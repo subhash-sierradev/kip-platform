@@ -178,6 +178,11 @@ export function getNotificationCreatedBy(notification: AppNotification): string 
     metadata?.createdByUser,
     metadata?.actor,
     metadata?.user,
+    metadata?.triggeredBy,
+    metadata?.updatedBy,
+    metadata?.deletedBy,
+    metadata?.enabledBy,
+    metadata?.disabledBy,
   ];
 
   for (const candidate of candidates) {

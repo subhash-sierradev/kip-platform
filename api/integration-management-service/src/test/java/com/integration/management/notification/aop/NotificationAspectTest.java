@@ -5,6 +5,7 @@ import com.integration.execution.contract.model.enums.NotificationEventKey;
 import com.integration.management.notification.messaging.NotificationEventPublisher;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,7 +16,8 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationContext;
-
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.lang.reflect.Method;
 import java.util.Map;
 
@@ -55,8 +57,14 @@ class NotificationAspectTest {
     void setUp() throws NoSuchMethodException {
         sampleMethod = SampleService.class.getMethod("doWork", String.class, String.class);
     }
-
-    private void stubJoinPoint(String[] paramNames, Object[] args)
+    @AfterEach
+    void tearDownTransactionSynchronization() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+        TransactionSynchronizationManager.setActualTransactionActive(false);
+    }
+    private void stubJoinPoint(final String[] paramNames, final Object[] args)
             throws Throwable {
         when(joinPoint.getSignature()).thenReturn(methodSignature);
         when(methodSignature.getParameterNames()).thenReturn(paramNames);
@@ -251,6 +259,59 @@ class NotificationAspectTest {
                     ArgumentCaptor.forClass(NotificationEvent.class);
             verify(notificationEventPublisher).publish(captor.capture());
             assertThat(captor.getValue().getMetadata()).isEmpty();
+        }
+    }
+    @Nested
+    @DisplayName("around - transactional deferral")
+    class AroundTransactionalDeferral {
+        @Test
+        @DisplayName("defers publish until afterCommit when transaction is active")
+        void defers_publish_until_after_commit() throws Throwable {
+            TransactionSynchronizationManager.initSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+            stubJoinPoint(new String[]{"tenantId", "userId"},
+                    new Object[]{"tenant-1", "user-1"});
+            PublishNotification ann = buildAnnotation();
+            notificationAspect.around(joinPoint, ann);
+            // Notification must NOT be published yet — transaction is still open
+            verify(notificationEventPublisher, never()).publish(any());
+            // Simulate transaction commit by triggering afterCommit on all registrations
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
+            ArgumentCaptor<NotificationEvent> captor =
+                    ArgumentCaptor.forClass(NotificationEvent.class);
+            verify(notificationEventPublisher).publish(captor.capture());
+            assertThat(captor.getValue().getEventKey()).isEqualTo("SITE_CONFIG_UPDATED");
+            assertThat(captor.getValue().getTenantId()).isEqualTo("tenant-1");
+        }
+        @Test
+        @DisplayName("does not publish when transaction rolls back (afterCommit never called)")
+        void does_not_publish_on_rollback() throws Throwable {
+            TransactionSynchronizationManager.initSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+            stubJoinPoint(new String[]{"tenantId", "userId"},
+                    new Object[]{"tenant-1", "user-1"});
+            PublishNotification ann = buildAnnotation();
+            notificationAspect.around(joinPoint, ann);
+            // Simulate rollback: afterCommit is NOT called, only afterCompletion(ROLLED_BACK)
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(s -> s.afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK));
+            verify(notificationEventPublisher, never()).publish(any());
+        }
+        @Test
+        @DisplayName("swallows afterCommit publish exceptions without propagation")
+        void swallows_after_commit_publish_exception() throws Throwable {
+            TransactionSynchronizationManager.initSynchronization();
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+            stubJoinPoint(new String[]{"tenantId", "userId"},
+                    new Object[]{"tenant-1", "user-1"});
+            PublishNotification ann = buildAnnotation();
+            doThrow(new RuntimeException("rabbit down"))
+                    .when(notificationEventPublisher).publish(any());
+            notificationAspect.around(joinPoint, ann);
+            // afterCommit should not throw — exception is caught inside safePublish
+            TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(TransactionSynchronization::afterCommit);
         }
     }
 }

@@ -44,6 +44,7 @@ public class NotificationDispatchService {
     private static final String ACTION_LABEL_KEY = "actionLabel";
     private static final String SERVICE_TYPE_ARCGIS = "ARCGIS";
     private static final String SERVICE_TYPE_JIRA = "JIRA";
+    private static final String SERVICE_TYPE_CONFLUENCE = "CONFLUENCE";
 
     private final NotificationTemplateService notificationTemplateService;
     private final NotificationRuleRepository notificationRuleRepository;
@@ -171,7 +172,7 @@ public class NotificationDispatchService {
             }
         }
 
-        addNavigationActionMetadata(effectiveMetadata);
+        addNavigationActionMetadata(eventKey, effectiveMetadata);
 
         if (triggeredByUserId == null || triggeredByUserId.isBlank()) {
             return effectiveMetadata;
@@ -209,26 +210,46 @@ public class NotificationDispatchService {
         return null;
     }
 
-    private void addNavigationActionMetadata(Map<String, Object> metadata) {
+    private void addNavigationActionMetadata(String eventKey, Map<String, Object> metadata) {
         if (metadata.isEmpty() || containsExistingNavigation(metadata)) {
             return;
         }
+        if (tryAddIntegrationNavigation(eventKey, metadata)) {
+            return;
+        }
+        if (tryAddWebhookNavigation(metadata)) {
+            return;
+        }
+        tryAddConnectionNavigation(metadata);
+    }
 
+    private boolean tryAddIntegrationNavigation(String eventKey, Map<String, Object> metadata) {
         String integrationId = getMetadataValue(metadata, INTEGRATION_ID_KEY);
-        if (isValidUuid(integrationId)) {
+        if (!isValidUuid(integrationId)) {
+            return false;
+        }
+        if (eventKey != null && eventKey.startsWith("CONFLUENCE_")) {
+            metadata.put(ROUTE_KEY, "/outbound/integration/confluence/" + integrationId);
+            metadata.put(ACTION_LABEL_KEY, "Open Confluence Integration");
+        } else {
             metadata.put(ROUTE_KEY, "/outbound/integration/arcgis/" + integrationId);
             metadata.put(ACTION_LABEL_KEY, "Open ArcGIS Integration");
-            return;
         }
+        return true;
+    }
 
+    private boolean tryAddWebhookNavigation(Map<String, Object> metadata) {
         String webhookId = getMetadataValue(metadata, WEBHOOK_ID_KEY);
         String issueKey = getMetadataValue(metadata, ISSUE_KEY);
-        if (!webhookId.isBlank() && !issueKey.isBlank()) {
-            metadata.put(ROUTE_KEY, "/outbound/webhook/jira/" + webhookId);
-            metadata.put(ACTION_LABEL_KEY, "Open Jira Webhook");
-            return;
+        if (webhookId.isBlank() || issueKey.isBlank()) {
+            return false;
         }
+        metadata.put(ROUTE_KEY, "/outbound/webhook/jira/" + webhookId);
+        metadata.put(ACTION_LABEL_KEY, "Open Jira Webhook");
+        return true;
+    }
 
+    private void tryAddConnectionNavigation(Map<String, Object> metadata) {
         String connectionId = getMetadataValue(metadata, CONNECTION_ID_KEY);
         String serviceType = getMetadataValue(metadata, SERVICE_TYPE_KEY).toUpperCase(Locale.ROOT);
         if (!isValidUuid(connectionId)) {
@@ -238,11 +259,12 @@ public class NotificationDispatchService {
         if (SERVICE_TYPE_ARCGIS.equals(serviceType)) {
             metadata.put(ROUTE_KEY, "/admin/connections/arcgis");
             metadata.put(ACTION_LABEL_KEY, "Open ArcGIS Connection");
-            return;
-        }
-        if (SERVICE_TYPE_JIRA.equals(serviceType)) {
+        } else if (SERVICE_TYPE_JIRA.equals(serviceType)) {
             metadata.put(ROUTE_KEY, "/admin/connections/jira");
             metadata.put(ACTION_LABEL_KEY, "Open Jira Connection");
+        } else if (SERVICE_TYPE_CONFLUENCE.equals(serviceType)) {
+            metadata.put(ROUTE_KEY, "/admin/connections/confluence");
+            metadata.put(ACTION_LABEL_KEY, "Open Confluence Connection");
         }
     }
 

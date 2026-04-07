@@ -35,13 +35,17 @@ public class NotificationEventCatalogService {
         Set<NotificationEntityType> types = EnumSet.of(NotificationEntityType.SITE_CONFIG);
         boolean hasJira = serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA);
         boolean hasArcGIS = serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS);
+        boolean hasConfluence = serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE);
         if (hasJira) {
             types.add(NotificationEntityType.JIRA_WEBHOOK);
         }
         if (hasArcGIS) {
             types.add(NotificationEntityType.ARCGIS_INTEGRATION);
         }
-        if (hasJira || hasArcGIS) {
+        if (hasConfluence) {
+            types.add(NotificationEntityType.CONFLUENCE_INTEGRATION);
+        }
+        if (hasJira || hasArcGIS || hasConfluence) {
             types.add(NotificationEntityType.INTEGRATION_CONNECTION);
         }
         return types;

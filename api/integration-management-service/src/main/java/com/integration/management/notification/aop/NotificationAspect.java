@@ -14,6 +14,8 @@ import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
@@ -73,18 +75,47 @@ public class NotificationAspect {
             String userId = evaluate(publishNotification.userId(), ctx, String.class);
             Map<String, Object> metadata = resolveMetadata(publishNotification, ctx, prefetchedMetadata);
 
-            notificationEventPublisher.publish(NotificationEvent.builder()
+            NotificationEvent event = NotificationEvent.builder()
                     .eventKey(publishNotification.eventKey().name())
                     .tenantId(tenantId)
                     .triggeredByUserId(userId)
                     .metadata(metadata)
-                    .build());
+                    .build();
+
+            publishOrDefer(event, publishNotification.eventKey().name());
         } catch (Exception ex) {
             // Never let notification failure propagate to the calling operation
             log.error("NotificationAspect failed for eventKey='{}': {}",
                     publishNotification.eventKey().name(), ex.getMessage(), ex);
         }
         return result;
+    }
+
+    /**
+     * Publishes the event immediately when no transaction is active, or registers an
+     * {@link TransactionSynchronization#afterCommit()} callback so the event is only sent
+     * after the surrounding transaction successfully commits.
+     */
+    private void publishOrDefer(final NotificationEvent event, final String eventKeyName) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    safePublish(event, eventKeyName);
+                }
+            });
+        } else {
+            safePublish(event, eventKeyName);
+        }
+    }
+
+    private void safePublish(final NotificationEvent event, final String eventKeyName) {
+        try {
+            notificationEventPublisher.publish(event);
+        } catch (Exception ex) {
+            log.error("NotificationAspect failed to publish eventKey='{}': {}",
+                    eventKeyName, ex.getMessage(), ex);
+        }
     }
 
     /**

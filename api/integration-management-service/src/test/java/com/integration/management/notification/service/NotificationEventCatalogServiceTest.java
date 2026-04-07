@@ -116,6 +116,7 @@ class NotificationEventCatalogServiceTest {
         void includes_all_types_when_has_both_roles() {
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(true);
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(true);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(false);
             when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
                     .thenReturn(List.of());
 
@@ -130,6 +131,57 @@ class NotificationEventCatalogServiceTest {
                     NotificationEntityType.SITE_CONFIG,
                     NotificationEntityType.JIRA_WEBHOOK,
                     NotificationEntityType.ARCGIS_INTEGRATION,
+                    NotificationEntityType.INTEGRATION_CONNECTION);
+            assertThat(captor.getValue())
+                    .doesNotContain(NotificationEntityType.CONFLUENCE_INTEGRATION);
+        }
+
+        @Test
+        @DisplayName("includes CONFLUENCE_INTEGRATION and INTEGRATION_CONNECTION when user has Confluence role")
+        void includes_confluence_types_when_has_confluence_role() {
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(true);
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+                    .thenReturn(List.of());
+
+            notificationEventCatalogService.getAllEnabled(TENANT_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<NotificationEntityType>> captor =
+                    ArgumentCaptor.forClass(Collection.class);
+            org.mockito.Mockito.verify(eventCatalogRepository)
+                    .findByIsEnabledTrueAndEntityTypeIn(captor.capture());
+            assertThat(captor.getValue()).contains(
+                    NotificationEntityType.CONFLUENCE_INTEGRATION,
+                    NotificationEntityType.INTEGRATION_CONNECTION,
+                    NotificationEntityType.SITE_CONFIG);
+            assertThat(captor.getValue())
+                    .doesNotContain(NotificationEntityType.JIRA_WEBHOOK,
+                            NotificationEntityType.ARCGIS_INTEGRATION);
+        }
+
+        @Test
+        @DisplayName("includes all five types when user has all three feature roles")
+        void includes_all_five_types_when_has_all_roles() {
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(true);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(true);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(true);
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+                    .thenReturn(List.of());
+
+            notificationEventCatalogService.getAllEnabled(TENANT_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Collection<NotificationEntityType>> captor =
+                    ArgumentCaptor.forClass(Collection.class);
+            org.mockito.Mockito.verify(eventCatalogRepository)
+                    .findByIsEnabledTrueAndEntityTypeIn(captor.capture());
+            assertThat(captor.getValue()).containsExactlyInAnyOrder(
+                    NotificationEntityType.SITE_CONFIG,
+                    NotificationEntityType.JIRA_WEBHOOK,
+                    NotificationEntityType.ARCGIS_INTEGRATION,
+                    NotificationEntityType.CONFLUENCE_INTEGRATION,
                     NotificationEntityType.INTEGRATION_CONNECTION);
         }
 

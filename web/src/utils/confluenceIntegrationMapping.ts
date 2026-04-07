@@ -44,7 +44,7 @@ export function buildConfluenceIntegrationRequest(
     languageCodes: form.languageCodes,
     reportNameTemplate: form.reportNameTemplate,
     confluenceSpaceKey: form.confluenceSpaceKey,
-    confluenceSpaceKeyFolderKey: form.confluenceSpaceKeyFolderKey || undefined,
+    confluenceSpaceKeyFolderKey: form.confluenceSpaceKeyFolderKey || 'ROOT',
     includeTableOfContents: form.includeTableOfContents,
     connectionId,
     schedule,

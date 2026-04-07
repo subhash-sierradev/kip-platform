@@ -368,7 +368,7 @@ class ConfluenceIntegrationServiceTest {
         verify(confluenceScheduleService).scheduleJob(integration);
 
         ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
-        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventKey())
                 .isEqualTo(NotificationEventKey.CONFLUENCE_INTEGRATION_ENABLED.name());
     }
@@ -399,7 +399,7 @@ class ConfluenceIntegrationServiceTest {
         verify(confluenceScheduleService).unscheduleJob(integration);
 
         ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
-        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventKey())
                 .isEqualTo(NotificationEventKey.CONFLUENCE_INTEGRATION_DISABLED.name());
     }
@@ -447,6 +447,7 @@ class ConfluenceIntegrationServiceTest {
         integration.setName("Test");
         integration.setConnectionId(UUID.randomUUID());
         integration.setSchedule(schedule);
+        integration.setIsEnabled(true);
 
         when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(integrationId, tenantId))
                 .thenReturn(Optional.of(integration));
@@ -454,8 +455,45 @@ class ConfluenceIntegrationServiceTest {
         // Act
         service.triggerJobExecution(integrationId, tenantId, userId);
 
-        // Assert
+        // Assert schedule trigger
         verify(confluenceScheduleService).triggerJob(integrationId, tenantId, TriggerType.API, userId);
+
+        // Assert adhoc-run notification is published
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
+        NotificationEvent event = eventCaptor.getValue();
+        assertThat(event.getEventKey())
+                .isEqualTo(NotificationEventKey.CONFLUENCE_INTEGRATION_JOB_ADHOC_RUN.name());
+        assertThat(event.getTenantId()).isEqualTo(tenantId);
+        assertThat(event.getTriggeredByUserId()).isEqualTo(userId);
+        assertThat(event.getMetadata()).containsKey("integrationName");
+        assertThat(event.getMetadata()).containsKey("integrationId");
+        assertThat(event.getMetadata()).containsKey("triggeredBy");
+    }
+
+    @Test
+    @DisplayName("triggerJobExecution - null integration name uses empty string in notification")
+    void triggerJobExecution_nullName_usesEmptyStringInNotification() {
+        // Arrange
+        UUID integrationId = UUID.randomUUID();
+        String tenantId = "tenant1";
+        String userId = "user1";
+
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(integrationId);
+        integration.setName(null);
+        integration.setIsEnabled(true);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(integrationId, tenantId))
+                .thenReturn(Optional.of(integration));
+
+        // Act
+        service.triggerJobExecution(integrationId, tenantId, userId);
+
+        // Assert notification metadata uses empty string for null name
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getMetadata().get("integrationName")).isEqualTo("");
     }
 
     @Test

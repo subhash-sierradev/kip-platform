@@ -43,6 +43,7 @@ describe('useActiveIntegrationTypes', () => {
     expect(activeEntityTypes.value.has(NotificationEntityType.JIRA_WEBHOOK)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.ARCGIS_INTEGRATION)).toBe(false);
+    expect(activeEntityTypes.value.has(NotificationEntityType.CONFLUENCE_INTEGRATION)).toBe(false);
   });
 
   it('adds ARCGIS_INTEGRATION and INTEGRATION_CONNECTION when user has arcgis role', () => {
@@ -52,9 +53,20 @@ describe('useActiveIntegrationTypes', () => {
     expect(activeEntityTypes.value.has(NotificationEntityType.ARCGIS_INTEGRATION)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.JIRA_WEBHOOK)).toBe(false);
+    expect(activeEntityTypes.value.has(NotificationEntityType.CONFLUENCE_INTEGRATION)).toBe(false);
   });
 
-  it('adds all four types when user has both feature roles', () => {
+  it('adds CONFLUENCE_INTEGRATION and INTEGRATION_CONNECTION when user has confluence role', () => {
+    authState.userRoles = ['feature_confluence_integration'];
+    const { activeEntityTypes } = mountComposable(() => useActiveIntegrationTypes());
+    expect(activeEntityTypes.value.has(NotificationEntityType.SITE_CONFIG)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.CONFLUENCE_INTEGRATION)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.JIRA_WEBHOOK)).toBe(false);
+    expect(activeEntityTypes.value.has(NotificationEntityType.ARCGIS_INTEGRATION)).toBe(false);
+  });
+
+  it('adds all four types when user has both jira and arcgis roles', () => {
     authState.userRoles = ['feature_jira_webhook', 'feature_arcgis_integration'];
     const { activeEntityTypes } = mountComposable(() => useActiveIntegrationTypes());
     expect(activeEntityTypes.value.size).toBe(4);
@@ -62,5 +74,27 @@ describe('useActiveIntegrationTypes', () => {
     expect(activeEntityTypes.value.has(NotificationEntityType.JIRA_WEBHOOK)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.ARCGIS_INTEGRATION)).toBe(true);
     expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.CONFLUENCE_INTEGRATION)).toBe(false);
+  });
+
+  it('adds all five types when user has all three feature roles', () => {
+    authState.userRoles = [
+      'feature_jira_webhook',
+      'feature_arcgis_integration',
+      'feature_confluence_integration',
+    ];
+    const { activeEntityTypes } = mountComposable(() => useActiveIntegrationTypes());
+    expect(activeEntityTypes.value.size).toBe(5);
+    expect(activeEntityTypes.value.has(NotificationEntityType.SITE_CONFIG)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.JIRA_WEBHOOK)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.ARCGIS_INTEGRATION)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.CONFLUENCE_INTEGRATION)).toBe(true);
+    expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(true);
+  });
+
+  it('does not add INTEGRATION_CONNECTION when user has no feature roles', () => {
+    const { activeEntityTypes } = mountComposable(() => useActiveIntegrationTypes());
+    expect(activeEntityTypes.value.has(NotificationEntityType.INTEGRATION_CONNECTION)).toBe(false);
   });
 });
+

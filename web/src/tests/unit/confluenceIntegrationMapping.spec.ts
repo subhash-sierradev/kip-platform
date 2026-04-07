@@ -163,6 +163,37 @@ describe('confluenceIntegrationMapping', () => {
     expect(request.itemSubtype).toBe('');
     expect(request.dynamicDocumentType).toBeUndefined();
     expect(request.dynamicDocumentTypeLabel).toBeUndefined();
-    expect(request.confluenceSpaceKeyFolderKey).toBeUndefined();
+    expect(request.confluenceSpaceKeyFolderKey).toBe('ROOT');
+  });
+
+  it('buildConfluenceIntegrationRequest sends ROOT when folder key is empty string', () => {
+    const request = buildConfluenceIntegrationRequest(
+      {
+        name: 'Integration',
+        description: '',
+        itemType: 'DOCUMENT',
+        subType: 'DOCUMENT_FINAL',
+        dynamicDocument: '',
+        dynamicDocumentLabel: '',
+        languageCodes: ['en'],
+        reportNameTemplate: 'Report {date}',
+        includeTableOfContents: true,
+        confluenceSpaceKey: 'MYSPACE',
+        confluenceSpaceKeyFolderKey: '',
+        connectionName: '',
+        username: '',
+        password: '',
+        executionDate: null,
+        executionTime: '02:00',
+        frequencyPattern: 'DAILY',
+        dailyFrequency: '24',
+        selectedDays: [],
+        selectedMonths: [],
+        isExecuteOnMonthEnd: false,
+      },
+      'conn-1'
+    );
+
+    expect(request.confluenceSpaceKeyFolderKey).toBe('ROOT');
   });
 });

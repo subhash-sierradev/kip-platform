@@ -110,6 +110,53 @@ class NotificationDefaultRulesServiceTest {
         }
 
         @Test
+        @DisplayName("includes CONFLUENCE_INTEGRATION and INTEGRATION_CONNECTION when user has Confluence role")
+        void includes_confluence_types_when_has_confluence_role() {
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(true);
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+                    .thenReturn(List.of());
+
+            notificationDefaultRulesService.initializeDefaultRulesForTenant(TENANT_ID, USER_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<java.util.Set<NotificationEntityType>> captor =
+                    ArgumentCaptor.forClass(java.util.Set.class);
+            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeIn(captor.capture());
+            assertThat(captor.getValue()).contains(
+                    NotificationEntityType.CONFLUENCE_INTEGRATION,
+                    NotificationEntityType.INTEGRATION_CONNECTION,
+                    NotificationEntityType.SITE_CONFIG);
+            assertThat(captor.getValue())
+                    .doesNotContain(NotificationEntityType.JIRA_WEBHOOK,
+                            NotificationEntityType.ARCGIS_INTEGRATION);
+        }
+
+        @Test
+        @DisplayName("includes all entity types when user has all three feature roles")
+        void includes_all_types_when_has_all_roles() {
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(true);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(true);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(true);
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+                    .thenReturn(List.of());
+
+            notificationDefaultRulesService.initializeDefaultRulesForTenant(TENANT_ID, USER_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<java.util.Set<NotificationEntityType>> captor =
+                    ArgumentCaptor.forClass(java.util.Set.class);
+            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeIn(captor.capture());
+            assertThat(captor.getValue()).containsExactlyInAnyOrder(
+                    NotificationEntityType.SITE_CONFIG,
+                    NotificationEntityType.JIRA_WEBHOOK,
+                    NotificationEntityType.ARCGIS_INTEGRATION,
+                    NotificationEntityType.CONFLUENCE_INTEGRATION,
+                    NotificationEntityType.INTEGRATION_CONNECTION);
+        }
+
+        @Test
         @DisplayName("creates policies with ALL_USERS recipient type")
         void creates_all_users_policies() {
             NotificationEventCatalog event = buildEvent("SITE_CONFIG_UPDATED",

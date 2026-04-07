@@ -181,7 +181,7 @@ public class ConfluenceIntegrationService {
             integration.setLastModifiedBy(userId);
             confluenceIntegrationRepository.save(integration);
 
-            notificationEventPublisher.publish(NotificationEvent.builder()
+            notificationEventPublisher.publishAfterCommit(NotificationEvent.builder()
                     .eventKey(newStatus
                             ? NotificationEventKey.CONFLUENCE_INTEGRATION_ENABLED.name()
                             : NotificationEventKey.CONFLUENCE_INTEGRATION_DISABLED.name())
@@ -220,6 +220,15 @@ public class ConfluenceIntegrationService {
             throw new IllegalStateException("Cannot trigger job for disabled integration: " + integrationId);
         }
         confluenceScheduleService.triggerJob(integration.getId(), tenantId, API, userId);
+        notificationEventPublisher.publishAfterCommit(NotificationEvent.builder()
+                .eventKey(NotificationEventKey.CONFLUENCE_INTEGRATION_JOB_ADHOC_RUN.name())
+                .tenantId(tenantId)
+                .triggeredByUserId(userId)
+                .metadata(Map.of(
+                        "integrationName", integration.getName() != null ? integration.getName() : "",
+                        "integrationId", integrationId.toString(),
+                        "triggeredBy", userId))
+                .build());
         log.info("Triggered Confluence job for integration: {} by user: {}", integrationId, userId);
     }
 

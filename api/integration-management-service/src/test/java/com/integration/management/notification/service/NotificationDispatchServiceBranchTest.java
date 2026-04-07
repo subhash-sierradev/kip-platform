@@ -347,6 +347,34 @@ class NotificationDispatchServiceBranchTest {
                 notification -> assertThat(notification.getMetadata()).doesNotContainKeys("route", "actionLabel"));
     }
 
+    @Test
+    @DisplayName("valid Confluence integrationId adds Confluence route and action label")
+    void confluenceIntegrationId_addsConfluenceNavigation() {
+        String integrationId = "b8c9f96f-6f42-4bb0-8a2f-d41c4a5c7f8e";
+
+        dispatchAndCapture("CONFLUENCE_INTEGRATION_UPDATED", null,
+                Map.of("integrationId", integrationId),
+                notification -> {
+                    assertThat(notification.getMetadata())
+                            .containsEntry("route", "/outbound/integration/confluence/" + integrationId)
+                            .containsEntry("actionLabel", "Open Confluence Integration");
+                });
+    }
+
+    @Test
+    @DisplayName("CONFLUENCE connection metadata adds admin Confluence connection route")
+    void confluenceConnectionMetadata_addsConfluenceConnectionRoute() {
+        dispatchAndCapture("INTEGRATION_CONNECTION_CREATED", null,
+                Map.of(
+                        "connectionId", "b8c9f96f-6f42-4bb0-8a2f-d41c4a5c7f8e",
+                        "serviceType", "CONFLUENCE"),
+                notification -> {
+                    assertThat(notification.getMetadata())
+                            .containsEntry("route", "/admin/connections/confluence")
+                            .containsEntry("actionLabel", "Open Confluence Connection");
+                });
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private void dispatchAndCapture(String eventKey, String triggeredBy,

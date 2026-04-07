@@ -113,7 +113,12 @@ public class NotificationDefaultRulesService {
             types.add(NotificationEntityType.ARCGIS_INTEGRATION);
         }
 
-        if (hasJira || hasArcGIS) {
+        boolean hasConfluence = serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE);
+        if (hasConfluence) {
+            types.add(NotificationEntityType.CONFLUENCE_INTEGRATION);
+        }
+
+        if (hasJira || hasArcGIS || hasConfluence) {
             types.add(NotificationEntityType.INTEGRATION_CONNECTION);
         }
 

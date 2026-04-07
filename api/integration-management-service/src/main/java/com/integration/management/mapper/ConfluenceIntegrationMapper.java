@@ -28,6 +28,11 @@ public interface ConfluenceIntegrationMapper extends NormalizationMapper {
             expression = "java(Boolean.TRUE.equals(request.getIncludeTableOfContents()))")
     @Mapping(target = "languages", ignore = true)
     @Mapping(target = "schedule", ignore = true)
+    @Mapping(target = "confluenceSpaceKeyFolderKey",
+            expression = "java(request.getConfluenceSpaceKeyFolderKey() != null"
+                    + " && !request.getConfluenceSpaceKeyFolderKey().isBlank()"
+                    + " ? request.getConfluenceSpaceKeyFolderKey()"
+                    + " : com.integration.management.constants.IntegrationManagementConstants.ROOT_FOLDER_KEY)")
     ConfluenceIntegration toEntity(ConfluenceIntegrationCreateUpdateRequest request);
 
     @Mapping(target = "id", ignore = true)
@@ -36,6 +41,11 @@ public interface ConfluenceIntegrationMapper extends NormalizationMapper {
             expression = "java(Boolean.TRUE.equals(request.getIncludeTableOfContents()))")
     @Mapping(target = "languages", ignore = true)
     @Mapping(target = "schedule", ignore = true)
+    @Mapping(target = "confluenceSpaceKeyFolderKey",
+            expression = "java(request.getConfluenceSpaceKeyFolderKey() != null"
+                    + " && !request.getConfluenceSpaceKeyFolderKey().isBlank()"
+                    + " ? request.getConfluenceSpaceKeyFolderKey()"
+                    + " : com.integration.management.constants.IntegrationManagementConstants.ROOT_FOLDER_KEY)")
     void updateEntity(ConfluenceIntegrationCreateUpdateRequest request, @MappingTarget ConfluenceIntegration entity);
 
     @Mapping(target = "itemType", source = "documentItemType")
