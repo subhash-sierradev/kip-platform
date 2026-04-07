@@ -1,0 +1,647 @@
+/**
+ * Shared CSS for ConnectionStep component
+ * Extracted and consolidated from Jira and ArcGIS connection step components
+ */
+
+/* Root Box */
+.cs-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 5px;
+}
+
+/* Container */
+.cs-container {
+  width: 100%;
+  max-width: 600px;
+  padding: 0 15px;
+  box-sizing: border-box;
+}
+
+/* Section */
+.cs-section {
+  margin-bottom: 20px;
+}
+
+.cs-section-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 12px;
+  letter-spacing: 0.01em;
+}
+
+/* Simple Radio Group */
+.cs-simple-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cs-simple-radio-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.cs-simple-radio-text {
+  margin: 0;
+  font-size: 14px;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.cs-radio {
+  margin: 2px 0 0 0;
+  cursor: pointer;
+}
+
+/* Button styling */
+.cs-btn {
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.cs-btn-outlined-primary {
+  background: #ffffff;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.cs-btn-outlined-primary:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+.cs-btn-contained-success {
+  background: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+}
+
+.cs-btn-contained-success:hover:not(:disabled) {
+  background: #059669;
+  border-color: #059669;
+  box-shadow: 0 2px 4px 0 rgba(16, 185, 129, 0.2);
+}
+
+.cs-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #f3f4f6;
+  color: #9ca3af;
+  border-color: #e5e7eb;
+  box-shadow: none;
+}
+
+/* Test button specific styling */
+.cs-test-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: #f4a100;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 160px;
+  justify-content: center;
+}
+
+.cs-test-btn:hover:not(:disabled) {
+  background: #e0920a;
+  transform: translateY(-1px);
+}
+
+.cs-test-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cs-test-btn-success {
+  background: #0b8b3a;
+}
+
+.cs-test-btn-success:hover:not(:disabled) {
+  background: #0a7a33;
+}
+
+.cs-test-btn-failed {
+  background: #dc2626;
+}
+
+.cs-test-btn-failed:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+/* Loading spinner */
+.cs-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #ffffff;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: cs-spin 1s linear infinite;
+}
+
+@keyframes cs-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icons */
+.cs-success-icon {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.cs-error-icon {
+  font-weight: bold;
+  font-size: 16px;
+}
+
+/* Verification row styling */
+.cs-verification-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.cs-verification-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.cs-verification-success {
+  color: #065f46;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.cs-verification-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.cs-check-inline {
+  font-weight: bold;
+}
+
+/* Test message */
+.cs-test-message {
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 1px solid transparent;
+  margin: 0;
+  flex: 1;
+  min-width: 200px;
+}
+
+.cs-test-message-success {
+  background: #f0fdf4;
+  color: #0b8b3a;
+  border: 1px solid #0b8b3a;
+}
+
+.cs-test-message-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Connection meta line */
+.cs-connection-meta-line {
+  font-size: 12px;
+  color: #f4a100;
+  margin-top: 6px;
+}
+
+/* Field styles */
+.cs-field {
+  margin-bottom: 8px;
+}
+
+.cs-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+/* Two column layout (for Jira-style forms) */
+.cs-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cs-col {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Labels */
+.cs-label {
+  font-size: 14px;
+  color: #000000;
+  font-weight: 600;
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.cs-required {
+  color: #dc2626;
+}
+
+/* Helper text (for additional instructions) */
+.cs-helper {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Input */
+.cs-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.cs-input:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.cs-input::placeholder {
+  color: var(--kw-placeholder-color, #9ca3af);
+  font-weight: 400;
+  font-style: italic;
+  opacity: 1;
+}
+
+.cs-input:focus::placeholder {
+  color: var(--kw-placeholder-focus-color, #d1d5db);
+}
+
+/* Input with icon (for password visibility toggle) */
+.cs-input-with-icon {
+  position: relative;
+}
+
+.cs-input-with-icon .cs-input {
+  padding-right: 40px;
+}
+
+.cs-icon-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.cs-icon-btn:hover {
+  color: #374151;
+}
+
+.cs-visibility-icon {
+  display: block;
+}
+
+/* Credential section */
+.cs-credential-section {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  margin-top: 8px;
+}
+
+/* Two-column credential grid (used for OAuth2 clientId/clientSecret) */
+.cs-credential-section.cs-credential-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.cs-credential-section.cs-credential-grid .cs-field {
+  margin-bottom: 0;
+}
+
+.cs-credential-section.cs-credential-grid .cs-field.cs-field-full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .cs-credential-section.cs-credential-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cs-credential-section.cs-credential-grid .cs-field.cs-field-full {
+    grid-column: auto;
+  }
+}
+
+/* Test connection section */
+.cs-test-section {
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+/* Custom Dropdown Styles */
+.cs-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.cs-dropdown-selected {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 36px;
+  box-sizing: border-box;
+  color: #111827;
+  gap: 8px;
+}
+
+.cs-selected-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  overflow: hidden;
+  color: #111827;
+}
+
+.cs-selected-content .cs-connection-name {
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 0;
+  padding: 0;
+}
+
+.cs-selected-separator {
+  color: #d1d5db;
+  font-size: 10px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin: 0 1px;
+  padding: 0;
+}
+
+.cs-selected-id {
+  font-family: monospace;
+  font-size: 11px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+}
+
+.cs-dropdown-selected:hover {
+  border-color: #9ca3af;
+}
+
+.cs-dropdown.cs-dropdown-open .cs-dropdown-selected {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 1px #3b82f6;
+}
+
+.cs-dropdown-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.cs-option {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.cs-option:hover {
+  background: #f9fafb;
+}
+
+.cs-option:last-child {
+  border-bottom: none;
+}
+
+.cs-connection-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cs-connection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.cs-connection-name {
+  font-weight: 500;
+  color: #111827;
+  flex: 1;
+}
+
+.cs-connection-meta {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  flex-wrap: wrap;
+}
+
+.cs-connection-secret {
+  font-family: monospace;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.cs-connection-url {
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.cs-last-used {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.cs-meta-separator {
+  color: #d1d5db;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.cs-connection-tested {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.cs-line1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  color: #111827;
+  font-weight: 500;
+}
+
+.cs-placeholder {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.cs-arrow {
+  transition: transform 0.2s ease;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.cs-arrow.open {
+  transform: rotate(180deg);
+}
+
+.cs-loading-row {
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.cs-empty {
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Badge styles */
+.cs-badge {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cs-badge-success {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  font-weight: 500;
+}
+
+.cs-badge-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  font-weight: 500;
+}
+
+.cs-badge-neutral {
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  font-weight: 400;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .cs-field-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .cs-two-col {
+    grid-template-columns: 1fr;
+  }
+
+  .cs-container {
+    padding: 0 12px;
+  }
+
+  .cs-test-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cs-test-message {
+    min-width: auto;
+  }
+}

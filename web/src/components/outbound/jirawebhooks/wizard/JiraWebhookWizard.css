@@ -1,0 +1,251 @@
+/* FULL CSS — unchanged from your original */
+.jw-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.jw-modal {
+  background: #ffffff;
+  border-radius: 8px;
+  height: 90vh; /* ← fixed height */
+  width: 110vw; /* ← fixed width */
+  min-width: 1150px;
+  max-width: 1250px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* keeps scroll inside */
+}
+
+/* Header (sticky) */
+.jw-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 32px;
+}
+
+.jw-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* --- NEW STEPPER STYLES MATCHING SCREENSHOT EXACTLY --- */
+
+.jw-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 95%;
+  margin-top: 10px;
+}
+
+/* Step (circle + label) */
+.jw-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 80px;
+}
+
+/* Circle */
+.jw-step-indicator {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid #d0d5dd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: #98a2b3;
+  background: white;
+}
+
+/* Active step */
+.jw-step-indicator.jw-active {
+  border-color: #f4a100;
+  background: #f4a100;
+  color: white;
+}
+
+/* Completed (checkmark) */
+.jw-step-indicator.jw-completed {
+  background: #f4a100;
+  border-color: #f4a100;
+  color: white;
+}
+
+.jw-check {
+  font-weight: 700;
+  font-size: 16px;
+  margin-top: -1px;
+}
+
+/* Label */
+.jw-step-label {
+  margin-top: 6px;
+  font-size: 14px;
+  color: #2b3341;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+/* Horizontal line between circles */
+.jw-step-line {
+  flex: 1;
+  height: 2px;
+  margin: 0 4px;
+  margin-left: -10px;
+}
+
+/* completed */
+.jw-line-active {
+  background-color: #f4a100;
+}
+
+/* upcoming */
+.jw-line-inactive {
+  background-color: #d0d5dd;
+}
+
+/* Icon button */
+.jw-icon-button {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 4px;
+  font-size: 18px;
+  color: #4b5563;
+}
+.jw-icon-button:hover {
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+
+/* Scrollable content */
+.jw-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 30px 24px 32px;
+  transition: opacity 0.2s ease;
+}
+
+/* Footer */
+.jw-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: #ffffff;
+  border-top: 1px solid #e5e7eb;
+  padding: 16px 32px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.jw-footer-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Buttons */
+.jw-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+
+.jw-btn-primary {
+  background-color: #f59e0b;
+  color: #ffffff;
+}
+
+.jw-btn-primary:hover {
+  background-color: #ee9024 !important; /* dark orange on hover */
+}
+
+.jw-btn-primary:disabled {
+  background-color: #e5e7eb;
+  color: var(--kw-placeholder-color);
+  cursor: not-allowed;
+}
+
+.jw-btn-outlined {
+  background-color: transparent;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+.jw-btn-neutral {
+  color: #111827;
+}
+.jw-btn-warning {
+  background-color: #f59e0b;
+  color: #ffffff;
+}
+
+/* Cancel dialog */
+.jw-cancel-dialog {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 24px;
+  width: 400px;
+  max-width: 90vw;
+  color: #111827;
+}
+
+.jw-cancel-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.jw-cancel-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  background: #f59e0b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.jw-cancel-title {
+  margin-left: 12px;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.jw-cancel-body p {
+  margin: 4px 0;
+  font-size: 0.95rem;
+  color: #111827;
+}
+
+.jw-cancel-subtitle {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.jw-cancel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}

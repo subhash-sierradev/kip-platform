@@ -1,0 +1,32 @@
+{
+  "integrationName": "Test Integration",
+  "integrationType": "TYPE_A",
+  "description": "Test integration for unit testing",
+  "sourceEndpoint": "http://source-endpoint.com/api",
+  "fetchMode": "PULL",
+  "frequencyType": "DAILY",
+  "cronExpression": "0 0 * * *",
+  "executionDate": "2025-08-27",
+  "executionTime": "10:00:00",
+  "dailyExecutionInterval": 1,
+  "timezone": "UTC",
+  "credentialRef": {
+    "credentialTypeCode": "C1",
+    "credentialData": {}
+  },
+  "fieldsMapping": {
+    "mappings": [
+      {
+        "id": "1",
+        "sourceField": "name",
+        "targetField": "fullName",
+        "targetEntity": "Person",
+        "dataType": "string",
+        "isMandatory": true
+      }
+    ],
+    "unmappedSources": [],
+    "unmappedTargets": []
+  }
+}
+

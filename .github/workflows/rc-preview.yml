@@ -1,0 +1,194 @@
+ame: RC Preview Comment
+
+# Posts (or updates) a PR comment showing the next RC version PER MODULE.
+# Each module has its own independent RC counter tracked via git tags.
+# Tag format: <module-name>-<base-version>-rc.<N>
+# Examples:
+#   integration-management-service-1.3.0-rc.2
+#   integration-execution-service-1.3.0-rc.1
+#   integration-execution-contract-1.3.0-rc.3
+
+on:
+  pull_request:
+    branches:
+      - 'release/[0-9]*.[0-9]*.[0-9]*'
+    types: [opened, synchronize, reopened]
+
+concurrency:
+  group: rc-preview-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  rc-preview:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Step 1: Validate release branch name strictly before doing any work.
+      #   Allowed:  release/x.y.z  (e.g. release/1.3.0)
+      #   Rejected: release/1.3.0-feature  release/2026-03-foo  release/1.3
+      # -----------------------------------------------------------------------
+      - name: Validate release branch name
+        id: validate
+        run: |
+          BRANCH="${{ github.base_ref }}"
+          echo "Target branch: $BRANCH"
+
+          if [[ ! "$BRANCH" =~ ^release/[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid release branch name: '$BRANCH'"
+            echo "::error::Required format: release/x.y.z  (e.g. release/1.3.0)"
+            echo "::error::Rejected examples: release/1.3.0-feature  release/2026-03-foo  release/1.3"
+            exit 1
+          fi
+
+          BASE_VERSION="${BRANCH#release/}"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Branch is valid. Base version: $BASE_VERSION"
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags
+          BASE_VERSION="${{ steps.validate.outputs.base_version }}"
+          echo "Existing RC tags for base version ${BASE_VERSION}:"
+          git tag -l "*-${BASE_VERSION}-rc.*" | sort || echo "  (none)"
+
+      # -----------------------------------------------------------------------
+      # Step 2: Calculate next RC number independently per module.
+      #   Each module's RC is derived only from its own tags:
+      #     integration-management-service-1.3.0-rc.N
+      #     integration-execution-service-1.3.0-rc.N
+      #     integration-execution-contract-1.3.0-rc.N
+      # -----------------------------------------------------------------------
+      - name: Calculate per-module RC versions
+        id: rc-calc
+        run: |
+          BASE_VERSION="${{ steps.validate.outputs.base_version }}"
+
+          next_rc() {
+            local MODULE="$1"
+            local LAST
+            LAST=$(git tag -l "${MODULE}-${BASE_VERSION}-rc.*" \
+                   | sed -n 's/.*-rc\.\([0-9]*\)$/\1/p' \
+                   | sort -n | tail -1)
+            if [ -z "$LAST" ]; then
+              echo 1
+            else
+              echo $((LAST + 1))
+            fi
+          }
+
+          CONTRACT_RC=$(next_rc "integration-execution-contract")
+          IMS_RC=$(next_rc "integration-management-service")
+          IES_RC=$(next_rc "integration-execution-service")
+
+          CONTRACT_VERSION="${BASE_VERSION}-rc.${CONTRACT_RC}"
+          IMS_VERSION="${BASE_VERSION}-rc.${IMS_RC}"
+          IES_VERSION="${BASE_VERSION}-rc.${IES_RC}"
+
+          echo "contract_version=$CONTRACT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ims_version=$IMS_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "ies_version=$IES_VERSION"           >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "Per-module RC preview:"
+          echo "  integration-execution-contract -> $CONTRACT_VERSION"
+          echo "  integration-management-service -> $IMS_VERSION"
+          echo "  integration-execution-service  -> $IES_VERSION"
+
+      # -----------------------------------------------------------------------
+      # Step 3: Detect which modules changed in this PR.
+      # -----------------------------------------------------------------------
+      - name: Detect changed modules
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            contract:
+              - 'integration-execution-contract/**'
+            management:
+              - 'integration-management-service/**'
+            execution:
+              - 'integration-execution-service/**'
+
+      # -----------------------------------------------------------------------
+      # Step 4: Post or update the RC preview comment on the PR.
+      #   Uses an HTML sentinel marker to find and update the existing comment
+      #   rather than posting a new one on every push.
+      # -----------------------------------------------------------------------
+      - name: Post or update RC preview comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const baseVersion     = '${{ steps.validate.outputs.base_version }}';
+            const contractVersion = '${{ steps.rc-calc.outputs.contract_version }}';
+            const imsVersion      = '${{ steps.rc-calc.outputs.ims_version }}';
+            const iesVersion      = '${{ steps.rc-calc.outputs.ies_version }}';
+            const contractChg     = '${{ steps.filter.outputs.contract }}'   === 'true';
+            const managementChg   = '${{ steps.filter.outputs.management }}' === 'true';
+            const executionChg    = '${{ steps.filter.outputs.execution }}'  === 'true';
+
+            let moduleRows = '';
+            if (contractChg)   moduleRows += `\n| \`integration-execution-contract\` | \`${contractVersion}\` |`;
+            if (managementChg) moduleRows += `\n| \`integration-management-service\` | \`${imsVersion}\` |`;
+            if (executionChg)  moduleRows += `\n| \`integration-execution-service\`  | \`${iesVersion}\` |`;
+            if (!moduleRows)   moduleRows  = '\n| _(no module source files changed)_ |  |';
+
+            const MARKER = '<!-- rc-preview-comment -->';
+
+            const body = [
+              MARKER,
+              '##  Release Candidate Preview',
+              '',
+              '| Property | Value |',
+              '|---|---|',
+              `| **Target Branch** | \`${{ github.base_ref }}\` |`,
+              `| **Base Version**  | \`${baseVersion}\` |`,
+              '',
+              '### Next RC version per module (independent counters)',
+              '',
+              '| Module | Next RC Version |',
+              '|---|---|',
+              moduleRows.trimStart(),
+              '',
+              '>  RC numbers are recalculated fresh at merge time from git tags.',
+              '> If another PR merges into this branch first, numbers may be higher.',
+              '> Each module increments its own counter independently.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner:        context.repo.owner,
+              repo:         context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes(MARKER)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner:      context.repo.owner,
+                repo:       context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+              core.info(`Updated existing RC preview comment (id ${existing.id})`);
+            } else {
+              await github.rest.issues.createComment({
+                owner:        context.repo.owner,
+                repo:         context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+              core.info('Created new RC preview comment');
+            }

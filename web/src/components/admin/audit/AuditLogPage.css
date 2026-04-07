@@ -1,0 +1,778 @@
+/* Audit Log Page Styles */
+.audit-log-page {
+  padding: 0.75rem;
+  background: var(--kw-content-bg, #fafbfc);
+  min-height: calc(100vh - 180px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+/* Enhanced Page Header */
+.page-header {
+  background: linear-gradient(
+    135deg,
+    var(--kw-layout-color, #383838) 0%,
+    var(--kw-primary-dark, #2c3e50) 100%
+  );
+  color: white;
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.page-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  pointer-events: none;
+}
+
+.header-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 2rem;
+  gap: 2rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.title-icon {
+  color: var(--kw-accent-orange, #f59e0b);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.stats-summary {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.filters-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 0.5rem;
+}
+
+/* DevExtreme SelectBox Styling */
+filters-container :deep(.dx-selectbox.filter-select) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.25) !important;
+  border-radius: 8px !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  transition: all 0.3s ease !important;
+  backdrop-filter: blur(10px) !important;
+}
+
+.filters-container :deep(.dx-selectbox.filter-select:hover) {
+  background: rgba(255, 255, 255, 0.15) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+.filters-container :deep(.dx-selectbox.filter-select:focus-within) {
+  border-color: var(--kw-accent-orange, #f59e0b) !important;
+  box-shadow:
+    0 0 0 3px rgba(245, 158, 11, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  background: rgba(255, 255, 255, 0.15) !important;
+}
+
+.filters-container :deep(.dx-selectbox.filter-select .dx-texteditor-input) {
+  color: white !important;
+  background: transparent !important;
+  font-size: 0.875rem !important;
+  padding: 0 12px !important;
+  line-height: 34px !important;
+  height: 34px !important;
+  font-weight: 500 !important;
+}
+
+.filters-container :deep(.dx-selectbox.filter-select .dx-dropdowneditor-button) {
+  color: rgba(255, 255, 255, 0.8) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.2) !important;
+  width: 32px !important;
+  background: transparent !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+.filters-container :deep(.dx-selectbox.filter-select .dx-dropdowneditor-button:hover) {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: white !important;
+}
+
+/* Clear Filters Button Styling */
+.clear-filters-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  height: 36px;
+  min-width: 120px;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  white-space: nowrap;
+}
+
+.clear-filters-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.clear-filters-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+
+.clear-filters-btn svg {
+  opacity: 0.8;
+  transition: opacity 0.2s ease;
+}
+
+.clear-filters-btn:hover svg {
+  opacity: 1;
+}
+
+/* DevExtreme dropdown list styling */
+.filter-bar-simple :deep(.dx-overlay-content .dx-list) {
+  background: #ffffff !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.filter-bar-simple :deep(.dx-overlay-content .dx-list-item) {
+  color: #374151 !important;
+  background: #ffffff !important;
+  padding: 0.75rem !important;
+  border-bottom: 1px solid #f3f4f6 !important;
+  font-size: 0.875rem !important;
+}
+
+.filter-bar-simple :deep(.dx-overlay-content .dx-list-item:hover) {
+  background: #f9fafb !important;
+  color: #111827 !important;
+}
+
+.filter-bar-simple :deep(.dx-overlay-content .dx-list-item.dx-state-selected) {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  font-weight: 500 !important;
+}
+
+.filter-bar-simple :deep(.dx-overlay-content .dx-list-item:last-child) {
+  border-bottom: none !important;
+}
+
+/* Export Dropdown */
+.export-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.export-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: linear-gradient(
+    135deg,
+    var(--kw-accent-orange, #f59e0b) 0%,
+    var(--kw-accent-orange-dark, #d97706) 100%
+  );
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+  height: 36px;
+  min-width: 120px;
+  transition: all 0.3s ease;
+  box-shadow:
+    0 2px 8px rgba(245, 158, 11, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.export-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  transition: left 0.5s ease;
+}
+
+.export-btn:hover::before {
+  left: 100%;
+}
+
+.export-btn:hover {
+  background: linear-gradient(135deg, var(--kw-accent-orange-dark, #d97706) 0%, #c2410c 100%);
+  box-shadow:
+    0 4px 12px rgba(245, 158, 11, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.export-btn:active {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 8px rgba(245, 158, 11, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-arrow {
+  margin-left: 0.25rem;
+  transition: transform 0.2s ease;
+  opacity: 0.8;
+}
+
+.export-btn:hover .dropdown-arrow {
+  opacity: 1;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.15),
+    0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 180px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  animation: fadeInDown 0.2s ease;
+}
+
+@keyframes fadeInDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.export-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 1rem 1.25rem;
+  text-align: left;
+  background: none;
+  border: none;
+  color: #374151;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.export-option:hover {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #1e293b;
+}
+
+.export-option:last-child {
+  border-bottom: none;
+}
+
+.export-option:active {
+  background: #e2e8f0;
+}
+
+.export-option svg {
+  color: var(--kw-accent-orange, #f59e0b);
+  opacity: 0.8;
+}
+
+.export-option:hover svg {
+  opacity: 1;
+}
+
+/* Loading indicator */
+.data-grid-container :deep(.dx-loadindicator) {
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+/* Header filter */
+.data-grid-container :deep(.dx-header-filter-indicator) {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.data-grid-container :deep(.dx-header-filter-indicator:hover) {
+  color: white !important;
+}
+
+/* Grid wrapper for scrollable content */
+.grid-wrapper {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Fixed pagination footer */
+.pagination-footer {
+  position: sticky;
+  bottom: 0;
+  background: #fafafa;
+  border-top: 1px solid #ddd;
+  z-index: 10;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* DevExtreme Grid Styling */
+.grid-wrapper :deep(.dx-datagrid) {
+  background: #ffffff !important;
+  color: #333 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  visibility: visible !important;
+  border: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+  min-height: 0 !important;
+  flex: 1 !important;
+}
+
+/* Hide default pager */
+.grid-wrapper :deep(.dx-pager) {
+  display: none !important;
+}
+
+/* Ensure rows view takes available space */
+.grid-wrapper :deep(.dx-datagrid-rowsview) {
+  flex: 1 !important;
+  overflow-y: auto !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-headers) {
+  background: linear-gradient(
+    135deg,
+    var(--kw-layout-color, #383838) 0%,
+    var(--kw-primary-dark, #2c3e50) 100%
+  ) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+  flex-shrink: 0 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-headers .dx-datagrid-table .dx-row > td) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-headers .dx-datagrid-table .dx-row > td:last-child) {
+  border-right: none !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-rowsview .dx-row) {
+  background: #ffffff !important;
+  color: #333 !important;
+  border-color: #f0f0f0 !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-rowsview .dx-row:nth-child(even)) {
+  background: #fafafa !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-rowsview .dx-row:hover) {
+  background: #f5f5f5 !important;
+  cursor: pointer !important;
+}
+
+.grid-wrapper :deep(.dx-datagrid-cell-content) {
+  padding: 6px 10px !important;
+  font-size: 0.7rem !important;
+}
+
+/* Fixed Pagination Footer Styling */
+.pagination-footer :deep(.dx-pager) {
+  padding: 0.75rem !important;
+  background: transparent !important;
+  border: none !important;
+  font-size: 0.7rem !important;
+  width: 100% !important;
+}
+
+.pagination-footer :deep(.dx-pager .dx-pages .dx-page) {
+  font-size: 0.7rem !important;
+  min-width: 1.8rem !important;
+  height: 1.8rem !important;
+}
+
+.pagination-footer :deep(.dx-pager .dx-navigate-button) {
+  width: 1.8rem !important;
+  height: 1.8rem !important;
+}
+
+/* Cell Template Styles */
+.name-cell {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+/* Tenant Link */
+.tenant-link {
+  color: #f59e0b;
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.7rem;
+}
+
+.tenant-link:hover {
+  color: #d97706;
+  text-decoration: underline;
+}
+
+/* Loading and Error States */
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  gap: 1rem;
+  color: #666;
+  flex: 1;
+  min-height: 200px;
+}
+
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #f59e0b;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.error-message {
+  color: #dc2626;
+  font-weight: 500;
+}
+
+.retry-btn {
+  padding: 0.5rem 1rem;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.retry-btn:hover {
+  background: #d97706;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .header-content {
+    padding: 1rem 1.5rem;
+  }
+
+  .filters-container {
+    gap: 0.5rem;
+  }
+
+  .filters-container :deep(.dx-selectbox.filter-select) {
+    width: 130px !important;
+  }
+
+  .clear-filters-btn {
+    min-width: 100px;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .data-grid-container :deep(.dx-pager) {
+    padding: 0.75rem !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    min-height: auto !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-pages) {
+    order: 2 !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-info) {
+    order: 1 !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-page-sizes) {
+    order: 3 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .audit-log-page {
+    padding: 1rem;
+  }
+
+  .header-content {
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .filters-container {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .filters-container :deep(.dx-selectbox.filter-select) {
+    width: 120px !important;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .data-grid-container {
+    min-height: 400px;
+  }
+
+  .data-grid-container :deep(.dx-datagrid-cell-content) {
+    padding: 0.5rem !important;
+    font-size: 0.8125rem !important;
+  }
+
+  .data-grid-container :deep(.dx-pager) {
+    padding: 0.5rem !important;
+    font-size: 0.8125rem !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-page),
+  .data-grid-container :deep(.dx-pager .dx-navigate-button) {
+    width: 2rem !important;
+    height: 2rem !important;
+    font-size: 0.8125rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .filters-container {
+    flex-direction: column;
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .filters-container :deep(.dx-selectbox.filter-select) {
+    width: 100% !important;
+  }
+
+  .clear-filters-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .export-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .export-menu {
+    left: 0;
+    right: 0;
+    min-width: auto;
+  }
+
+  .data-grid-container :deep(.dx-pager) {
+    padding: 0.5rem !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-pages) {
+    flex-wrap: wrap !important;
+    justify-content: center !important;
+  }
+
+  .data-grid-container :deep(.dx-pager .dx-page-sizes) {
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+}
+
+/* Responsive Grid Classes */
+.responsive-grid :deep(.dx-datagrid) {
+  width: 100% !important;
+  max-width: 100vw !important;
+}
+
+.responsive-grid :deep(.dx-datagrid-content) {
+  width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.responsive-grid :deep(.dx-datagrid-table) {
+  width: 100% !important;
+  table-layout: auto !important;
+  min-width: 100% !important;
+}
+
+/* Viewport-based responsive column adjustments */
+@media screen and (min-width: 1200px) {
+  .responsive-grid :deep(.dx-datagrid-table) {
+    min-width: calc(100vw - 3rem) !important;
+  }
+}
+
+@media screen and (max-width: 1199px) and (min-width: 768px) {
+  .responsive-grid :deep(.dx-datagrid-table) {
+    min-width: calc(100vw - 2.5rem) !important;
+  }
+
+  .audit-log-page {
+    padding: 1rem;
+  }
+}
+
+@media screen and (max-width: 767px) {
+  .responsive-grid :deep(.dx-datagrid-table) {
+    min-width: calc(100vw - 2rem) !important;
+  }
+
+  .audit-log-page {
+    padding: 0.75rem;
+  }
+}
+
+/* Small screen: reduce grid font sizes and padding to fit 10 rows without scrolling */
+@media screen and (max-width: 1199px) and (min-width: 768px) {
+  /* Allow full grid height without internal scroll */
+  .audit-log-page .data-grid-container {
+    overflow: visible;
+  }
+  .audit-log-page .data-grid-container :deep(.dx-datagrid-rowsview) {
+    overflow: visible;
+  }
+
+  /* Reduce header font size and padding */
+  .audit-log-page .data-grid-container :deep(.dx-datagrid-headers) {
+    font-size: 0.75rem !important;
+  }
+  .audit-log-page .data-grid-container :deep(.dx-datagrid-headers .dx-datagrid-table .dx-row > td) {
+    padding: 6px 8px !important;
+  }
+
+  /* Reduce row cell font size and padding */
+  .audit-log-page .data-grid-container :deep(.dx-datagrid-cell-content) {
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
+    padding: 4px 6px !important;
+  }
+
+  /* Tighten rows to decrease row height */
+  .audit-log-page .data-grid-container :deep(.dx-datagrid-rowsview .dx-row > td) {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+
+  /* Pager font size compact */
+  .audit-log-page .data-grid-container :deep(.dx-pager) {
+    font-size: 0.7rem !important;
+  }
+}

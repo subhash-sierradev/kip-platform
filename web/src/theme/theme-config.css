@@ -1,0 +1,81 @@
+/**
+ * Centralized Theme Configuration
+ * 
+ * This file contains all the color variables for the Kaseware Integration Platform.
+ * To change the primary layout color (top bar and sidebar), update the 
+ * --kw-layout-color variable below.
+ * 
+ * Usage:
+ * - Import this file in your main CSS to apply theme variables
+ * - Use CSS variables like var(--kw-layout-color) in components
+ * - All layout components will automatically use these colors
+ */
+
+:root {
+  /* === MAIN LAYOUT COLOR === */
+  /* Change this single variable to update both top bar and sidebar color */
+  --kw-layout-color: #383838;
+
+  /* === LAYOUT COMPONENT COLORS === */
+  /* These automatically use the main layout color */
+  --kw-topbar-bg: var(--kw-layout-color);
+  --kw-sidebar-bg: var(--kw-layout-color);
+
+  /* === LAYOUT INTERACTION COLORS === */
+  --kw-layout-hover: rgba(255, 255, 255, 0.1);
+  --kw-layout-border: #1a1a1a;
+  --kw-layout-text: #ffffff;
+  --kw-layout-text-muted: #bdc3c7;
+
+  /* === BRAND COLORS === */
+  --kw-primary-dark: #2c3e50;
+  --kw-secondary-dark: #34495e;
+  --kw-accent-orange: #e67e22;
+  --kw-accent-orange-dark: #d35400;
+
+  /* === TEXT COLORS === */
+  --kw-text-primary: #ecf0f1;
+  --kw-text-secondary: #bdc3c7;
+  --kw-text-muted: #95a5a6;
+
+  /* === FORM INPUT COLORS === */
+  --kw-placeholder-color: #9ca3af;
+  --kw-placeholder-focus-color: #d1d5db;
+
+  /* === ADDITIONAL LAYOUT COLORS === */
+  --kw-content-bg: #ffffff;
+  --kw-panel-bg: #ffffff;
+  --kw-panel-border: #d9dce0;
+  --kw-shadow: rgba(0, 0, 0, 0.1);
+  --kw-shadow-dark: rgba(0, 0, 0, 0.3);
+
+  /* === TENANT/ORGANIZATION BADGE === */
+  --kw-org-badge-bg: rgba(255, 255, 255, 0.15);
+  --kw-org-badge-hover: rgba(255, 255, 255, 0.25);
+  --kw-org-badge-border: rgba(255, 255, 255, 0.2);
+  --kw-org-badge-text: var(--kw-layout-text);
+}
+
+/* 
+ * === HOW TO CHANGE COLORS ===
+ * 
+ * To change the main layout color:
+ * 1. Update --kw-layout-color above (e.g., to #2c3e50)
+ * 2. Save the file
+ * 3. Both top bar and sidebar will automatically update
+ * 
+ * To add new themed components:
+ * 1. Use var(--kw-layout-color) for backgrounds
+ * 2. Use var(--kw-layout-text) for text
+ * 3. Use var(--kw-layout-hover) for hover states
+ * 
+ * Example CSS:
+ * .my-component {
+ *   background: var(--kw-layout-color);
+ *   color: var(--kw-layout-text);
+ * }
+ * 
+ * .my-component:hover {
+ *   background: var(--kw-layout-hover);
+ * }
+ */

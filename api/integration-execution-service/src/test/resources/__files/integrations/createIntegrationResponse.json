@@ -1,0 +1,12 @@
+{
+  "id": "123",
+  "integrationName": "Test Integration",
+  "integrationType": "TYPE_A",
+  "sourceEndpoint": "http://source-endpoint.com/api",
+  "fetchMode": "PULL",
+  "frequencyPattern": "0 0 * * *",
+  "executionDate": "2025-08-27",
+  "executionTime": "10:00:00",
+  "status": "CREATED"
+}
+

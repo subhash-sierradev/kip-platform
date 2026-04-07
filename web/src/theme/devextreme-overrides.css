@@ -1,0 +1,146 @@
+/* Hide DevExtreme filter popup loader/spinner in header filter menu only */
+.dx-header-filter-menu .dx-loadindicator,
+.dx-header-filter-menu .dx-loadpanel,
+.dx-header-filter-menu .dx-loadpanel-content {
+  display: none !important;
+}
+
+/* Global LoadPanel/Spinner Orange Color Override */
+.dx-loadpanel-indicator,
+.dx-loadpanel .dx-loadindicator,
+.dx-loadindicator,
+.dx-loadindicator .dx-loadindicator-icon,
+.dx-loadindicator-segment,
+.dx-loadindicator-segment::before,
+.dx-loadindicator-segment::after {
+  border-color: #f59e0b transparent transparent transparent !important;
+  color: #f59e0b !important;
+}
+
+/* DevExtreme SVG-based loading indicators */
+.dx-loadindicator svg,
+.dx-loadindicator path,
+.dx-loadindicator circle {
+  stroke: #f59e0b !important;
+  fill: #f59e0b !important;
+  color: #f59e0b !important;
+}
+
+/* Additional DevExtreme loading indicator variants */
+.dx-loadindicator-icon::before,
+.dx-loadindicator-icon::after,
+.dx-loadpanel .dx-loadindicator-icon::before,
+.dx-loadpanel .dx-loadindicator-icon::after {
+  border-top-color: #f59e0b !important;
+  border-left-color: #f59e0b !important;
+  border-right-color: #f59e0b !important;
+}
+
+/* For rotating segment-based loaders */
+.dx-loadindicator-segment {
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+}
+
+/* For material design style indicators */
+.dx-theme-material .dx-loadindicator-segment {
+  background: linear-gradient(90deg, transparent, #f59e0b) !important;
+}
+
+/* For generic theme indicators */
+.dx-theme-generic .dx-loadindicator-segment {
+  border-top-color: #f59e0b !important;
+}
+
+/* DevExtreme Light Theme Overrides for Audit Page */
+
+/* DataGrid Overrides */
+.dx-datagrid {
+  background-color: #ffffff !important;
+  color: #333333 !important;
+  border: 1px solid #e9ecef !important;
+}
+
+.dx-datagrid-headers {
+  background-color: #f8f9fa !important;
+  color: #333333 !important;
+  font-weight: 600 !important;
+}
+
+.dx-datagrid-rowsview .dx-row {
+  background-color: #ffffff !important;
+  color: #333333 !important;
+  border-color: #e9ecef !important;
+}
+
+.dx-datagrid-rowsview .dx-row:nth-child(even) {
+  background-color: #f8f9fa !important;
+}
+
+.dx-datagrid-rowsview .dx-row:hover {
+  background-color: #e3f2fd !important;
+}
+
+.dx-datagrid .dx-scrollable-wrapper {
+  background-color: #ffffff !important;
+}
+
+.dx-pager {
+  background-color: #f8f9fa !important;
+  color: #333333 !important;
+  border-top: 1px solid #e9ecef !important;
+  padding: 0.75rem !important;
+}
+
+.dx-pager .dx-button {
+  background-color: transparent !important;
+  color: #333333 !important;
+}
+
+.dx-pager .dx-button:hover {
+  background-color: #e9ecef !important;
+}
+
+.dx-pager .dx-button.dx-state-selected {
+  background-color: #007bff !important;
+  color: #ffffff !important;
+}
+
+/* Force visibility for DataGrid only - not all widgets */
+.dx-datagrid.dx-widget {
+  visibility: visible !important;
+  opacity: 1 !important;
+  display: block !important;
+}
+
+/* Filter row styling */
+.dx-datagrid-filter-row {
+  background-color: #f8f9fa !important;
+}
+
+.dx-datagrid-filter-row .dx-editor-cell .dx-texteditor {
+  background-color: #ffffff !important;
+  color: #333333 !important;
+}
+
+/* Dark theme compatibility for main app */
+.dx-theme-generic-dark {
+  background-color: var(--kw-primary-dark) !important;
+  color: var(--kw-text-primary) !important;
+}
+
+/* Fix DevExtreme filter popup height for header filter menu only */
+.dx-header-filter-menu .dx-overlay-content,
+.dx-header-filter-menu ~ .dx-overlay-wrapper .dx-overlay-content {
+  height: auto !important;
+}
+
+/* Only target the filter popup, not all popups */
+.dx-header-filter-menu .dx-popup-content,
+.dx-header-filter-menu ~ .dx-overlay-wrapper .dx-popup-content {
+  min-height: 120px !important;
+}
+
+.dx-toolbar .dx-toolbar-items-container {
+  height: 20px !important;
+}

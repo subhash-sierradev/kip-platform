@@ -1,0 +1,557 @@
+@import 'devextreme/dist/css/dx.light.css';
+
+/* Root layout */
+.ms-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Two-column panels */
+.ms-panels {
+  display: grid;
+  /* Adjusted ~10%: left narrower, right wider */
+  grid-template-columns: minmax(0, 0.99fr) minmax(0, 1.54fr);
+  gap: 24px;
+}
+
+@media (max-width: 1024px) {
+  .ms-panels {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* LEFT PANEL */
+.ms-left-card {
+  background-color: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  /* Fixed panel height so content scrolls inside */
+  height: 60vh;
+}
+
+.ms-left-header {
+  margin-bottom: 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ms-left-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ms-left-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.ms-json-container {
+  margin-top: 8px;
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  padding: 10px;
+  /* Fill the card and provide its own scroll */
+  height: 100%;
+  min-height: 260px;
+  /* Avoid horizontal scrolling; allow vertical only */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Add inner gutter so content doesn't hug scrollbar */
+  padding-right: 8px;
+  scrollbar-gutter: stable both-edges;
+}
+
+.ms-json {
+  margin: 0;
+  /* Preserve indentation and newlines but wrap long tokens */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  /* Fallbacks to ensure wrapping in older engines */
+  word-break: break-word;
+  word-break: break-all;
+  display: block;
+  max-width: 100%;
+  overflow-x: hidden;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #111827;
+}
+
+/* Individual JSON rendered lines */
+.ms-json-line {
+  /* Preserve indentation and allow long values to wrap */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ms-json-key {
+  font-weight: 700;
+}
+
+.ms-json-empty {
+  font-size: 12px;
+  color: var(--kw-placeholder-color);
+}
+
+/* RIGHT PANEL CARD */
+.ms-card {
+  background-color: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  /* Slightly increased padding for better breathing room */
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  /* Fixed panel height for independent scrolling */
+  height: 60vh;
+  /* Reserve stable gutter for nested scrollports */
+  scrollbar-gutter: stable both-edges;
+}
+
+.ms-card-header {
+  /* More separation between header and form */
+  margin-bottom: 16px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ms-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.ms-card-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Form fields */
+.ms-form {
+  display: flex;
+  flex-direction: column;
+  /* Increase vertical rhythm between fields */
+  gap: 16px;
+  /* Make the form area scroll independently within the card */
+  flex: 1;
+  overflow: auto;
+  /* Inner right padding and stable gutter so buttons don't hug scrollbar */
+  padding-right: 12px;
+  scrollbar-gutter: stable both-edges;
+}
+
+.ms-field {
+  display: flex;
+  flex-direction: column;
+  /* Ensure label and control spacing is consistent */
+  gap: 6px;
+}
+
+.ms-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  /* Slightly more breathing room above controls */
+  margin-bottom: 6px;
+}
+
+/* Header row: label left, actions right */
+.ms-field-header {
+  display: flex;
+  justify-content: flex-start;
+  /* keep actions next to label, not right-aligned */
+  align-items: center;
+  gap: 8px;
+}
+
+.ms-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Compact icon buttons within header */
+.ms-actions .ms-icon-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+/* Eye icon styling aligned with PreviewStep */
+.ps-eye-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+
+.ps-eye-icon:hover {
+  background: #e5e7eb;
+}
+
+.ps-eye-icon:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ps-eye-svg {
+  width: 14px;
+  height: 14px;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+
+.ps-eye-icon:hover .ps-eye-svg {
+  color: #374151;
+}
+
+/* Add icon styling (DevExtreme) matching eye icon container */
+.ps-add-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+
+.ps-add-icon:hover {
+  background: #e5e7eb;
+}
+
+.ps-add-icon:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ps-add-icon .dx-icon {
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1;
+}
+
+.ps-add-icon:hover .dx-icon {
+  color: #374151;
+}
+
+.ms-required {
+  color: #dc2626;
+  margin-left: 3px;
+}
+
+.ms-input {
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 13px;
+  /* Larger touch target and cleaner look */
+  padding: 8px 12px;
+  min-height: 36px;
+  line-height: 1.4;
+  color: #111827;
+  background-color: #ffffff;
+}
+
+.ms-input:disabled {
+  background-color: #f9fafb;
+  color: var(--kw-placeholder-color);
+}
+
+.ms-input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.15);
+}
+
+.ms-select {
+  appearance: auto;
+}
+
+/* Wrapper that stacks the two select rows vertically */
+.ms-selects-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Two-up grid for first row */
+.ms-grid-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: end;
+}
+
+@media (max-width: 768px) {
+  .ms-grid-two {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Three-up grid: Project, Issue Type, Assignee in one row */
+.ms-grid-three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.ms-field--parent {
+  min-width: 0;
+}
+
+.ms-search-select {
+  position: relative;
+}
+
+.ms-search-select__control {
+  display: flex;
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+  height: 36px; /* match other inputs */
+}
+
+.ms-search-select__input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 0 10px; /* remove vertical padding */
+  height: 100%;
+  line-height: 36px; /* vertically center text */
+  font-size: 14px;
+  background: transparent;
+}
+
+.ms-search-select__toggle {
+  width: 36px;
+  border: none;
+  border-left: 1px solid #d1d5db;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ms-search-select__toggle:hover:not(:disabled) {
+  background: #f9fafb;
+}
+
+.ms-search-select__toggle:disabled {
+  cursor: not-allowed;
+  color: #9ca3af;
+  background: #f9fafb;
+}
+
+.ms-search-select__caret {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ms-search-select__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  padding: 4px;
+}
+
+.ms-search-select__option {
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #111827;
+  font-size: 13px;
+  line-height: 1.35;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.ms-search-select__option:hover,
+.ms-search-select__option.is-selected {
+  background: #f3f4f6;
+}
+
+.ms-search-select__empty {
+  color: #6b7280;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.ms-field-error {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #dc2626;
+}
+
+@media (max-width: 1024px) {
+  .ms-grid-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .ms-grid-three {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Narrower, elegant Assignee select */
+.ms-field--assignee .ms-select {
+  width: 100%;
+}
+
+/* Textarea with button */
+.ms-textarea-row {
+  display: flex;
+  gap: 12px;
+}
+
+.ms-textarea-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ms-textarea {
+  flex: 1;
+  resize: vertical;
+  /* More comfortable default height for template editing */
+  min-height: 80px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* Summary textarea: match Description textarea height */
+.ms-textarea--summary {
+  min-height: 80px;
+  /* same as Description textarea */
+}
+
+.ms-inline-preview {
+  white-space: pre-wrap;
+  font-size: 13px;
+  /* match normal control text */
+  line-height: 1.4;
+  /* normal text line height */
+  background: #f9fafb;
+  color: #111827;
+  border: 1px solid #e5e7eb;
+  padding: 10px;
+  border-radius: 6px;
+  min-height: 60px;
+  /* default aligns to Summary */
+  max-height: 160px;
+  /* scroll when content exceeds */
+  overflow-y: auto;
+  overflow-x: hidden;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+/* Field-specific preview heights to match textarea defaults */
+.ms-inline-preview--summary {
+  min-height: 80px;
+}
+
+.ms-inline-preview--description {
+  min-height: 80px;
+}
+
+/* Icon column retained for other contexts; Summary/Description now use header actions */
+.ms-icon-col {
+  display: none;
+}
+
+.ms-textarea-wrapper {
+  position: relative;
+}
+
+.ms-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-sizing: border-box;
+  cursor: pointer;
+  user-select: none;
+  text-align: center;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.ms-icon-plus {
+  background-color: #f59e0b;
+  color: #ffffff;
+  border-color: #d97706;
+}
+
+.ms-icon-eye {
+  background-color: #6b7280;
+  color: #ffffff;
+  border-color: #4b5563;
+}
+
+.ms-icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ms-insert-btn {
+  align-self: flex-start;
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.ms-insert-btn:hover {
+  background-color: #f3f4f6;
+}

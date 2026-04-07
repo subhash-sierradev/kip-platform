@@ -1,0 +1,78 @@
+name: E2E
+
+on:
+  # Manual trigger with environment and suite selection
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'sandbox'
+        type: choice
+        options:
+          - sandbox
+      suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'sanity'
+        type: choice
+        options:
+          - sanity
+          - regression
+          - regression:arcgis
+          - regression:jira
+
+  # Nightly sanity run against sandbox
+  schedule:
+    - cron: '0 2 * * 1-5'   # 02:00 UTC Mon–Fri
+
+jobs:
+  playwright-e2e:
+    name: Playwright • Tests
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'sandbox' }}
+
+    defaults:
+      run:
+        working-directory: ./e2e
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'e2e/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install chromium --with-deps
+
+      - name: Run Playwright tests
+        run: npm run ${{ github.event.inputs.suite || 'sanity' }}
+        env:
+          CI: true
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+
+      - name: Upload Playwright HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.event.inputs.suite || 'sanity' }}-${{ github.run_number }}
+          path: e2e/playwright-report/
+          retention-days: 14
+
+      - name: Upload failure artifacts (screenshots & videos)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-${{ github.run_number }}
+          path: e2e/test-results/
+          retention-days: 7

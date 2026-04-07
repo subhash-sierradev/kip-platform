@@ -1,0 +1,764 @@
+@import 'devextreme/dist/css/dx.light.css';
+
+/* ============================================================
+   CUSTOM FIELDS PANEL — Enterprise Card UI
+   Preserves all .ms-* / .ps-* row-level classes used by
+   CustomFieldRow.vue. Panel-level classes use .cf-* prefix.
+============================================================ */
+
+/* ---------- Card Container ---------- */
+.cf-panel-card {
+  margin-top: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.04);
+  /* Must be visible — position:absolute dropdowns inside CustomFieldRow
+     (field selector, sprint/user pickers) are clipped by overflow:hidden,
+     making them invisible but still hit-testing, which freezes interaction. */
+  overflow: visible;
+}
+
+/* ---------- Card Header ---------- */
+.cf-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  /* Round only the top corners (card no longer uses overflow:hidden for this) */
+  border-radius: 8px 8px 0 0;
+}
+
+.cf-panel-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cf-panel-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1f2937;
+  letter-spacing: 0.01em;
+}
+
+.cf-optional-label {
+  font-size: 11px;
+  font-weight: 400;
+  color: #9ca3af;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 1px 7px;
+  line-height: 1.6;
+}
+
+.cf-count-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+/* ---------- Add Field Button (header + empty state) ---------- */
+.cf-panel-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: none;
+  background: #f59e0b;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.cf-panel-add-btn:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.cf-panel-add-btn:active:not(:disabled) {
+  background: #b45309;
+}
+
+.cf-panel-add-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ---------- Status Banners ---------- */
+.cf-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-size: 12px;
+  border-bottom: 1px solid transparent;
+}
+
+.cf-status-loading {
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom-color: #f3f4f6;
+}
+
+.cf-status-error {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-bottom-color: #fee2e2;
+}
+
+@keyframes cf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cf-spin {
+  animation: cf-spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ---------- Rows Container (TransitionGroup host) ---------- */
+.cf-rows-list {
+  position: relative;
+  min-height: 0;
+}
+
+/* ---------- Individual Row ---------- */
+.cf-row-item {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 36px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 14px;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background 0.12s ease;
+}
+
+.cf-row-item:last-child {
+  border-bottom: none;
+}
+
+.cf-row-item:hover {
+  background: #fafbfc;
+}
+
+/* ---------- Trash (Delete) Ghost Button ---------- */
+.cf-trash-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #d1d5db;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.cf-trash-btn:hover {
+  background: #fef2f2;
+  color: #ef4444;
+}
+
+.cf-trash-btn:active {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* ---------- Empty State ---------- */
+.cf-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 24px 28px;
+  gap: 6px;
+  text-align: center;
+}
+
+.cf-empty-title {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.cf-empty-sub {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.cf-empty-add-btn {
+  /* inherits cf-panel-add-btn */
+}
+
+/* ---------- Row Transition Animations ---------- */
+.cf-row-enter-active,
+.cf-row-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.cf-row-enter-from {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.cf-row-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+.cf-row-leave-active {
+  position: absolute;
+  width: 100%;
+}
+
+/* ============================================================
+   LEGACY — keep ms-label-heading for any external references
+============================================================ */
+.ms-label-heading {
+  color: #111827;
+  font-weight: 500;
+  font-size: 13px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.ms-selector {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+  width: 90%;
+  color: #000;
+  font-size: small;
+}
+
+.ms-search {
+  height: 30px;
+  border-radius: 5px;
+  border: 1px solid #d0d0d0;
+  width: 100%;
+}
+
+.ms-dd-name {
+  color: #111827;
+  font-size: 12px;
+}
+
+.ms-dd-key {
+  color: #555;
+  font-size: 11px;
+}
+
+.ms-icon::before {
+  font-family: Arial, sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-block;
+  content: '';
+}
+
+.ms-icon-plus::before {
+  content: '+';
+}
+
+.ms-icon-remove::before {
+  content: '–';
+}
+
+.ms-icon-clear::before {
+  content: '×';
+}
+
+.ms-value {
+  height: 30px;
+  border-radius: 5px;
+  border: 1px solid #d0d0d0;
+  width: 97%;
+}
+
+.ms-multi-select {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  min-height: 32px;
+}
+
+.ms-chip {
+  padding: 4px 10px;
+  border-radius: 14px;
+  background: #f3f4f6;
+  color: #333;
+  font-size: 12px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.ms-chip.selected {
+  background: #d1fae5;
+  border-color: #10b981;
+  color: #065f46;
+  font-weight: 500;
+}
+
+.ms-select-trigger {
+  height: 32px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  padding: 0 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  position: relative;
+  width: 100%;
+}
+
+/* Search input visible only when editing */
+.ms-search-visible {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 13px;
+}
+
+/* Dropdown fixes */
+.ms-dropdown {
+  position: absolute;
+  left: 0;
+  width: 110%;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  z-index: 10000;
+}
+
+/* Placement modifiers: render below or above the trigger */
+.ms-dropdown.down {
+  top: 36px;
+  bottom: auto;
+}
+.ms-dropdown.up {
+  bottom: 36px;
+  top: auto;
+}
+
+.ms-select-text {
+  color: #111;
+  font-size: 13px;
+}
+
+.ms-chevron {
+  font-size: 12px;
+  color: #444;
+}
+
+.ms-search-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: auto;
+  /* allow focus */
+  height: 0;
+  width: 0;
+}
+
+.ms-dropdown-item {
+  padding: 8px 10px;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.ms-dropdown-item:hover {
+  background: #f0f0f0;
+}
+
+.ms-dropdown-item .key {
+  color: #666;
+  font-size: 11px;
+}
+
+.ms-multiuser-list {
+  max-height: 200px;
+  overflow-y: auto;
+  color: #000;
+}
+
+.cf-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.cf-modal {
+  background-color: #ffffff;
+  border-radius: 8px;
+  padding: 18px 20px;
+  width: 420px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+}
+
+.cf-modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 8px;
+}
+
+.cf-modal-desc {
+  font-size: 13px;
+  color: #374151;
+  margin: 0 0 12px;
+}
+
+.cf-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ms-btn-cancel {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: none;
+  background-color: #9ca3af;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ms-btn-danger {
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: none;
+  background-color: #dc2626;
+  color: #ffffff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ms-btn-cancel:disabled,
+.ms-btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/*-- extended styles for multi-user picker --*/
+/* ===============================
+   MULTI-USER PICKER FIXED WIDTH
+================================ */
+
+/* Container should NOT grow */
+.ms-multiuser {
+  position: relative;
+  width: 100%;
+  max-width: 272px; /* same as other inputs */
+  flex: 0 0 auto;
+}
+
+/* Trigger should stay single-line */
+.ms-multiuser-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  height: 30px;
+  width: 95%;
+  font-size: smaller;
+  padding: 0 10px;
+  color: #000;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+
+  cursor: pointer;
+  overflow: hidden;
+}
+
+/* Text inside trigger */
+.ms-multiuser-trigger .value,
+.ms-multiuser-trigger .placeholder {
+  flex: 1;
+  min-width: 0;
+
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  font-size: 13px;
+  color: #24292f;
+}
+
+/* Placeholder color */
+.ms-multiuser-trigger .placeholder {
+  color: #8c959f;
+}
+
+/* Chevron */
+.ms-multiuser-trigger .chevron {
+  margin-left: 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ===============================
+   DROPDOWN OVERLAY (NO EXPAND)
+================================ */
+
+.ms-multiuser-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  width: 103%;
+  max-height: 220px;
+  background: #fff;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
+  overflow: hidden;
+}
+.ms-multiuser-dropdown.down {
+  top: calc(100% + 4px);
+  bottom: auto;
+}
+
+.ms-multiuser-dropdown.up {
+  bottom: calc(100% + 4px);
+  top: auto;
+}
+
+/* Search box */
+.ms-multiuser-search {
+  width: 92%;
+  padding: 6px 8px;
+  border: none;
+  border-bottom: 1px solid #e5e7eb;
+  outline: none;
+  font-size: 13px;
+}
+
+/* User list scroll */
+.ms-multiuser-list {
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+/* Checkbox row */
+.ms-multiuser-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ms-multiuser-item:hover {
+  background: #f6f8fa;
+}
+
+/* Prevent layout stretching inside grid row */
+.ms-value-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* =========================================
+   Text input row (input + icon column)
+========================================= */
+.ms-string-with-insert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.ms-string-with-insert .ms-input {
+  flex: 1;
+}
+
+.ms-string-with-insert .ms-icon-plus {
+  min-width: 32px;
+  height: 32px;
+  background-color: #f59e0b;
+  color: #ffffff;
+  border-color: #d97706;
+}
+
+/* =========================================
+   Stack for input + preview (same column)
+========================================= */
+.ms-text-input-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  min-width: 0; /* prevents flex overflow */
+}
+
+/* =========================================
+   Inline preview (same style as parent)
+========================================= */
+.ms-inline-preview {
+  padding: 8px 10px;
+  min-height: 36px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  font-size: 13px;
+  color: #334155;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* =========================================
+   Icon column ( + / 👁 buttons )
+========================================= */
+.ms-icon-col {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  padding-top: 5px;
+}
+
+/* =========================================
+   Icon button consistency
+========================================= */
+.ms-icon-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ms-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ms-string-with-insert .ms-icon-eye {
+  background-color: #6b7280;
+  color: #ffffff;
+  border-color: #4b5563;
+}
+
+/* Elegant icons matching MappingStep (eye + add) */
+.ps-eye-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+.ps-eye-icon:hover {
+  background: #e5e7eb;
+}
+.ps-eye-icon:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ps-eye-svg {
+  width: 14px;
+  height: 14px;
+  color: #6b7280;
+  transition: color 0.15s ease;
+}
+.ps-eye-icon:hover .ps-eye-svg {
+  color: #374151;
+}
+
+.ps-add-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.2s;
+}
+.ps-add-icon:hover {
+  background: #e5e7eb;
+}
+.ps-add-icon:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.ps-add-icon .dx-icon {
+  font-size: 16px;
+  color: #6b7280;
+  line-height: 1;
+}
+.ps-add-icon:hover .dx-icon {
+  color: #374151;
+}

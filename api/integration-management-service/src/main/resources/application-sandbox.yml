@@ -1,0 +1,143 @@
+# Sandbox Environment Configuration
+spring:
+  mvc:
+    async:
+      # Disable Spring MVC's default async request timeout so the 30-minute
+      # SseEmitter timeout (set in SseEmitterRegistry) is the sole expiry.
+      # Some servlet containers default this to 10 000 ms which would
+      # silently kill SSE streams after 10 seconds.
+      request-timeout: -1
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+
+  # PostgreSQL Configuration for Sandbox
+  datasource:
+    url: ${SANDBOX_DB_URL}
+    username: ${SANDBOX_DB_USERNAME}
+    password: ${SANDBOX_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 15
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      connection-test-query: SELECT 1
+
+  # JPA Configuration
+  jpa:
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate # Changed from create to validate to work with Flyway migrations
+    show-sql: false # Enable for debugging connection issues
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        default_schema: integration_platform
+        jdbc:
+          lob:
+            non_contextual_creation: true
+
+  # Flyway Configuration for Database Migrations
+  flyway:
+    enabled: true
+    default-schema: integration_platform
+    create-schemas: false # <-- instruct Flyway to create the schema if it doesn't exist
+    baseline-on-migrate: true
+    validate-on-migrate: false
+    clean-disabled: true
+    locations:
+      - classpath:db/migration
+    table: flyway_schema_history
+    connect-retries: 3
+
+integration:
+  execution:
+    base-url: ${EXECUTION_SERVICE_URL:http://localhost:8081}
+
+  security:
+    cors:
+      allowed-origin-patterns:
+        - 'https://*.sierradev.com'
+      allowed-methods:
+        - 'GET'
+        - 'POST'
+        - 'PUT'
+        - 'DELETE'
+        - 'OPTIONS'
+        - 'PATCH'
+      allowed-headers:
+        - 'Authorization'
+        - 'Content-Type'
+        - 'X-Requested-With'
+        - 'Accept'
+        - 'Origin'
+        - 'X-CSRF-Token'
+      exposed-headers:
+        - 'Authorization'
+        - 'Content-Type'
+        - 'X-Total-Count'
+        - 'X-Pagination-Total'
+      allow-credentials: true
+      max-age: 1800 # 30 minutes
+      path-pattern: '/api/**'
+    csp:
+      enabled: true
+      default-src: "'self'"
+      script-src: "'self'"
+      style-src: "'self' 'unsafe-inline'" # Required for Material-UI v7.x + Emotion (dynamic runtime styles).
+      #See https://mui.com/material-ui/guides/content-security-policy/. Consider nonce/hash-based CSP for future.
+      img-src: "'self' data: https:"
+      font-src: "'self' data:"
+      connect-src: "'self' https://*.kaseware.com https://*.sierradev.com"
+      frame-src: "'none'"
+      object-src: "'none'"
+      media-src: "'self'"
+      manifest-src: "'self'"
+      worker-src: "'self'"
+      child-src: "'self'"
+      form-action: "'self'"
+      frame-ancestors: "'none'"
+      base-uri: "'self'"
+      upgrade-insecure-requests: true # Force HTTPS in sandbox
+      report-only: false # Enforce CSP in sandbox environment
+
+logging:
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+
+  file:
+    name: ${LOG_DIR:./logs}/kip-ims.log
+    max-size: 10MB
+    max-history: 30
+    total-size-cap: 300MB
+
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_DIR:./logs}/kip-ims.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 300MB
+      clean-history-on-start: false
+
+  level:
+    root: INFO
+    com.integration: INFO
+    org.springframework: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate: INFO
+    org.hibernate.SQL: INFO
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.apache.camel: INFO
+    org.quartz: INFO
+    org.flywaydb: INFO
+    org.postgresql: INFO

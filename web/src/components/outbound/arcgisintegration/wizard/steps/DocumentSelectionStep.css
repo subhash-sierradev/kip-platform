@@ -1,0 +1,294 @@
+/* Root Box */
+.ds-root {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+}
+
+/* Title */
+.ds-title {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 30px;
+  color: #060606;
+}
+
+/* Container */
+.ds-container {
+  width: 100%;
+  max-width: 600px;
+}
+
+/* Section */
+.ds-section {
+  margin-bottom: 32px;
+}
+
+.ds-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #000000;
+  margin-bottom: 20px;
+}
+
+/* Field styles */
+.ds-field {
+  margin-bottom: 20px;
+}
+
+.ds-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* Labels */
+.ds-label {
+  font-size: 15px;
+  color: #000000;
+  font-weight: 600;
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.ds-required {
+  color: #dc2626;
+}
+
+/* Select wrapper for loading indicators */
+.ds-select-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+/* Input & Select */
+.ds-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: #fff;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.ds-input:focus {
+  border-color: #2563eb;
+  outline: none;
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.2);
+}
+
+.ds-input:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+  border-color: #e5e7eb;
+}
+
+select.ds-input {
+  cursor: pointer;
+}
+
+select.ds-input:disabled {
+  cursor: not-allowed;
+}
+
+select.ds-input option {
+  padding: 8px;
+  color: #1f2937;
+  background-color: #ffffff;
+}
+
+select.ds-input option:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+select.ds-input option:checked,
+select.ds-input option:focus {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+
+/* Custom scrollbar styling for select dropdown */
+select.ds-input {
+  /* For Webkit browsers (Chrome, Safari, Edge) */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #ffffff;
+}
+
+select.ds-input::-webkit-scrollbar {
+  width: 6px;
+}
+
+select.ds-input::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border-radius: 3px;
+}
+
+select.ds-input::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+  transition: background 0.2s ease;
+}
+
+select.ds-input::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Loading indicator */
+.ds-loading-indicator {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.ds-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 50%;
+  border-top-color: #3b82f6;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error state styling */
+.ds-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.ds-error-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.ds-error-text {
+  color: #dc2626;
+  flex-grow: 1;
+}
+
+.ds-retry-btn {
+  padding: 4px 8px;
+  background-color: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.ds-retry-btn:hover {
+  background-color: #b91c1c;
+}
+
+.ds-retry-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+/* Placeholder styling */
+select.ds-input option[disabled] {
+  color: #6b7280;
+  font-style: italic;
+  background-color: #f9fafb;
+}
+
+/* Style the select when no value is selected (placeholder state) */
+select.ds-input:required:invalid {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Dynamic Document dropdown should match Item Subtype font styling (no italic placeholder) */
+.ds-dynamic-doc-wrapper select.ds-input:required:invalid {
+  font-style: normal;
+}
+
+select.ds-input:valid {
+  color: #1f2937;
+  font-style: normal;
+}
+
+select.ds-input:valid:not([value='']) {
+  color: #111827;
+  font-weight: 500;
+}
+
+/* Visible placeholder overlay for native selects (prevents blank placeholder in some browsers) */
+.ds-placeholder-overlay {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  font-style: normal;
+  pointer-events: none;
+  max-width: calc(100% - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ds-field-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .ds-container {
+    padding: 0 12px;
+  }
+
+  .ds-error {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .ds-retry-btn {
+    align-self: flex-end;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  .ds-spinner {
+    animation: none;
+  }
+
+  .ds-input {
+    transition: none;
+  }
+
+  .ds-retry-btn {
+    transition: none;
+  }
+}

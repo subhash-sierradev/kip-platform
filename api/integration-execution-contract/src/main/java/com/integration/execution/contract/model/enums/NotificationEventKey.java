@@ -1,0 +1,55 @@
+package com.integration.execution.contract.model.enums;
+
+/**
+ * Enum of all notification event keys registered in the {@code notification_event_catalog} table.
+ */
+public enum NotificationEventKey {
+
+    // ArcGIS integration lifecycle
+    ARCGIS_INTEGRATION_CREATED,
+    ARCGIS_INTEGRATION_UPDATED,
+    ARCGIS_INTEGRATION_DELETED,
+    ARCGIS_INTEGRATION_ENABLED,
+    ARCGIS_INTEGRATION_DISABLED,
+
+    // ArcGIS job lifecycle
+    ARCGIS_INTEGRATION_JOB_COMPLETED,
+    ARCGIS_INTEGRATION_JOB_FAILED,
+    ARCGIS_INTEGRATION_JOB_ADHOC_RUN,
+
+    // Site configuration
+    SITE_CONFIG_UPDATED,
+
+    // Integration connection lifecycle
+    INTEGRATION_CONNECTION_CREATED,
+    INTEGRATION_CONNECTION_DELETED,
+    INTEGRATION_CONNECTION_SECRET_UPDATED,
+
+    // Jira webhook integration lifecycle
+    JIRAWEBHOOK_INTEGRATION_CREATED,
+    JIRAWEBHOOK_INTEGRATION_UPDATED,
+    JIRAWEBHOOK_INTEGRATION_DELETED,
+    JIRAWEBHOOK_INTEGRATION_ENABLED,
+    JIRAWEBHOOK_INTEGRATION_DISABLED,
+
+    // Jira webhook event lifecycle
+    JIRAWEBHOOK_EVENT_COMPLETED,
+    JIRAWEBHOOK_EVENT_FAILED,
+
+    // Jira webhook entity lifecycle (legacy)
+    JIRA_WEBHOOK_CREATED,
+    JIRA_WEBHOOK_UPDATED,
+    JIRA_WEBHOOK_DELETED,
+    JIRA_WEBHOOK_TOGGLED,
+
+    // Confluence integration lifecycle
+    CONFLUENCE_INTEGRATION_CREATED,
+    CONFLUENCE_INTEGRATION_UPDATED,
+    CONFLUENCE_INTEGRATION_DELETED,
+    CONFLUENCE_INTEGRATION_ENABLED,
+    CONFLUENCE_INTEGRATION_DISABLED,
+
+    // Confluence job lifecycle
+    CONFLUENCE_INTEGRATION_JOB_COMPLETED,
+    CONFLUENCE_INTEGRATION_JOB_FAILED
+}

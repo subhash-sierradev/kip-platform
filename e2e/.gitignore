@@ -1,0 +1,59 @@
+
+# Playwright
+node_modules/
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+/playwright/.auth/
+
+# Node dependencies
+node_modules/
+
+# Playwright test results
+playwright-report/
+test-results/
+blob-report/
+
+# Playwright cache
+.playwright/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+build/
+
+# Coverage
+coverage/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# GitHub Actions and Agents
+.github/
+github-agents/
+.github-workflows/
+.agent-cache/
+agent-logs/
+.gh-actions-cache/
+
+# TypeScript cache (if using TS with Playwright)
+*.tsbuildinfo
+

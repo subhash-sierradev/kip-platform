@@ -1,0 +1,154 @@
+spring:
+  application:
+    name: integration-management-service
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 30000
+          execution-arcgis-feature-layer:
+            url: ${integration.execution.base-url}
+          execution-integration-connection:
+            url: ${integration.execution.base-url}
+          execution-jira-integration:
+            url: ${integration.execution.base-url}
+          execution-kw-doc:
+            url: ${integration.execution.base-url}
+          execution-confluence-api:
+            url: ${integration.execution.base-url}
+
+  profiles:
+    active: dev
+
+  # PostgreSQL Configuration
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: ${SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  flyway:
+    enabled: true
+    default-schema: integration_platform
+    schemas:
+      - integration_platform
+      - notifications
+    create-schemas: true
+    baseline-on-migrate: true
+    validate-on-migrate: false
+    locations:
+      - classpath:db/migration
+    table: flyway_schema_history
+    connect-retries: 3
+    baseline-version: 0
+    sql-migration-prefix: V
+    sql-migration-separator: __
+    sql-migration-suffixes: .sql
+
+  quartz:
+    # Use JDBC store — tables created by Flyway V3__Create_quartz_tables.sql
+    job-store-type: jdbc
+    overwrite-existing-jobs: true
+    jdbc:
+      initialize-schema: never
+    properties:
+      # Scheduler identity
+      org.quartz.scheduler.instanceName: IntegrationPlatformScheduler
+      org.quartz.scheduler.instanceId: AUTO
+      # Job store — LocalDataSourceJobStore reuses the Spring-managed DataSource
+      org.quartz.jobStore.class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+      org.quartz.jobStore.tablePrefix: integration_platform.qrtz_
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.clusterCheckinInterval: 20000
+      org.quartz.jobStore.useDBLocks: true
+      org.quartz.jobStore.lockHandler.class: org.quartz.impl.jdbcjobstore.UpdateLockRowSemaphore
+      org.quartz.jobStore.acquireTriggersWithinLock: true
+      org.quartz.jobStore.maxMisfiresToHandleAtATime: 1
+      org.quartz.jobStore.misfireThreshold: 60000
+      # Thread pool
+      org.quartz.threadPool.class: org.quartz.simpl.SimpleThreadPool
+      org.quartz.threadPool.threadCount: 10
+      org.quartz.threadPool.threadPriority: 5
+      org.quartz.threadPool.threadsInheritContextClassLoaderOfInitializingThread: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://kaseware.sierradev.com/auth/realms/integration-platform-realm-dev
+
+server:
+  port: 8085
+  address: 0.0.0.0
+
+app:
+  messaging:
+    transport: ${APP_MESSAGING_TRANSPORT:rabbitmq}
+
+# General application timeout configuration
+application:
+  timeout:
+    max-seconds: 5
+
+logging:
+  level:
+    com.integration.management: DEBUG
+    com.integration.management.service.masterdata: DEBUG
+    org.apache.camel: WARN
+    org.quartz: WARN
+    org.hibernate.SQL: ${HIBERNATE_SQL_LOGGING:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${HIBERNATE_PARAM_LOGGING:WARN}
+    org.flywaydb: INFO
+    org.springframework.boot.autoconfigure: WARN
+    org.springframework.boot.actuate.autoconfigure: WARN
+    org.springframework.boot.web.servlet: WARN
+    org.springframework.context.annotation: WARN
+    org.springframework.security.web: WARN
+    org.springframework.web: WARN
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+
+# Integration Platform Configuration
+integration:
+  execution:
+    base-url: ${EXECUTION_SERVICE_URL:http://localhost:8081}
+
+integration-platform:
+  job-reload:
+    enabled: false
+
+  security:
+    jwt:
+      tenant-id-claim: 'tenant_id'
+      user-id-claim: 'preferred_username'
+    webhook:
+      tenant-id: 'kaseware-application-tn'
+      user-id: 'kaseware-app-user'
+      client-role: 'webhook_client'
+    error:
+      missing-auth: 'Missing or invalid Authorization header'
+      missing-fields: 'Missing tenantId or userId in token'
+      invalid-token: 'Invalid JWT token'
+
+  jira:
+    webhook:
+      id-length: 12
+      max-retries: 5
+      url-template: 'https://kaseware.sierradev.com/backend/api/webhooks/jira/execute/{webhookId}'

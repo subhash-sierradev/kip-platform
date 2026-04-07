@@ -1,0 +1,50 @@
+name: Frontend
+
+on:
+  pull_request:
+    branches:
+      - main
+      - release
+      - 'release/**'
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+
+jobs:
+  frontend-ci:
+    name: UI • Build
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint, type-check, test and build
+        run: npm run ci
+
+      - name: Install licensee
+        run: sudo gem install licensee > /dev/null
+
+      - name: Run license scan
+        run: |
+          licensee detect . --confidence 60 --json > license-report.json 2>/dev/null
+          if grep -q '"licenses":' license-report.json && grep -q 'AND' license-report.json; then
+            echo "License conflict detected (multiple license types found)."
+            exit 1
+          fi

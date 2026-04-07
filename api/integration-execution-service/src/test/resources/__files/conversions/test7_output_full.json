@@ -1,0 +1,19 @@
+[
+  {
+    "fName": "John",
+    "lName": "Doe",
+    "emailId": "john.doe1@example.com",
+    "address": [
+      {
+        "addressId": 1,
+        "streetName": "123 Main St",
+        "country": "A"
+      },
+      {
+        "addressId": 102,
+        "streetName": "456 Elm St",
+        "country": "A"
+      }
+    ]
+  }
+]

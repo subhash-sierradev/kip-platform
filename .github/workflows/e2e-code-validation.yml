@@ -1,0 +1,44 @@
+name: E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+      - release
+      - 'release/**'
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'e2e/**'
+      - '.github/workflows/e2e-code-validation.yml'
+
+jobs:
+  playwright-code-check:
+    name: Playwright • Validation
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./e2e
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'e2e/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers (Chromium only)
+        run: npx playwright install chromium --with-deps
+
+      - name: Validate test files parse correctly (dry-run)
+        run: npx playwright test --list
+        env:
+          CI: true

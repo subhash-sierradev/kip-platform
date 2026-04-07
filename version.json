@@ -1,0 +1,20 @@
+{
+  "version": "0.157.1",
+  "name": "kaseware-integration-platform",
+  "description": "Enterprise-grade multi-tenant data integration platform with Vue.js 3.5.25 frontend and Spring Boot 4.0.4 backend",
+  "lastUpdated": "2026-03-15T16:07:33.974Z",
+  "buildNumber": 354,
+  "frontend": {
+    "framework": "Vue.js",
+    "version": "3.5.25",
+    "ui": "DevExtreme 25.2.3",
+    "build": "Vite 7.3.0",
+    "state": "Pinia 3.0.4"
+  },
+  "backend": {
+    "framework": "Spring Boot",
+    "version": "4.0.4",
+    "java": "25",
+    "database": "PostgreSQL 42.7.7"
+  }
+}

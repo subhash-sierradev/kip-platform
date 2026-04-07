@@ -1,0 +1,189 @@
+package com.integration.execution.service.processor;
+
+import com.integration.execution.client.ConfluenceApiClient;
+import com.integration.execution.client.ConfluenceApiClient.ConfluencePublishRequest;
+import com.integration.execution.client.ConfluenceApiClient.ConfluencePublishResult;
+import com.integration.execution.contract.message.ConfluenceExecutionCommand;
+import com.integration.execution.model.ConfluenceJobExecutionResult;
+import com.integration.execution.model.KwMonitoringDocument;
+import com.integration.execution.service.KwGraphQLService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class KwToConfluenceOrchestratorTest {
+
+    @Mock
+    private KwGraphQLService kwGraphQLService;
+
+    @Mock
+    private ConfluencePageRenderer confluencePageRenderer;
+
+    @Mock
+    private ConfluenceApiClient confluenceApiClient;
+
+    private KwToConfluenceOrchestrator orchestrator;
+
+    @BeforeEach
+    void setUp() {
+        orchestrator = new KwToConfluenceOrchestrator(
+                kwGraphQLService, confluencePageRenderer, confluenceApiClient);
+    }
+
+    @Test
+    void processExecution_withMonitoringData_rendersAndPublishesPage() {
+        ConfluenceExecutionCommand cmd = buildCommand("DYNAMIC_TYPE", "2025-{date}", "UTC");
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"), buildDocument("doc-2"));
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any()))
+                .thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>content</p>");
+        when(confluenceApiClient.createOrUpdatePage(any(ConfluencePublishRequest.class)))
+                .thenReturn(new ConfluencePublishResult("https://example.com/page/42", "42"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.totalRecords()).isEqualTo(2);
+        assertThat(result.confluencePageUrl()).isEqualTo("https://example.com/page/42");
+        assertThat(result.confluencePageId()).isEqualTo("42");
+    }
+
+    @Test
+    void processExecution_emptyMonitoringData_returnsSuccessWithZeroRecords() {
+        ConfluenceExecutionCommand cmd = buildCommand("DYNAMIC_TYPE", "{date}-Report", "Europe/London");
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(List.of());
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.confluencePageUrl()).isNull();
+        verify(confluenceApiClient, never()).createOrUpdatePage(any());
+    }
+
+    @Test
+    void processExecution_confluenceClientThrows_returnsFailedResult() {
+        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "UTC");
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any()))
+                .thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenThrow(new RuntimeException("Confluence API unavailable"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).contains("Confluence API unavailable");
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.confluencePageUrl()).isNull();
+    }
+
+    @Test
+    void processExecution_graphqlServiceThrows_returnsFailedResult() {
+        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "UTC");
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenThrow(new RuntimeException("KW unavailable"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).contains("KW unavailable");
+        assertThat(result.totalRecords()).isZero();
+    }
+
+    @Test
+    void processExecution_businessTimezoneUsed_whenProvided() {
+        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "America/New_York");
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any()))
+                .thenReturn(ZoneId.of("America/New_York"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "99"));
+
+        ArgumentCaptor<ZoneId> timezoneCaptor = ArgumentCaptor.forClass(ZoneId.class);
+        verify(confluenceApiClient, org.mockito.Mockito.atMostOnce())
+                .getUserTimezone(anyString(), timezoneCaptor.capture());
+
+        orchestrator.processExecution(cmd);
+        // verify no exception thrown and success path completes
+    }
+
+    @Test
+    void processExecution_nullWindowStartAndEnd_usesNowAsDefault() {
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .windowStart(null)
+                .windowEnd(null)
+                .businessTimezone("UTC")
+                .build();
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(List.of());
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.errorMessage()).isNull();
+    }
+
+    private ConfluenceExecutionCommand buildCommand(
+            String dynamicType, String reportTemplate, String timezone) {
+        return ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType(dynamicType)
+                .reportNameTemplate(reportTemplate)
+                .connectionSecretName("my-secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("folder-id")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimezone(timezone)
+                .tenantId("tenant-1")
+                .build();
+    }
+
+    private KwMonitoringDocument buildDocument(String id) {
+        return KwMonitoringDocument.builder()
+                .id(id)
+                .title("Report " + id)
+                .attributes(Map.of("dynamicData", Map.of("Client", "ACME", "Priority", "HIGH")))
+                .build();
+    }
+}

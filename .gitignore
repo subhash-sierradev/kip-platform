@@ -1,0 +1,138 @@
+# ============================================================
+# Monorepo baseline ignore rules
+# Covers shared IDE, OS, backend, frontend, and E2E artifacts.
+# Module-specific .gitignore files may still add narrower rules.
+# ============================================================
+
+# ============================================================
+# IDE / Editor
+# ============================================================
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+!.vscode/
+.vscode/*
+!.vscode/settings.json
+out/
+
+# Eclipse / STS
+.classpath
+.project
+.settings/
+.springBeans
+.sts4-cache/
+.factorypath
+bin/
+
+# ============================================================
+# OS-specific
+# ============================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ============================================================
+# Logs
+# ============================================================
+*.log
+logs/
+spring.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ============================================================
+# Backend: Maven / Gradle / Java
+# ============================================================
+target/
+build/
+.gradle/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+**/.mvn/timing.properties
+
+# Keep Maven wrapper JARs committed so CI can bootstrap cleanly.
+!**/.mvn/wrapper/maven-wrapper.jar
+
+*.class
+*.ctxt
+.mtj.tmp/
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+hs_err_pid*
+replay_pid*
+
+# NetBeans
+**/nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# ============================================================
+# Frontend / Node / TypeScript
+# ============================================================
+node_modules/
+dist/
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Ignore generated JS inside the Vue app source tree, but not handwritten JS elsewhere.
+web/src/**/*.js
+!web/src/**/*.d.ts
+**/*.vue.js
+
+# ============================================================
+# E2E / Playwright
+# ============================================================
+playwright-report/
+test-results/
+blob-report/
+.playwright/
+playwright/.cache/
+playwright/.auth/
+
+# ============================================================
+# Environment / secrets
+# ============================================================
+.env
+*.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.p12
+*.jks
+*.keystore
+**/devextreme-license.*
+
+# Keep checked-in examples.
+!.env.example
+
+# ============================================================
+# Misc project-specific
+# ============================================================
+# Ignore all files in any directory named 'kip.v*' (e.g. kip.v1, kip.v2).
+**/kip.v*/**
+web/package-lock.json

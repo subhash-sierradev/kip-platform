@@ -1,0 +1,39 @@
+# Sandbox Environment Configuration
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n"
+
+  file:
+    name: ${LOG_DIR:./logs}/kip-ies.log
+    max-size: 10MB
+    max-history: 30
+    total-size-cap: 300MB
+
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_DIR:./logs}/kip-ies.%d{yyyy-MM-dd}.%i.log
+      max-file-size: 10MB
+      max-history: 30
+      total-size-cap: 300MB
+      clean-history-on-start: false
+
+  level:
+    root: INFO
+    com.integration: DEBUG
+    com.integration.execution: DEBUG
+    com.integration.execution.service: DEBUG
+    org.springframework: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.amqp: INFO
+    org.apache.camel: INFO
+    org.postgresql: INFO

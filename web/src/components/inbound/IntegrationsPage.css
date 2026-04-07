@@ -1,0 +1,668 @@
+/* ====================================
+   INTEGRATIONS PAGE STYLES - SIMPLE VERSION
+==================================== */
+
+.integrations-page {
+  height: calc(100vh - 60px);
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  overflow: hidden;
+}
+
+.integrations-container {
+  max-width: 700px;
+  width: 100%;
+  text-align: center;
+}
+
+.welcome-section {
+  background: white;
+  padding: 4rem 3rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  margin: 0 auto;
+}
+
+.welcome-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 1.5rem;
+  line-height: 1.2;
+}
+
+.welcome-description {
+  font-size: 1.125rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.feature-summary {
+  font-size: 1rem;
+  color: #9ca3af;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .integrations-page {
+    padding: 1rem;
+  }
+
+  .welcome-section {
+    padding: 2rem 1.5rem;
+  }
+
+  .welcome-title {
+    font-size: 1.75rem;
+  }
+
+  .welcome-description {
+    font-size: 1rem;
+  }
+}
+
+.create-btn:hover {
+  background: #e67e22;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(243, 156, 18, 0.3);
+}
+
+/* ====================================
+   CONTENT GRID
+==================================== */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+/* ====================================
+   WELCOME CARD
+==================================== */
+.welcome-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 2rem;
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.welcome-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.welcome-description {
+  font-size: 1rem;
+  line-height: 1.6;
+  opacity: 0.95;
+  margin-bottom: 1.5rem;
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.feature-icon {
+  color: #4ade80;
+  font-weight: 700;
+}
+
+/* ====================================
+   QUICK START GUIDE
+==================================== */
+.quick-start-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.quick-start-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quick-start-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.step-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  background: #f39c12;
+  color: white;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.step-content h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 0.25rem 0;
+}
+
+.step-content p {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ====================================
+   INTEGRATION TYPES SECTION
+==================================== */
+.integration-types {
+  margin-top: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.section-subtitle {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+.types-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.type-card {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.type-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  border-color: #f39c12;
+}
+
+.type-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.type-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.25rem;
+}
+
+.type-icon.rest-api {
+  background: #3b82f6;
+}
+
+.type-icon.database {
+  background: #10b981;
+}
+
+.type-icon.file-import {
+  background: #8b5cf6;
+}
+
+.type-icon.webhook {
+  background: #f59e0b;
+}
+
+.type-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.type-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.type-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.type-feature {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.25rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.type-feature::before {
+  content: '•';
+  color: #f39c12;
+  position: absolute;
+  left: 0;
+  font-weight: 700;
+}
+
+/* ====================================
+   RESPONSIVE DESIGN
+==================================== */
+@media (max-width: 768px) {
+  .integrations-page {
+    padding: 1rem;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .header-left,
+  .header-right {
+    justify-content: center;
+  }
+
+  .types-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-card,
+  .quick-start-card,
+  .type-card {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .welcome-title {
+    font-size: 1.25rem;
+  }
+
+  .section-title {
+    font-size: 1.25rem;
+  }
+
+  .welcome-card,
+  .quick-start-card,
+  .type-card {
+    padding: 1.25rem;
+  }
+}
+
+/* ====================================
+   CONTENT AREA
+==================================== */
+.content-area {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* ====================================
+   WELCOME SECTION
+==================================== */
+.welcome-section {
+  margin-bottom: 1rem;
+}
+
+.welcome-card {
+  background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  color: white;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+
+.welcome-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="25" r="0.5" fill="white" opacity="0.05"/><circle cx="50" cy="50" r="1.5" fill="white" opacity="0.03"/><circle cx="25" cy="75" r="0.8" fill="white" opacity="0.08"/><circle cx="75" cy="75" r="1.2" fill="white" opacity="0.06"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+  pointer-events: none;
+}
+
+.card-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: #f39c12;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.card-content {
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+
+.card-content h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 1rem 0;
+  color: white;
+}
+
+.card-content p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.feature-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+}
+
+.feature-item svg {
+  color: #f39c12;
+  flex-shrink: 0;
+}
+
+/* ====================================
+   QUICK START GUIDE
+==================================== */
+.quick-start-section h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 1.5rem 0;
+}
+
+.guide-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.step-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.step-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background: #f39c12;
+  color: white;
+  border-radius: 50%;
+  font-weight: 700;
+  font-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.step-content h4 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+}
+
+.step-content p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #6c757d;
+  margin: 0;
+}
+
+/* ====================================
+   INTEGRATION TYPES
+==================================== */
+.integration-types-section h3 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 1.5rem 0;
+}
+
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.integration-type-card {
+  background: white;
+  border-radius: 8px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.integration-type-card:hover {
+  border-color: #f39c12;
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(243, 156, 18, 0.15);
+}
+
+.type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  color: white;
+  border-radius: 16px;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2);
+}
+
+.integration-type-card:hover .type-icon {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(243, 156, 18, 0.3);
+}
+
+.type-content h4 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2c3e50;
+  margin: 0 0 0.5rem 0;
+}
+
+.type-content p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: #6c757d;
+  margin: 0;
+}
+
+/* ====================================
+   RESPONSIVE DESIGN
+==================================== */
+@media (max-width: 768px) {
+  .integrations-page {
+    padding: 1rem;
+  }
+
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+
+  .welcome-card {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem 1.5rem;
+  }
+
+  .card-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .feature-list {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-steps,
+  .integration-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .step-card,
+  .integration-type-card {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .integrations-page {
+    padding: 0.75rem;
+  }
+
+  .page-header {
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .welcome-card {
+    padding: 1.5rem 1rem;
+  }
+
+  .card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+  }
+
+  .type-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+  }
+}

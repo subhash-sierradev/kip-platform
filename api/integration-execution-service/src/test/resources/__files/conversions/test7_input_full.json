@@ -1,0 +1,33 @@
+[
+  {
+    "id": 1,
+    "firstName": "John",
+    "middleName": "A",
+    "lastName": "Doe",
+    "email": "john.doe1@example.com",
+    "address": [
+      {
+        "id": 1,
+        "street": "123 Main St",
+        "country": "Springfield"
+      },
+      {
+        "id": 102,
+        "street": "456 Elm St",
+        "country": "Springfield"
+      }
+    ],
+    "document": [
+      {
+        "documentId": 1,
+        "type": "Passport",
+        "country": "Springfield"
+      },
+      {
+        "documentId": 92,
+        "type": "Passport",
+        "country": "Springfield"
+      }
+    ]
+  }
+]

@@ -1,0 +1,45 @@
+{
+  "integrationName": "Updated Integration",
+  "integrationType": "TYPE_B",
+  "description": "Updated description for integration.",
+  "frequencyType": "WEEKLY",
+  "cronExpression": "0 15 10 * * ?",
+  "executionDate": "2025-08-28",
+  "executionTime": "11:30:00",
+  "daySchedule": ["MONDAY", "FRIDAY"],
+  "monthSchedule": ["JANUARY", "JUNE"],
+  "fetchMode": "POST",
+  "sourceEndpoint": "http://updated-endpoint.com/api",
+  "dailyExecutionInterval": 1,
+  "timezone": "UTC",
+  "credentialRef": {
+    "credentialTypeCode": "C2",
+    "credentialData": {
+      "username": "test-user",
+      "password": "test-pass"
+    }
+  },
+  "fieldsMapping": {
+    "mappings": [
+      {
+        "id": "1",
+        "sourceField": "firstName",
+        "targetField": "givenName",
+        "targetEntity": "Person",
+        "dataType": "string",
+        "isMandatory": true
+      },
+      {
+        "id": "2",
+        "sourceField": "lastName",
+        "targetField": "familyName",
+        "targetEntity": "Person",
+        "dataType": "string",
+        "isMandatory": true
+      }
+    ],
+    "unmappedSources": [],
+    "unmappedTargets": []
+  }
+}
+

@@ -1,0 +1,122 @@
+/* Enhanced Field Mapping Tab Styles */
+.datagrid-container {
+  width: 100%;
+  padding: 0;
+  background: transparent;
+  margin: 0;
+}
+.toolbar-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  width: 100%;
+  margin-top: 1px;
+  margin-bottom: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.datagrid-container .dx-datagrid {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background: white;
+}
+.datagrid-container .dx-datagrid-headers {
+  background: #f8f9fa;
+}
+.datagrid-container .dx-header-row > td {
+  background: #f8f9fa;
+  color: #374151;
+  font-weight: 600;
+  font-size: 0.875rem;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+}
+.datagrid-container .dx-row:hover {
+  background: #f9fafb;
+}
+
+/* Index Column */
+.index-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0;
+}
+.index-number {
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+/* Simple Field Cells */
+.simple-field-cell {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+}
+.simple-field-cell .field-name {
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+/* Data type styling */
+.type-text {
+  text-transform: capitalize;
+  font-size: 0.75rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+.source-type {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.target-type {
+  background: #f0f9ff;
+  color: #0891b2;
+}
+
+/* Legacy field name cells - keeping for compatibility */
+.field-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mapped-value-cell {
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875rem;
+}
+.mapped-value {
+  font-weight: 500;
+  color: #1f2937;
+}
+
+/* Transformation type */
+.transformation-text {
+  color: #059669;
+  font-weight: 500;
+  font-size: 0.875rem;
+  text-transform: capitalize;
+}
+
+/* Mandatory/Required badges */
+.mandatory-cell {
+  display: flex;
+  align-items: center;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6b7280;
+}
+.empty-icon {
+  font-size: 3rem;
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}

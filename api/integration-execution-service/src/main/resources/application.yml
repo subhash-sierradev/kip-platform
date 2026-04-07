@@ -1,0 +1,159 @@
+spring:
+  application:
+    name: integration-execution-service
+
+  profiles:
+    active: dev
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://kaseware.sierradev.com/auth/realms/integration-platform-realm-dev
+
+server:
+  port: 8081
+  address: 0.0.0.0
+
+app:
+  messaging:
+    transport: ${APP_MESSAGING_TRANSPORT:rabbitmq}
+
+# General application timeout configuration
+application:
+  timeout:
+    max-seconds: 5
+
+logging:
+  level:
+    com.integration.execution: WARN
+    com.integration.execution.service.masterdata: DEBUG
+    org.apache.camel: WARN
+    org.springframework.amqp: WARN
+    org.springframework.boot.autoconfigure: WARN
+    org.springframework.boot.autoconfigure.condition: WARN
+    org.springframework.boot.web.servlet: WARN
+    org.springframework.context.annotation: WARN
+    org.springframework.security.web: WARN
+    org.springframework.web: WARN
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+
+# Integration Platform Configuration
+integration:
+  security:
+    jwt:
+      tenant-id-claim: 'tenant_id'
+      user-id-claim: 'preferred_username'
+    webhook:
+      tenant-id: 'kaseware-application-tn'
+      user-id: 'kaseware-app-user'
+      client-role: 'webhook_client'
+    error:
+      missing-auth: 'Missing or invalid Authorization header'
+      missing-fields: 'Missing tenantId or userId in token'
+      invalid-token: 'Invalid JWT token'
+
+  # Azure Key Vault Configuration
+  azure:
+    keyvault:
+      url: ${AZURE_KEYVAULT_URL}
+      client-id: ${AZURE_KEYVAULT_CLIENT_ID}
+      client-secret: ${AZURE_KEYVAULT_CLIENT_SECRET}
+      tenant-id: ${AZURE_KEYVAULT_TENANT_ID}
+
+  # Kaseware Integration Configuration
+  kaseware:
+    auth:
+      token-url: https://staging.kaseware.com/auth/realms/KasewarePD/protocol/openid-connect/token
+      client-id: Kaseware
+      username: ${KW_API_USERNAME}
+      password: ${KW_API_PASSWORD}
+      grant-type: password
+      token-refresh-interval: PT55M
+      max-retries: 3
+      headers:
+        user-agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        origin: 'https://staging.kaseware.com'
+        referer: 'https://staging.kaseware.com/'
+        accept-encoding: 'gzip, deflate, br'
+    graphql:
+      endpoint: https://staging.kaseware.com/api
+
+  # HTTP Client Configuration for Service Integrations
+  http-clients:
+    jira:
+      connection-pool:
+        max-total: 50
+        max-per-route: 10
+        ttl-minutes: 10
+        idle-evict-minutes: 2
+      timeouts:
+        connect-seconds: 15
+        socket-seconds: 30
+        response-seconds: 60
+        connection-request-seconds: 10
+      retry:
+        max-attempts: 3
+        interval-seconds: 2
+      redirects-enabled: true
+      max-redirects: 3
+
+    arcgis:
+      connection-pool:
+        max-total: 30
+        max-per-route: 8
+        ttl-minutes: 15
+        idle-evict-minutes: 3
+      timeouts:
+        connect-seconds: 10
+        socket-seconds: 45
+        response-seconds: 120
+        connection-request-seconds: 15
+      retry:
+        max-attempts: 2
+        interval-seconds: 3
+      redirects-enabled: true
+      max-redirects: 5
+
+    kaseware:
+      connection-pool:
+        max-total: 40
+        max-per-route: 12
+        ttl-minutes: 5
+        idle-evict-minutes: 2
+      timeouts:
+        connect-seconds: 10
+        socket-seconds: 30
+        response-seconds: 60
+        connection-request-seconds: 10
+      retry:
+        max-attempts: 3
+        interval-seconds: 2
+      redirects-enabled: true
+      max-redirects: 3
+
+    proxy:
+      enabled: false
+
+  jira:
+    webhook:
+      id-length: 11
+      max-retries: 5
+      url-template: 'https://kaseware.sierradev.com/backend/api/webhooks/jira/execute/{webhookId}'
+      retry:
+        initial-delay: 100ms
+        max-delay: 10s
+        multiplier: 2.0
+        jitter: true
+    api:
+      rate-limiter:
+        permits-per-second: 10
+        max-wait-seconds: 30
+      paths:
+        server-info: '/rest/api/2/serverInfo'
+        project-search: '/rest/api/3/project/search'
+        user-assignable-search: '/rest/api/3/user/assignable/search'
+        project-statuses: '/rest/api/3/project/{projectKey}/statuses'
+        fields: '/rest/api/3/field'
+        issue-create: '/rest/api/3/issue'

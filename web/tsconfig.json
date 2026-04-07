@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "jsx": "preserve",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "noEmitOnError": true,
+    "types": ["node", "vue", "vite/client", "vitest"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "forceConsistentCasingInFileNames": true,
+    "useDefineForClassFields": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["./*"],
+      "@kaseware/lib-ui": ["../kw-client-development/libs/ui/src"],
+      "@kaseware/lib-utils": ["../kw-client-development/libs/utils/src"],
+      "@kaseware/lib-core": ["../kw-client-development/libs/core/src"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue", "src/types/globals.d.ts"],
+  "exclude": ["node_modules", "dist"]
+}

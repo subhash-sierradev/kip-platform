@@ -1,0 +1,233 @@
+/* Modal chrome is provided by the shared AppModal component */
+
+.job-id-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  justify-content: flex-end;
+  margin-right: 16px;
+}
+
+.job-id-label {
+  color: #6b7280;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.job-id-value {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  color: #1f2937;
+  font-size: 12px;
+  background: #ffffff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1.5px solid #d1d5db;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.copy-job-id-btn {
+  background: #ffffff;
+  border: 1.5px solid #d1d5db;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.copy-job-id-btn:hover {
+  background: #f9fafb;
+  color: #374151;
+  border-color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.copy-job-id-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.copy-job-id-btn .copy-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.metadata-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.metadata-content :deep(.dx-datagrid) {
+  height: 100%;
+  font-size: 13px;
+}
+
+.metadata-content :deep(.dx-datagrid-headers) {
+  font-weight: 600;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.metadata-content :deep(.dx-datagrid-header-panel) {
+  padding: 12px 0;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.metadata-content :deep(.dx-toolbar) {
+  background-color: transparent;
+  padding: 0;
+}
+
+.metadata-content :deep(.monospace-cell) {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #334155;
+}
+
+.metadata-content :deep(.dx-datagrid-rowsview .dx-row) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.metadata-content :deep(.dx-datagrid-rowsview .dx-row:hover) {
+  background-color: #f8f9fa;
+}
+
+.metadata-content :deep(.dx-group-row) {
+  background-color: #e3f2fd;
+  font-weight: 600;
+  color: #1565c0;
+  min-height: 40px;
+  height: 40px;
+}
+
+.metadata-content :deep(.dx-group-row td) {
+  padding: 10px 12px !important;
+  vertical-align: middle !important;
+  line-height: 1.5;
+}
+
+.metadata-content :deep(.dx-group-row .dx-datagrid-group-text) {
+  display: flex;
+  align-items: center;
+  min-height: 36px;
+}
+
+.metadata-content :deep(.dx-group-row:hover) {
+  background-color: #bbdefb;
+}
+
+.metadata-content :deep(.dx-datagrid-group-opened),
+.metadata-content :deep(.dx-datagrid-group-closed) {
+  color: #1565c0;
+}
+
+.error-cell-wrapper {
+  padding: 4px 0;
+  width: 100%;
+}
+
+.error-text {
+  color: #d32f2f;
+  font-size: 12px;
+  display: block;
+  white-space: normal;
+  word-wrap: break-word;
+  line-height: 1.4;
+}
+
+.metadata-content :deep(.dx-datagrid-search-panel) {
+  margin-right: 12px;
+}
+
+.metadata-content :deep(.dx-texteditor-input) {
+  font-size: 13px;
+}
+
+.metadata-content :deep(.dx-pager) {
+  padding: 12px 0;
+  background-color: #fafafa;
+  border-top: 1px solid #e0e0e0;
+}
+
+/* Index column styling */
+.metadata-content :deep(.index-cell) {
+  background-color: #f8f9fa;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.index-cell-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.metadata-content :deep(.dx-row.dx-row-alt .index-cell) {
+  background-color: #f1f3f5;
+}
+
+.metadata-content :deep(.dx-row:hover .index-cell) {
+  background-color: #e9ecef;
+}
+
+/* ID cell with copy button styling */
+.id-cell-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.id-text {
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #334155;
+  flex: 1;
+}
+
+.copy-id-btn {
+  background: #ffffff;
+  border: 1.5px solid #d1d5db;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #6b7280;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+
+.copy-id-btn:hover {
+  background: #f9fafb;
+  color: #374151;
+  border-color: #9ca3af;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.copy-id-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.copy-id-btn .copy-icon {
+  width: 14px;
+  height: 14px;
+}

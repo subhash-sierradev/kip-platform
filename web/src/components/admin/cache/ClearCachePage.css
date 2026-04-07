@@ -1,0 +1,147 @@
+/* Theme color variables for maintainability */
+:root {
+  --kw-danger: #d32f2f;
+  --kw-danger-dark: #b71c1c;
+  --kw-danger-bg: #ffeaea;
+  --kw-breakpoint-md: 900px;
+  --kw-breakpoint-sm: 600px;
+}
+
+/* --- Styles for Clear Cache --- */
+.clear-cache-page {
+  padding: 24px;
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.title {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+.clear-all-btn {
+  min-width: 120px;
+  font-size: 14px;
+  height: 36px;
+}
+.clear-cache-page .cache-card {
+  background: #fff;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  padding: 18px 24px 10px 24px;
+  margin: 0 auto;
+  max-width: 100%;
+}
+.cache-grid {
+  display: grid;
+  grid-template-columns: 1fr 60px 36px 1fr 60px 36px 1fr 60px 36px;
+  gap: 0 12px;
+}
+.cache-row {
+  display: contents;
+}
+.cache-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.cache-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cache-label {
+  font-weight: 500;
+  font-size: 12px;
+  color: #222;
+  text-align: left;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cache-size-btn {
+  font-weight: 700;
+  height: 30px;
+  min-width: 24px;
+  font-size: 13px;
+  border-radius: 12px;
+  background: #f5f7fa;
+  color: #1976d2;
+  border: 1.5px solid #1976d2;
+  box-sizing: border-box;
+  line-height: 22px;
+  text-align: center;
+  vertical-align: middle;
+}
+.delete-btn {
+  margin-left: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.18s;
+  color: var(--kw-danger);
+  font-size: 20px;
+  outline: none;
+}
+.delete-btn:focus {
+  box-shadow: 0 0 0 2px #d32f2f33;
+}
+.delete-btn:hover {
+  background: var(--kw-danger-bg);
+  color: var(--kw-danger-dark);
+}
+.error {
+  color: red;
+  margin-bottom: 12px;
+}
+.empty {
+  color: #999;
+  margin-bottom: 12px;
+}
+.dialog-content {
+  padding: 12px 0 0 0;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+/* Responsive grid for smaller screens */
+@media (max-width: var(--kw-breakpoint-md)) {
+  .clear-cache-page .cache-card {
+    padding: 8px 2px 4px 2px;
+  }
+  .cache-grid {
+    grid-template-columns: 1fr 32px 24px 1fr 32px 24px;
+    gap: 0 4px;
+  }
+  .cache-label {
+    max-width: 80px;
+    font-size: 11px;
+  }
+}
+@media (max-width: var(--kw-breakpoint-sm)) {
+  .cache-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px 0;
+  }
+  .cache-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+  }
+  .cache-main {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+}

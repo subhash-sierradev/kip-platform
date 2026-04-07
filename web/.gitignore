@@ -1,0 +1,20 @@
+# Ignore all JS files in src (except config/build files)
+/src/**/*.js
+!/src/**/*.d.ts
+
+# Ignore all JS files in root except config
+!eslint.config.js
+
+# Ignore node_modules and build output
+node_modules/
+dist/
+coverage/
+
+# Ignore lock files (package-lock.json is committed for reproducible CI installs)
+yarn.lock
+pnpm-lock.yaml
+
+# Ignore IDE/editor files
+.vscode/
+.idea/
+.DS_Store

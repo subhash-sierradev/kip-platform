@@ -1,0 +1,27 @@
+{
+  "name": "playwright-js",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "sanity": "npx playwright test --workers=1 --grep '@sanity'",
+    "regression": "npx playwright test --workers=1 --grep '@regression'",
+    "regression:arcgis": "npx playwright test --workers=1 --grep '@ArcGIS'",
+    "regression:jira": "npx playwright test --workers=1 --grep '@JiraWebhook'",
+    "report": "npx playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@faker-js/faker": "latest",
+    "@playwright/test": "^1.57.0",
+    "@types/node": "^25.0.3",
+    "dotenv": "^16.6.1",
+    "json-schema-faker": "latest"
+  },
+  "dependencies": {
+    "init": "^0.1.2"
+  }
+}

@@ -1,0 +1,300 @@
+/* --------------------------------------------- */
+/* PAGE WRAPPER */
+/* --------------------------------------------- */
+
+.siteconfig-page {
+  padding: 0.75rem;
+  background: var(--kw-content-bg, #fafbfc);
+  min-height: calc(100vh - 180px);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
+}
+
+/* -------------------------------
+   Page Header Styles
+--------------------------------*/
+.siteconfig-page .page-header {
+  background: linear-gradient(
+    135deg,
+    var(--kw-layout-color, #383838) 0%,
+    var(--kw-primary-dark, #2c3e50) 100%
+  );
+  color: white;
+  border-radius: 8px;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.15),
+    0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.siteconfig-page .header-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 2rem;
+  gap: 2rem;
+}
+
+.siteconfig-page .header-left {
+  display: flex;
+  align-items: center;
+}
+
+.siteconfig-page .page-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.siteconfig-page .title-icon {
+  color: var(--kw-accent-orange, #f59e0b);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+
+.siteconfig-page .header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.siteconfig-page .add-config-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #111827;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.siteconfig-page .add-config-btn:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
+}
+
+.siteconfig-page .add-config-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #93c5fd;
+}
+
+.siteconfig-page .btn-icon {
+  font-size: 16px;
+}
+
+@media screen and (max-width: 768px) {
+  .siteconfig-page .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+}
+
+/* -------------------------------
+   Config Key/Value/Description
+--------------------------------*/
+.siteconfig-page .config-key,
+.siteconfig-page .config-value,
+.siteconfig-page .config-description {
+  font-family: 'Courier New', monospace;
+  display: inline-block;
+  cursor: help;
+}
+
+.siteconfig-page .config-key {
+  font-weight: 600;
+  color: #000000;
+  font-size: 12px;
+}
+
+.siteconfig-page .config-value,
+.siteconfig-page .config-description {
+  color: #374151;
+}
+
+/* -------------------------------
+   Dates
+--------------------------------*/
+.siteconfig-page .date-info {
+  text-align: left;
+}
+
+.siteconfig-page .date {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.siteconfig-page .dx-button-mode-text {
+  width: 34px;
+  height: 34px;
+}
+
+/* -------------------------------
+   Responsive Rules
+--------------------------------*/
+@media screen and (min-width: 1024px) {
+  .siteconfig-page .table-wrapper {
+    min-height: 650px;
+  }
+}
+@media screen and (max-width: 768px) {
+  .siteconfig-page .table-wrapper {
+    min-height: 500px;
+    max-height: 90vh;
+  }
+}
+
+/* Data Grid Container */
+.data-grid-container {
+  background: white;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 2px 4px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 0;
+  padding: 0;
+  position: relative;
+  min-height: 500px;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* Enhanced DevExtreme Grid Styling */
+.data-grid-container :deep(.dx-datagrid) {
+  background: #ffffff !important;
+  border: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+  height: 100% !important;
+  width: 100% !important;
+}
+
+/* Responsive Grid Table */
+.data-grid-container :deep(.dx-datagrid-content) {
+  width: 100% !important;
+  overflow-x: auto !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-table) {
+  width: 100% !important;
+  table-layout: auto !important;
+  min-width: 100% !important;
+}
+
+/* Grid Headers */
+.data-grid-container :deep(.dx-datagrid-headers) {
+  background: linear-gradient(
+    135deg,
+    var(--kw-layout-color, #383838) 0%,
+    var(--kw-primary-dark, #2c3e50) 100%
+  ) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-headers .dx-datagrid-table .dx-row > td) {
+  border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+  padding: 1rem 0.75rem !important;
+  vertical-align: middle !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-headers .dx-datagrid-table .dx-row > td:last-child) {
+  border-right: none !important;
+}
+
+/* Grid Rows */
+.data-grid-container :deep(.dx-datagrid-rowsview .dx-row) {
+  background: #ffffff !important;
+  color: #374151 !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  transition: all 0.2s ease !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-rowsview .dx-row:nth-child(even)) {
+  background: #f8fafc !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-rowsview .dx-row:hover) {
+  background: #e2e8f0 !important;
+  cursor: pointer !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.data-grid-container :deep(.dx-datagrid-cell-content) {
+  padding: 0.75rem !important;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+/* Enhanced Pagination Styling */
+.data-grid-container :deep(.dx-pager) {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%) !important;
+  border-top: 1px solid #e2e8f0 !important;
+  border-radius: 0 0 8px 8px !important;
+  padding: 1rem !important;
+  font-size: 0.875rem !important;
+  color: #374151 !important;
+  min-height: 60px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+}
+
+/* Pagination Controls */
+.data-grid-container :deep(.dx-pager .dx-pages) {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.25rem !important;
+}
+
+.data-grid-container :deep(.dx-pager .dx-page) {
+  background: white !important;
+  border: 1px solid #d1d5db !important;
+  color: #374151 !important;
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 6px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+  min-width: 2.5rem !important;
+  height: 2.5rem !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.data-grid-container :deep(.dx-pager .dx-page:hover) {
+  background: #f3f4f6 !important;
+  border-color: #9ca3af !important;
+  transform: translateY(-1px) !important;
+}
+
+.data-grid-container :deep(.dx-pager .dx-page.dx-selection) {
+  background: var(--kw-accent-orange, #f59e0b) !important;
+  border-color: var(--kw-accent-orange, #f59e0b) !important;
+  color: white !important;
+  font-weight: 600 !important;
+}

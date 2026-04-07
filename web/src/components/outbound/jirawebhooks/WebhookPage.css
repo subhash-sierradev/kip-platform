@@ -1,0 +1,72 @@
+/* Webhook theme styles extracted from WebhookPage.vue */
+.webhook-page {
+  padding: 1rem;
+}
+.toolbar-row {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+.card {
+  background: #fff;
+  border: 1px solid #d9dce0;
+  border-radius: 4px;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
+}
+.metric {
+  font-size: 1.4rem;
+  margin: 0.4rem 0 0;
+  font-weight: 600;
+}
+
+/* Styles moved from WebhookPage.vue */
+.webhook-card {
+  background: #fff;
+  border: 1px solid #d9dce0;
+  border-radius: 4px;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.07);
+}
+
+.status-chip {
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.status-active {
+  background-color: #4caf50;
+  color: #fff;
+}
+
+.status-disabled {
+  background-color: #f44336;
+  color: #fff;
+}
+
+.trigger-chip {
+  font-weight: bold;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.trigger-success {
+  background-color: #4caf50;
+  color: #fff;
+}
+
+.trigger-pending {
+  background-color: #ff9800;
+  color: #fff;
+}
+
+.trigger-failure {
+  background-color: #f44336;
+  color: #fff;
+}

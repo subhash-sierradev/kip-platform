@@ -1,0 +1,32 @@
+# Development Environment Configuration
+spring:
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT}
+    username: ${RABBITMQ_USERNAME}
+    password: ${RABBITMQ_PASSWORD}
+    virtual-host: ${RABBITMQ_VHOST:/}
+
+integration:
+  # KW API Configuration for Development
+  kaseware:
+    auth:
+      username: ${KW_API_USERNAME}
+      password: ${KW_API_PASSWORD}
+
+  http-clients:
+    proxy:
+      enabled: false
+      host: ${HTTP_PROXY_HOST}
+      port: ${HTTP_PROXY_PORT}
+
+logging:
+  level:
+    com.integration.execution: INFO
+    org.apache.camel: INFO
+    org.springframework.amqp: INFO
+    org.springframework.boot.autoconfigure: WARN
+    org.springframework.boot.autoconfigure.condition: WARN
+    org.springframework.context.annotation: WARN
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'

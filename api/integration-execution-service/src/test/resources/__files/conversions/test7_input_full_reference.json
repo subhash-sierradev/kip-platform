@@ -1,0 +1,91 @@
+[
+  {
+    "id": 1,
+    "firstName": "John",
+    "middleName": "A",
+    "lastName": "Doe",
+    "email": "john.doe1@example.com",
+    "phone": "1234567801",
+    "dateOfBirth": "1990-01-01",
+    "gender": "Male",
+    "nationality": "USA",
+    "maritalStatus": "Single",
+    "occupation": "Engineer",
+    "employer": "Acme Corp",
+    "jobTitle": "Developer",
+    "educationLevel": "Bachelor",
+    "bloodType": "O+",
+    "religion": "None",
+    "ethnicity": "Caucasian",
+    "language": "English",
+    "notes": "Note 1",
+    "isActive": true,
+    "addresses": [
+      {
+        "id": 1,
+        "street": "123 Main St",
+        "city": "Springfield",
+        "state": "IL",
+        "postalCode": null,
+        "country": "USA",
+        "latitude": null,
+        "longitude": null,
+        "addressType": null
+      },
+      {
+        "id": 101,
+        "street": "123 Main St",
+        "city": "Springfield",
+        "state": "IL",
+        "postalCode": null,
+        "country": "USA",
+        "latitude": null,
+        "longitude": null,
+        "addressType": null
+      },
+      {
+        "id": 102,
+        "street": "456 Elm St",
+        "city": "Springfield",
+        "state": "IL",
+        "postalCode": null,
+        "country": "USA",
+        "latitude": null,
+        "longitude": null,
+        "addressType": null
+      }
+    ],
+    "documents": [
+      {
+        "documentId": 1,
+        "type": "Passport",
+        "number": "X1234567",
+        "issuedDate": "2015-05-01",
+        "expiryDate": "2025-05-01",
+        "issuingAuthority": "Govt USA",
+        "country": "USA",
+        "isVerified": true
+      },
+      {
+        "documentId": 92,
+        "type": "Passport",
+        "number": "A1234567",
+        "issuedDate": "2015-01-01",
+        "expiryDate": "2025-01-01",
+        "issuingAuthority": "US Govt",
+        "country": "USA",
+        "isVerified": true
+      },
+      {
+        "documentId": 93,
+        "type": "Driver License",
+        "number": "DL987654",
+        "issuedDate": "2020-06-01",
+        "expiryDate": "2030-06-01",
+        "issuingAuthority": "IL DMV",
+        "country": "USA",
+        "isVerified": true
+      }
+    ]
+  }
+]

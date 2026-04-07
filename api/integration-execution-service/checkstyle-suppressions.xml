@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!-- Suppress Javadoc checks for test classes -->
+    <suppress checks="MissingJavadocType" files=".*Test\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*Test\.java"/>
+    <suppress checks="JavadocMethod" files=".*Test\.java"/>
+    <suppress checks="MethodName" files=".*Test\.java"/>
+
+    <!-- Suppress Javadoc checks for configuration classes -->
+    <suppress checks="MissingJavadocType" files=".*[Cc]onfig.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*[Cc]onfig.*\.java"/>
+
+    <!-- Suppress Javadoc checks for DTOs/Models with Lombok -->
+    <suppress checks="MissingJavadocType" files=".*dto.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*dto.*\.java"/>
+    <suppress checks="MissingJavadocType" files=".*model.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*model.*\.java"/>
+
+    <!-- Suppress utility class constructor hiding for Spring Boot main classes -->
+    <suppress checks="HideUtilityClassConstructor" files=".*Application\.java"/>
+
+    <!-- Suppress design for extension in controllers (Spring handles this) -->
+    <suppress checks="DesignForExtension" files=".*Controller\.java"/>
+
+    <!-- Suppress parameter number check for DI constructors in Spring components only -->
+    <suppress checks="ParameterNumber" files=".*[Ss]ervice.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Cc]ontroller.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Cc]lient.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Mm]apper.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Rr]esolver.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Pp]ublisher.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Pp]rocessor.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Ee]xtractor.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Ll]istener.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Ss]cheduler.*\.java"/>
+
+    <!-- Suppress magic number checks in configuration classes -->
+    <suppress checks="MagicNumber" files=".*[Cc]onfig.*\.java"/>
+
+    <!-- Suppress visibility modifier checks for fields with Lombok annotations -->
+    <suppress checks="VisibilityModifier" files=".*model.*\.java"/>
+    <suppress checks="VisibilityModifier" files=".*dto.*\.java"/>
+
+    <!-- Allow star imports for test classes -->
+    <suppress checks="AvoidStarImport" files=".*Test\.java"/>
+
+    <!-- Suppress final parameters for interface methods -->
+    <suppress checks="FinalParameters" files=".*\.java"/>
+
+    <!-- Suppress Javadoc for Spring Boot auto-generated methods -->
+    <suppress checks="JavadocMethod" files=".*Repository\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*Repository\.java"/>
+
+    <!-- Suppress checks for Lombok generated methods -->
+    <suppress checks="JavadocMethod" files=".*" message="Missing a Javadoc comment"/>
+
+    <!-- Allow IllegalCatch for framework integration points where generic exception handling is needed -->
+    <suppress checks="IllegalCatch" files=".*DatabaseSchemaInitializer\.java"/>
+    <suppress checks="IllegalCatch" files=".*CronExpressionFormatter\.java"/>
+    <suppress checks="IllegalCatch" files=".*CronExpressionValidator\.java"/>
+    <suppress checks="IllegalCatch" files=".*IntegrationHttpClient\.java"/>
+    <suppress checks="IllegalCatch" files=".*IntegrationSchedulerService\.java"/>
+    <suppress checks="IllegalCatch" files=".*IntegrationService\.java"/>
+    <suppress checks="IllegalCatch" files=".*IntegrationExecutor\.java"/>
+    <suppress checks="IllegalCatch" files=".*IntegrationScheduler\.java"/>
+
+    <!-- Allow line length violations for complex method signatures and configurations -->
+    <suppress checks="LineLength" files=".*Test\.java"/>
+
+    <!-- Suppress file length check for test classes -->
+    <suppress checks="FileLength" files=".*Test\.java"/>
+    <suppress checks="FileLength" files=".*KwGraphQLService\.java"/>
+
+    <!-- Suppress cyclomatic complexity for complex mapping logic -->
+    <suppress checks="CyclomaticComplexity" files=".*FieldMappingConverter\.java"/>
+    <suppress checks="CyclomaticComplexity" files=".*XmlToJsonConvertor\.java"/>
+    <suppress checks="CyclomaticComplexity" files=".*JiraFieldMapper\.java"/>
+
+    <!-- Suppress NPath complexity for complex mapping logic -->
+    <suppress checks="NPathComplexity" files=".*FieldMappingConverter\.java"/>
+    <suppress checks="NPathComplexity" files=".*XmlToJsonConvertor\.java"/>
+    <suppress checks="NPathComplexity" files=".*XmlToJsonConverter\.java"/>
+</suppressions>

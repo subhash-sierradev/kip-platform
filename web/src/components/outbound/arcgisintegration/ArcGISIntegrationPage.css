@@ -1,0 +1,381 @@
+/* ArcGIS Integration Dashboard Styles - Based on JiraWebhookDashboard */
+
+/* CSS Custom Properties for consistent color scheme */
+:root {
+  --chip-grey-bg: #6b728015;
+  --chip-grey-text: #6b7280;
+  --label-text: #374151;
+  --kw-placeholder-color: #9ca3af;
+  --kw-placeholder-focus-color: #d1d5db;
+}
+
+/* Standardized placeholder styling for search inputs */
+input::placeholder,
+textarea::placeholder {
+  color: var(--kw-placeholder-color);
+  font-weight: 400;
+  font-size: 14px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  opacity: 1;
+}
+
+input:focus::placeholder,
+textarea:focus::placeholder {
+  color: var(--kw-placeholder-focus-color);
+}
+
+/* Integration Grid Layout */
+.integration-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.3rem;
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Responsive grid layout */
+@media (min-width: 1400px) {
+  .integration-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 1200px) and (max-width: 1399px) {
+  .integration-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1199px) {
+  .integration-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .integration-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.integration-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 0;
+  padding: 0;
+}
+
+/* Integration Card Styles */
+.integration-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  padding: 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  font-size: 30px;
+  border: 1px solid #e5e7eb;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
+  cursor: pointer;
+}
+
+.integration-card:hover {
+  box-shadow: 0 4px 18px rgba(0, 121, 193, 0.18);
+}
+
+.card-top-row {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 9px;
+}
+
+.icon-box {
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  color: var(--kw-secondary-dark);
+}
+
+.title-box {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.title-text {
+  font-weight: 600;
+  font-size: 15px;
+  color: #2c3e50;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.title-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.created-text {
+  color: var(--chip-grey-text);
+  font-size: 11px;
+}
+
+.created-text .label {
+  font-weight: 600;
+  color: var(--label-text);
+}
+
+/* Status and Environment Chips */
+.status-chip {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9px;
+  line-height: 16px;
+  display: inline-block;
+}
+
+.status-active {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.status-disabled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-running {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-aborted {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.environment-chip {
+  background: var(--chip-grey-bg);
+  color: var(--chip-grey-text);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.dynamic-doc-chip {
+  background: #94a3b815;
+  color: #52667a;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 9px;
+  white-space: nowrap;
+}
+
+.chips-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* Sync Status */
+.sync-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--label-text);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sync-date {
+  font-size: 10px;
+  color: #6b7280;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Info Row */
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.info-cell {
+  font-size: 11px;
+  color: #6b7280;
+  flex: 1;
+}
+
+.info-cell.align-right {
+  text-align: right;
+}
+
+.info-cell .label {
+  font-weight: 600;
+  color: var(--label-text);
+  margin-right: 4px;
+}
+
+.info-cell .value {
+  font-weight: 500;
+}
+
+/* URL Row */
+.url-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.url-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--label-text);
+  flex-shrink: 0;
+}
+
+.url-value {
+  font-size: 11px;
+  font-family: monospace;
+  background: #f8f9fa;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1.3;
+  color: #374151;
+  flex: 1;
+  word-break: break-all;
+}
+
+.copy-icon-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.copy-icon-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.copy-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* Skeleton Loading */
+.skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: loading 1.5s infinite;
+  border-radius: 4px;
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.card-title.skeleton {
+  height: 16px;
+  margin-bottom: 8px;
+}
+
+.card-desc.skeleton {
+  height: 14px;
+  margin-bottom: 12px;
+}
+
+.card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-meta .skeleton {
+  height: 12px;
+}
+
+/* Empty State */
+.simple-empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
+  background-color: #fafbfc;
+  border-radius: 8px;
+  border: 2px dashed #e5e7eb;
+  color: #6b7280;
+  margin: 0;
+  margin-top: 2rem;
+}
+
+.empty-title {
+  margin: 0 0 0.5rem 0;
+  color: #9ca3af;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.empty-subtitle {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Status Row */
+.status-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 8px;
+}
+
+/* FontAwesome icon support */
+.fas {
+  font-family: 'Font Awesome 5 Free';
+  font-weight: 900;
+}
+
+.fa-pause::before {
+  content: '\f04c';
+}
+
+.fa-play::before {
+  content: '\f04b';
+}
