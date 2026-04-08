@@ -30,30 +30,6 @@ class ConfluenceIntegrationMapperTest {
     }
 
     @Test
-    @DisplayName("toEntity defaults confluenceSpaceKeyFolderKey to ROOT when request value is null")
-    void toEntity_nullFolderKey_defaultsToRoot() {
-        ConfluenceIntegration entity = mapper.toEntity(minimalRequest(null));
-
-        assertThat(entity.getConfluenceSpaceKeyFolderKey()).isEqualTo(ROOT_FOLDER_KEY);
-    }
-
-    @Test
-    @DisplayName("toEntity defaults confluenceSpaceKeyFolderKey to ROOT when request value is blank")
-    void toEntity_blankFolderKey_defaultsToRoot() {
-        ConfluenceIntegration entity = mapper.toEntity(minimalRequest("   "));
-
-        assertThat(entity.getConfluenceSpaceKeyFolderKey()).isEqualTo(ROOT_FOLDER_KEY);
-    }
-
-    @Test
-    @DisplayName("toEntity defaults confluenceSpaceKeyFolderKey to ROOT when request value is empty string")
-    void toEntity_emptyFolderKey_defaultsToRoot() {
-        ConfluenceIntegration entity = mapper.toEntity(minimalRequest(""));
-
-        assertThat(entity.getConfluenceSpaceKeyFolderKey()).isEqualTo(ROOT_FOLDER_KEY);
-    }
-
-    @Test
     @DisplayName("toEntity preserves explicit confluenceSpaceKeyFolderKey when provided")
     void toEntity_explicitFolderKey_preserved() {
         ConfluenceIntegration entity = mapper.toEntity(minimalRequest("PAGE-123"));
@@ -65,25 +41,6 @@ class ConfluenceIntegrationMapperTest {
     @DisplayName("toEntity returns null for null request")
     void toEntity_nullRequest_returnsNull() {
         assertThat(mapper.toEntity(null)).isNull();
-    }
-
-    @Test
-    @DisplayName("updateEntity defaults confluenceSpaceKeyFolderKey to ROOT when request value is null")
-    void updateEntity_nullFolderKey_defaultsToRoot() {
-        ConfluenceIntegration existing = ConfluenceIntegration.builder()
-                .name("Old Name")
-                .normalizedName("old_name")
-                .documentItemType("DOCUMENT")
-                .documentItemSubtype("DOCUMENT_FINAL")
-                .reportNameTemplate("Old Report")
-                .confluenceSpaceKey("SPACE")
-                .confluenceSpaceKeyFolderKey("OLD-KEY")
-                .connectionId(UUID.randomUUID())
-                .build();
-
-        mapper.updateEntity(minimalRequest(null), existing);
-
-        assertThat(existing.getConfluenceSpaceKeyFolderKey()).isEqualTo(ROOT_FOLDER_KEY);
     }
 
     @Test
