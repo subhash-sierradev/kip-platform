@@ -1,0 +1,235 @@
+// ============================================================
+// integration-management-service  (port 8085)
+// Equivalent to integration-management-service/pom.xml
+// Plugins: Spring Boot fat-JAR, Checkstyle, JaCoCo, Flyway
+// ============================================================
+
+// ── Flyway database plugin classpath ─────────────────────────
+// Flyway 10+ modularised database support into separate JARs.
+// The Gradle plugin runs in the buildscript classloader and does NOT
+// automatically inherit the project runtimeClasspath, so the
+// PostgreSQL module and JDBC driver must be declared here.
+// Versions are read from gradle.properties to avoid duplication.
+buildscript {
+    def props = new Properties()
+    file("${rootDir}/gradle.properties").withInputStream { props.load(it) }
+    repositories { mavenCentral() }
+    dependencies {
+        classpath "org.flywaydb:flyway-database-postgresql:${props.flywayVersion}"
+        classpath "org.postgresql:postgresql:${props.postgresqlVersion}"
+    }
+}
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.4'
+    id 'checkstyle'
+    id 'jacoco'
+    id 'org.flywaydb.flyway' version '11.20.0'
+}
+
+group = 'com.integration'
+version = projectVersion
+
+// ── BOM / Dependency Management ─────────────────────────────
+// Uses Gradle-native platform() — no io.spring.dependency-management plugin needed.
+// Spring Boot BOM manages Spring, Jackson, Hibernate, Caffeine, etc.
+// Spring Cloud BOM manages spring-cloud-starter-openfeign.
+dependencies {
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    implementation platform("org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}")
+    implementation platform("org.junit:junit-bom:${junitVersion}")
+
+    // ── Contract module ─────────────────────────────────────
+    implementation project(':integration-execution-contract')
+
+    // ── Spring Boot starters ─────────────────────────────────
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    // AOP starter pinned to 3.5.12 as in pom.xml (explicit version override)
+    implementation "org.springframework.boot:spring-boot-starter-aop:${springBootAopVersion}"
+    implementation('org.springframework.cloud:spring-cloud-starter-openfeign') {
+        exclude group: 'commons-fileupload', module: 'commons-fileupload'
+    }
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-quartz'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // ── Database ─────────────────────────────────────────────
+    runtimeOnly "org.postgresql:postgresql:${postgresqlVersion}"
+    implementation 'org.flywaydb:flyway-core'
+    runtimeOnly "org.flywaydb:flyway-database-postgresql:${flywayVersion}"
+
+    // ── Validation ───────────────────────────────────────────
+    implementation 'jakarta.validation:jakarta.validation-api'
+    implementation 'org.hibernate.validator:hibernate-validator'
+
+    // ── Jackson ──────────────────────────────────────────────
+    implementation 'com.fasterxml.jackson.core:jackson-annotations'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    // ── Spring Data ──────────────────────────────────────────
+    implementation 'org.springframework.data:spring-data-commons'
+
+    // ── MapStruct + Lombok annotation processing ─────────────
+    // Order matters: lombok must run before mapstruct
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok-mapstruct-binding:${lombokMapstructBindingVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+
+    // ── Caching ──────────────────────────────────────────────
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // ── HTTP Client ──────────────────────────────────────────
+    implementation "org.apache.httpcomponents.client5:httpclient5:${httpclient5Version}"
+    implementation "org.apache.httpcomponents.core5:httpcore5:${httpcore5Version}"
+
+    // ── JOLT (JSON transformation) ───────────────────────────
+    implementation "com.bazaarvoice.jolt:jolt-core:${joltCoreVersion}"
+
+    // ── Utilities ────────────────────────────────────────────
+    implementation "commons-validator:commons-validator:${commonsValidatorVersion}"
+    implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
+
+    // ── Spring Retry ─────────────────────────────────────────
+    implementation "org.springframework.retry:spring-retry:${springRetryVersion}"
+
+    // ── Jakarta JSON ─────────────────────────────────────────
+    implementation 'jakarta.json:jakarta.json-api'
+    runtimeOnly "org.eclipse.parsson:parsson:${parssonVersion}"
+
+    // ── Test dependencies ────────────────────────────────────
+    // Exclude assertj from starter then re-add the version controlled by BOM (matches pom.xml)
+    testImplementation('org.springframework.boot:spring-boot-starter-test') {
+        exclude group: 'org.assertj', module: 'assertj-core'
+    }
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
+    testImplementation 'org.assertj:assertj-core'
+}
+
+// ── Java compiler options ────────────────────────────────────
+// -parameters preserves method parameter names (required by Spring MVC / JPA)
+compileJava {
+    options.compilerArgs << '-parameters'
+}
+
+// ── Spring Boot fat JAR ──────────────────────────────────────
+// Mirrors spring-boot-maven-plugin repackage + mainClass configuration
+springBoot {
+    mainClass = 'com.integration.management.IntegrationManagementServiceApplication'
+}
+
+bootJar {
+    archiveClassifier = ''   // single fat JAR, no plain jar alongside
+}
+
+// Plain jar is not needed for a runnable service
+jar {
+    enabled = false
+}
+
+// ── Test task ────────────────────────────────────────────────
+// Mirrors maven-surefire-plugin configuration
+test {
+    useJUnitPlatform()
+    maxHeapSize = '1024m'
+    include '**/*Test.class', '**/*Tests.class'
+    jvmArgs '-XX:+EnableDynamicAgentLoading'   // suppress Java 25 JaCoCo agent warning
+    finalizedBy jacocoTestReport               // always generate report after tests
+}
+
+// ── Checkstyle ───────────────────────────────────────────────
+// Mirrors maven-checkstyle-plugin in IMS pom.xml
+// failsOnError=false  →  ignoreFailures = true  (violations logged, build continues)
+// violationSeverity=warning, logViolationsToConsole=true
+// configFile points to the module-root checkstyle.xml (shared with Maven — no duplication).
+// checkstyle/ subdir is the Gradle configDirectory; it contains copies of both checkstyle
+// files so that configDirectory never overlaps with build/ (Gradle 9 strict-validation safe).
+checkstyle {
+    toolVersion = checkstyleToolVersion
+    configFile = file('checkstyle.xml')
+    ignoreFailures = true    // matches failsOnError=false in Maven
+    showViolations = true
+}
+checkstyleTest {
+    enabled = true           // matches includeTestSourceDirectory=true in Maven
+}
+
+tasks.withType(Checkstyle).configureEach {
+    // configDirectory sets ${config_loc} used by the SuppressionFilter inside checkstyle.xml
+    configDirectory = project.file('checkstyle')
+}
+
+// ── JaCoCo ───────────────────────────────────────────────────
+// Mirrors jacoco-maven-plugin in IMS pom.xml
+// 80% LINE + BRANCH minimum (verify phase → check task)
+jacoco {
+    toolVersion = jacocoVersion
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = false
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = new BigDecimal(jacocoMinimumCoverage)
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = new BigDecimal(jacocoMinimumCoverage)
+            }
+        }
+    }
+}
+
+// Wire coverage verification into the standard 'check' lifecycle
+// ./gradlew check  →  runs tests + enforces 80% coverage (matches ./mvnw verify)
+// ./gradlew test jacocoTestReport  →  tests + report only (matches ./mvnw test jacoco:report)
+check.dependsOn jacocoTestCoverageVerification
+
+// ── Flyway (CLI / migration plugin) ──────────────────────────
+// Mirrors flyway-maven-plugin in IMS pom.xml
+// Use: .\gradlew :integration-management-service:flywayMigrate  (from api/ or integration-management-service/)
+// PostgreSQL driver + flyway-database-postgresql are added to the flyway
+// configuration above so the plugin classloader can find them at runtime.
+flyway {
+    url = 'jdbc:postgresql://localhost:5432/kw_ip_dev'
+    user = 'postgres'
+    password = 'Abc@12345'
+    schemas = ['integration_platform', 'notifications']
+    locations = ['filesystem:src/main/resources/db/migration']
+    table = 'flyway_schema_history'
+    createSchemas = true
+    baselineOnMigrate = true
+    validateOnMigrate = false
+    sqlMigrationPrefix = 'V'
+    sqlMigrationSeparator = '__'
+    sqlMigrationSuffixes = ['.sql']
+}
+
+
+

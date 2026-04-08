@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!-- Minimal suppressions for contract module (DTOs, Records, Models only) -->
+    
+    <!-- Allow line length violations in complex method signatures or long URLs -->
+    <suppress checks="LineLength" files=".*Response\.java"/>
+    <suppress checks="LineLength" files=".*Request\.java"/>
+</suppressions>

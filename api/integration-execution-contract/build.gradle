@@ -1,0 +1,44 @@
+// ============================================================
+// integration-execution-contract
+// Pure DTO / shared-model library — no Spring Boot, no tests, no JaCoCo
+// Equivalent to integration-execution-contract/pom.xml
+// ============================================================
+
+plugins {
+    id 'java-library'
+    id 'checkstyle'
+}
+
+group = 'com.integration'
+version = contractVersion
+
+dependencies {
+    // Exposed to consumers as API (matches <scope>compile</scope> / no scope in pom)
+    api "jakarta.validation:jakarta.validation-api:${jakartaValidationVersion}"
+    api "com.fasterxml.jackson.core:jackson-annotations:${jacksonAnnotationsVersion}"
+    api "com.fasterxml.jackson.core:jackson-databind:${jacksonDatabindVersion}"
+    api "org.hibernate.validator:hibernate-validator:${hibernateValidatorContractVersion}"
+
+    // Lombok — compile-time only, excluded from the published jar
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+}
+
+// ── Checkstyle ──────────────────────────────────────────────
+// Mirrors maven-checkstyle-plugin config in contract pom.xml
+// failsOnError=true  →  ignoreFailures = false
+// violationSeverity=warning  →  maxWarnings = 0
+// configFile points to the module-root checkstyle.xml (shared with Maven — no duplication).
+// checkstyle/ subdir is the Gradle configDirectory; it contains copies of both checkstyle
+// files so that configDirectory never overlaps with build/ (Gradle 9 strict-validation safe).
+checkstyle {
+    toolVersion = checkstyleToolVersion
+    configFile = file('checkstyle.xml')
+    ignoreFailures = false
+    maxWarnings = 0
+}
+
+tasks.withType(Checkstyle).configureEach {
+    // configDirectory sets ${config_loc} used by the SuppressionFilter inside checkstyle.xml
+    configDirectory = project.file('checkstyle')
+}

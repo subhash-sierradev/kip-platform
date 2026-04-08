@@ -81,6 +81,8 @@ api/
 **Profile Activation**:
 
 ```bash
+./gradlew :integration-management-service:bootRun --args='--spring.profiles.active=sandbox'
+# Maven equivalent:
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=sandbox
 java -jar service.jar --spring.profiles.active=prod
 ```
@@ -551,7 +553,13 @@ void getIntegration_nonExistent_throwsNotFoundException()
 - Full rules for services (181 lines)
 - Minimal rules for contract module (75 lines - formatting + naming only)
 - Line length: 120 characters
-- Run: `./mvnw checkstyle:check`
+- **Dual-path layout** (pom.xml is unchanged — no changes needed for Maven):
+  - Maven reads `checkstyle.xml` + `checkstyle-suppressions.xml` from each **module root** (`<configLocation>` + `<suppressionsLocation>` in pom.xml)
+  - Gradle uses `configFile = file('checkstyle.xml')` (module root — shared, no duplicate) and `configDirectory = project.file('checkstyle')` pointing to a `checkstyle/` subdir that contains copies of both `checkstyle.xml` and `checkstyle-suppressions.xml`
+  - Gradle 9 requires `configDirectory` to be a dedicated dir not containing `build/` output — that is why `checkstyle/` exists alongside the module-root files
+  - When editing Checkstyle rules: update the **module-root** files first, then sync the copies in `checkstyle/`
+- Run (Gradle primary): `./gradlew checkstyleMain checkstyleTest`
+- Run (Maven fallback): `./mvnw checkstyle:check`
 
 #### EditorConfig
 
@@ -563,9 +571,43 @@ If an `.editorconfig` is present, use these settings:
 
 ### Build & Deployment
 
-#### Maven Commands
+#### Gradle Commands (primary)
 
-```bash
+```powershell
+# Build all modules (fat JARs in build/libs/)
+./gradlew build -x test
+
+# Build specific module
+./gradlew :integration-execution-contract:build
+
+# Run management service (port 8085)
+./gradlew :integration-management-service:bootRun
+
+# Run execution service (port 8081)
+./gradlew :integration-execution-service:bootRun
+
+# Fat JAR deployment
+./gradlew bootJar -x test
+java -jar integration-management-service/build/libs/integration-management-service-*.jar
+java -jar integration-execution-service/build/libs/integration-execution-service-*.jar
+
+# Tests with JaCoCo coverage report
+./gradlew test jacocoTestReport
+
+# Enforce 80% coverage threshold
+./gradlew check
+
+# Checkstyle
+./gradlew checkstyleMain checkstyleTest
+
+# Database migration (IMS only — needs running PostgreSQL)
+./gradlew :integration-management-service:flywayMigrate
+./gradlew :integration-management-service:flywayInfo
+```
+
+#### Maven Commands (dual-build fallback)
+
+```powershell
 # Build all modules (order matters: contract → services)
 mvn clean install
 
@@ -598,16 +640,18 @@ mvn clean verify
 The root `kip-backend` parent POM is permanently fixed at `1.0.0` and **must never be changed**.
 Only the child module `<version>` tags (`integration-execution-contract`, `integration-management-service`, `integration-execution-service`) are updated during version bumps.
 Do **not** include `kip-backend` parent version in any version management, `mvn versions:set`, or release automation.
+When bumping module versions, update the `<version>` tags in each `pom.xml` **and** the `projectVersion` / `contractVersion` in `api/gradle.properties` to keep both builds in sync.
 
 #### Deployment Checklist
 
-- ✅ Both services build as fat JARs
-- ✅ Checkstyle passes (0 violations)
+- ✅ Both services build as fat JARs (`./gradlew bootJar -x test` or `./mvnw clean package`)
+- ✅ Checkstyle passes on both builds (`./gradlew checkstyleMain checkstyleTest` + `./mvnw checkstyle:check`)
 - ✅ All tests pass
 - ✅ Coverage ≥80%
 - ✅ Environment variables configured
-- ✅ Database migrations applied
+- ✅ Database migrations applied (`./gradlew :integration-management-service:flywayMigrate`)
 - ✅ Parent POM version remains `1.0.0` (never bumped)
+- ✅ When changing Checkstyle rules: update module-root `checkstyle.xml` / `checkstyle-suppressions.xml` AND sync copies in `<module>/checkstyle/`
 
 ---
 

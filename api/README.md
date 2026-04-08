@@ -45,6 +45,7 @@ KIP Backend automates data synchronization workflows:
 | ---------------- | ---------------------------------------------------- |
 | **Language**     | Java 25                                              |
 | **Framework**    | Spring Boot 4.0.4                                    |
+| **Build Tools**  | Gradle 9.4.1 (primary) · Maven 3.8+ (dual-build)     |
 | **Database**     | PostgreSQL 42.7.7 + Flyway 11.20.0                   |
 | **Scheduler**    | Quartz (clustered)                                   |
 | **Security**     | OAuth2 + Keycloak JWT                                |
@@ -62,14 +63,33 @@ KIP Backend automates data synchronization workflows:
 ### Prerequisites
 
 - Java 25 (JDK)
-- Maven 3.8+
+- Gradle 9.4.1 **or** Maven 3.8+ (both supported — dual-build)
 - PostgreSQL 14+
 - RabbitMQ 3.x
 - Azure subscription (or use dev fallback)
 
-### Build & Run
+### Build & Run — Gradle (primary)
 
-```bash
+```powershell
+# Build all modules (produces fat JARs)
+cd api
+./gradlew build -x test
+
+# Run management service (port 8085)
+./gradlew :integration-management-service:bootRun
+
+# Run execution service (port 8081 — separate terminal)
+./gradlew :integration-execution-service:bootRun
+
+# Or run fat JARs directly
+./gradlew bootJar -x test
+java -jar integration-management-service/build/libs/integration-management-service-*.jar
+java -jar integration-execution-service/build/libs/integration-execution-service-*.jar
+```
+
+### Build & Run — Maven (dual-build fallback)
+
+```powershell
 # Build entire project
 mvn clean install
 
@@ -137,7 +157,31 @@ java -jar target/integration-execution-service-<version>.jar
 
 ## Testing
 
-```bash
+### Gradle
+
+```powershell
+# Run all tests
+./gradlew test
+
+# Run tests + generate JaCoCo HTML coverage report
+./gradlew test jacocoTestReport
+
+# Enforce 80% coverage threshold (mirrors ./mvnw verify)
+./gradlew check
+
+# Run checkstyle on main sources
+./gradlew checkstyleMain
+
+# Run specific test class
+./gradlew :integration-management-service:test --tests "com.integration.management.*JiraApiClientTest"
+
+# View JaCoCo coverage report
+# integration-management-service/build/reports/jacoco/test/html/index.html
+```
+
+### Maven (dual-build)
+
+```powershell
 # Run all tests
 mvn test
 
@@ -161,11 +205,43 @@ mvn test -Dtest=JiraApiClientTest
 ## Project Structure
 
 ```
-kip-backend/
+api/
+├── settings.gradle                      # Gradle root — declares all submodules
+├── build.gradle                         # Gradle root — shared Java toolchain config
+├── gradle.properties                    # Gradle — all version strings centralised
+├── gradlew / gradlew.bat                # Gradle wrapper scripts
+├── gradle/wrapper/                      # Gradle wrapper JAR + properties
+├── pom.xml                              # Maven root (dual-build — aggregator only)
+│
 ├── integration-execution-contract/      # Shared DTOs (lightweight, no tests)
+│   ├── build.gradle                     # Gradle build (java-library + checkstyle)
+│   ├── pom.xml                          # Maven build (unchanged)
+│   ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
+│   ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
+│   └── checkstyle/                      # Gradle configDirectory (must not contain build/ — Gradle 9 rule)
+│       ├── checkstyle.xml               # Copy — kept in sync with module-root checkstyle.xml
+│       └── checkstyle-suppressions.xml  # Copy — Gradle resolves ${config_loc}/checkstyle-suppressions.xml here
+│
 ├── integration-management-service/      # Config API (8085, fat JAR)
+│   ├── build.gradle                     # Gradle build (Spring Boot + JaCoCo + Flyway)
+│   ├── pom.xml                          # Maven build (unchanged)
+│   ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
+│   ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
+│   └── checkstyle/                      # Gradle configDirectory
+│       ├── checkstyle.xml               # Copy — kept in sync with module-root
+│       └── checkstyle-suppressions.xml  # Copy — read by Gradle
+│
 └── integration-execution-service/       # Processing Engine (8081, fat JAR)
+    ├── build.gradle                     # Gradle build (Spring Boot + JaCoCo)
+    ├── pom.xml                          # Maven build (unchanged)
+    ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
+    ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
+    └── checkstyle/                      # Gradle configDirectory
+        ├── checkstyle.xml               # Copy — kept in sync with module-root
+        └── checkstyle-suppressions.xml  # Copy — read by Gradle
 ```
+
+> **Note on Checkstyle config layout**: Each module root is the **authoritative source**: `checkstyle.xml` is read by both Maven (`<configLocation>`) and Gradle (`configFile`); `checkstyle-suppressions.xml` is read by Maven (`<suppressionsLocation>`). The `checkstyle/` subdirectory is Gradle's `configDirectory` — it must not overlap with `build/` (Gradle 9 strict validation), so copies of both files are kept there. Always update the module-root files first, then sync the copies in `checkstyle/`.
 
 ---
 
@@ -218,32 +294,39 @@ Set `azure.keyvault.enabled: false` to use PostgreSQL `vault_secrets` table.
 ### Code Standards
 
 1. **IDE Formatting**: Use .editorconfig (automatic in IntelliJ/VS Code/Eclipse)
-2. **Checkstyle**: Run `mvn checkstyle:check` before committing
-3. **Testing**: Write tests first (TDD preferred), maintain >80% coverage
-4. **Database**: Always use Flyway migrations for schema changes
-5. **Contract Module**: Coordinate changes - shared by both services
+2. **Checkstyle (Gradle)**: Run `./gradlew checkstyleMain checkstyleTest` — reads `checkstyle.xml` from module root, suppressions from `checkstyle/`
+3. **Checkstyle (Maven)**: Run `./mvnw checkstyle:check` — reads `checkstyle.xml` + `checkstyle-suppressions.xml` from module root
+4. **Keep in sync**: When editing checkstyle files, update the module-root files **and** the copies in `checkstyle/`
+5. **Testing**: Write tests first (TDD preferred), maintain >80% coverage
+6. **Database**: Always use Flyway migrations for schema changes
+7. **Contract Module**: Coordinate changes — shared by both services
 
 ### Development Workflow
 
-```bash
+```powershell
+# ── Gradle (primary) ─────────────────────────────────────────
 # 1. Format code (automatic with EditorConfig)
 # 2. Validate checkstyle
-mvn checkstyle:check
+./gradlew checkstyleMain checkstyleTest
 
-# 3. Run tests with coverage
-mvn clean test jacoco:report
+# 3. Run tests with coverage report
+./gradlew test jacocoTestReport
 
-# 4. Build all modules
-mvn clean install
+# 4. Enforce 80% coverage threshold (like mvn verify)
+./gradlew check
 
-# 5. Test both services locally
-# Terminal 1: Management Service (8085)
-cd integration-management-service
-mvn spring-boot:run
+# 5. Build all modules (fat JARs)
+./gradlew build -x test
 
-# Terminal 2: Execution Service (8081)
-cd integration-execution-service
-mvn spring-boot:run
+# 6. Database migration (IMS only)
+./gradlew :integration-management-service:flywayMigrate
+
+# ── Maven (dual-build fallback) ───────────────────────────────
+./mvnw checkstyle:check
+./mvnw clean test jacoco:report
+./mvnw clean verify
+./mvnw clean install
+cd integration-management-service && ./mvnw flyway:migrate
 ```
 
 **Last Updated**: March 16, 2026

@@ -1,0 +1,195 @@
+// ============================================================
+// integration-execution-service  (port 8081)
+// Equivalent to integration-execution-service/pom.xml
+// Plugins: Spring Boot fat-JAR, Checkstyle, JaCoCo
+// No Flyway (IES is stateless — database access only via IMS)
+// ============================================================
+
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.0.4'
+    id 'checkstyle'
+    id 'jacoco'
+}
+
+group = 'com.integration'
+version = projectVersion
+
+// ── BOM / Dependency Management ─────────────────────────────
+// Uses Gradle-native platform() — matches dependencyManagement in IES pom.xml
+// Spring Boot BOM + JUnit BOM + Azure SDK BOM
+dependencies {
+    implementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
+    implementation platform("org.junit:junit-bom:${junitVersion}")
+    implementation platform("com.azure:azure-sdk-bom:${azureSdkBomVersion}")
+
+    // ── Contract module ─────────────────────────────────────
+    implementation project(':integration-execution-contract')
+
+    // ── Spring Boot starters ─────────────────────────────────
+    implementation 'org.springframework.boot:spring-boot-starter'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+    // AOP starter pinned to 3.5.12 as in pom.xml (explicit version override)
+    implementation "org.springframework.boot:spring-boot-starter-aop:${springBootAopVersion}"
+    implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+
+    // ── Validation ───────────────────────────────────────────
+    implementation 'jakarta.validation:jakarta.validation-api'
+    implementation 'org.hibernate.validator:hibernate-validator'
+
+    // ── Jackson ──────────────────────────────────────────────
+    implementation 'com.fasterxml.jackson.core:jackson-annotations'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+
+    // ── Spring Data ──────────────────────────────────────────
+    implementation 'org.springframework.data:spring-data-commons'
+
+    // ── MapStruct + Lombok annotation processing ─────────────
+    // IES pom does NOT include lombok-mapstruct-binding (unlike IMS)
+    implementation "org.mapstruct:mapstruct:${mapstructVersion}"
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
+
+    // ── Caching ──────────────────────────────────────────────
+    implementation 'com.github.ben-manes.caffeine:caffeine'
+
+    // ── HTTP Client ──────────────────────────────────────────
+    implementation "org.apache.httpcomponents.client5:httpclient5:${httpclient5Version}"
+    implementation "org.apache.httpcomponents.core5:httpcore5:${httpcore5Version}"
+
+    // ── FreeMarker (Confluence page template rendering) ───────
+    implementation "org.freemarker:freemarker:${freemarkerVersion}"
+
+    // ── JOLT (JSON transformation) ───────────────────────────
+    implementation "com.bazaarvoice.jolt:jolt-core:${joltCoreVersion}"
+
+    // ── Utilities ────────────────────────────────────────────
+    implementation "commons-validator:commons-validator:${commonsValidatorVersion}"
+    implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
+
+    // ── Spring Retry ─────────────────────────────────────────
+    implementation "org.springframework.retry:spring-retry:${springRetryVersion}"
+
+    // ── Resilience4j ─────────────────────────────────────────
+    implementation "io.github.resilience4j:resilience4j-bulkhead:${resilience4jVersion}"
+    implementation "io.github.resilience4j:resilience4j-ratelimiter:${resilience4jVersion}"
+
+    // ── Azure Key Vault ──────────────────────────────────────
+    // Explicit versions preserved from IES pom.xml (Azure SDK BOM provides defaults
+    // but pom had explicit overrides in dependencyManagement AND in dependency)
+    implementation "com.azure:azure-security-keyvault-secrets:${azureKeyvaultSecretsVersion}"
+    implementation "com.azure:azure-identity:${azureIdentityVersion}"
+
+    // ── Jakarta JSON ─────────────────────────────────────────
+    implementation 'jakarta.json:jakarta.json-api'
+    runtimeOnly "org.eclipse.parsson:parsson:${parssonVersion}"
+
+    // ── Test dependencies ────────────────────────────────────
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation "org.mockito:mockito-core:${mockitoVersion}"
+    testImplementation "org.mockito:mockito-junit-jupiter:${mockitoVersion}"
+    testImplementation "org.wiremock:wiremock-standalone:${wiremockVersion}"
+    testImplementation 'org.assertj:assertj-core'
+
+    // ── Testcontainers ────────────────────────────────────────
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.testcontainers:postgresql:${testcontainersVersion}"
+}
+
+// ── Java compiler options ────────────────────────────────────
+compileJava {
+    options.compilerArgs << '-parameters'
+}
+
+// ── Spring Boot fat JAR ──────────────────────────────────────
+springBoot {
+    mainClass = 'com.integration.execution.IntegrationExecutionServiceApplication'
+}
+
+bootJar {
+    archiveClassifier = ''
+}
+
+jar {
+    enabled = false
+}
+
+// ── Test task ────────────────────────────────────────────────
+test {
+    useJUnitPlatform()
+    maxHeapSize = '1024m'
+    include '**/*Test.class', '**/*Tests.class'
+    jvmArgs '-XX:+EnableDynamicAgentLoading'
+    finalizedBy jacocoTestReport
+}
+
+// ── Checkstyle ───────────────────────────────────────────────
+// Mirrors maven-checkstyle-plugin in IES pom.xml
+// failsOnError=false  →  ignoreFailures = true
+// configFile points to the module-root checkstyle.xml (shared with Maven — no duplication).
+// checkstyle/ subdir is the Gradle configDirectory; it contains copies of both checkstyle
+// files so that configDirectory never overlaps with build/ (Gradle 9 strict-validation safe).
+checkstyle {
+    toolVersion = checkstyleToolVersion
+    configFile = file('checkstyle.xml')
+    ignoreFailures = true
+    showViolations = true
+}
+checkstyleTest {
+    enabled = true
+}
+
+tasks.withType(Checkstyle).configureEach {
+    // configDirectory sets ${config_loc} used by the SuppressionFilter inside checkstyle.xml
+    configDirectory = project.file('checkstyle')
+}
+
+// ── JaCoCo ───────────────────────────────────────────────────
+// Mirrors jacoco-maven-plugin in IES pom.xml
+// 80% LINE + BRANCH minimum
+jacoco {
+    toolVersion = jacocoVersion
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = false
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    violationRules {
+        rule {
+            element = 'BUNDLE'
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = new BigDecimal(jacocoMinimumCoverage)
+            }
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = new BigDecimal(jacocoMinimumCoverage)
+            }
+        }
+    }
+}
+
+check.dependsOn jacocoTestCoverageVerification
+
+
+
+

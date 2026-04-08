@@ -1,0 +1,12 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'kip-api'
+
+include 'integration-execution-contract'
+include 'integration-management-service'
+include 'integration-execution-service'

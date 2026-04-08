@@ -1,0 +1,27 @@
+// ============================================================
+// Root build file - shared configuration injected into every subproject
+// ============================================================
+
+subprojects {
+    repositories {
+        mavenCentral()
+        mavenLocal()
+    }
+
+    // Apply shared Java settings to every subproject that carries the java plugin
+    plugins.withType(JavaPlugin) {
+        java {
+            toolchain {
+                languageVersion = JavaLanguageVersion.of(project.property('javaVersion') as Integer)
+            }
+        }
+
+        tasks.withType(JavaCompile).configureEach {
+            options.encoding = 'UTF-8'
+        }
+
+        tasks.withType(Test).configureEach {
+            useJUnitPlatform()
+        }
+    }
+}
