@@ -1,6 +1,5 @@
 // ============================================================
 // integration-management-service  (port 8085)
-// Equivalent to integration-management-service/pom.xml
 // Plugins: Spring Boot fat-JAR, Checkstyle, JaCoCo, Flyway
 // ============================================================
 
@@ -46,7 +45,6 @@ dependencies {
     // ── Spring Boot starters ─────────────────────────────────
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    // AOP starter pinned to 3.5.12 as in pom.xml (explicit version override)
     implementation "org.springframework.boot:spring-boot-starter-aop:${springBootAopVersion}"
     implementation('org.springframework.cloud:spring-cloud-starter-openfeign') {
         exclude group: 'commons-fileupload', module: 'commons-fileupload'
@@ -104,7 +102,6 @@ dependencies {
     runtimeOnly "org.eclipse.parsson:parsson:${parssonVersion}"
 
     // ── Test dependencies ────────────────────────────────────
-    // Exclude assertj from starter then re-add the version controlled by BOM (matches pom.xml)
     testImplementation('org.springframework.boot:spring-boot-starter-test') {
         exclude group: 'org.assertj', module: 'assertj-core'
     }
@@ -125,55 +122,49 @@ compileJava {
 }
 
 // ── Spring Boot fat JAR ──────────────────────────────────────
-// Mirrors spring-boot-maven-plugin repackage + mainClass configuration
 springBoot {
     mainClass = 'com.integration.management.IntegrationManagementServiceApplication'
 }
 
 bootJar {
-    archiveClassifier = ''   // single fat JAR, no plain jar alongside
+    archiveClassifier = ''
 }
 
-// Plain jar is not needed for a runnable service
 jar {
     enabled = false
 }
 
 // ── Test task ────────────────────────────────────────────────
-// Mirrors maven-surefire-plugin configuration
 test {
     useJUnitPlatform()
     maxHeapSize = '1024m'
     include '**/*Test.class', '**/*Tests.class'
-    jvmArgs '-XX:+EnableDynamicAgentLoading'   // suppress Java 25 JaCoCo agent warning
-    finalizedBy jacocoTestReport               // always generate report after tests
+    jvmArgs '-XX:+EnableDynamicAgentLoading'
+    finalizedBy jacocoTestReport
 }
 
 // ── Checkstyle ───────────────────────────────────────────────
-// Mirrors maven-checkstyle-plugin in IMS pom.xml
-// failsOnError=false  →  ignoreFailures = true  (violations logged, build continues)
-// violationSeverity=warning, logViolationsToConsole=true
-// configFile points to the module-root checkstyle.xml (shared with Maven — no duplication).
-// checkstyle/ subdir is the Gradle configDirectory; it contains copies of both checkstyle
-// files so that configDirectory never overlaps with build/ (Gradle 9 strict-validation safe).
+// configFile reads checkstyle.xml from the module root.
+// configDirectory is set to checkstyle/ so ${config_loc} resolves to
+// checkstyle/checkstyle-suppressions.xml (Gradle 9: configDirectory must
+// not contain build/ output, hence the dedicated subdirectory).
+// ignoreFailures=true — violations are logged but the build continues.
 checkstyle {
     toolVersion = checkstyleToolVersion
     configFile = file('checkstyle.xml')
-    ignoreFailures = true    // matches failsOnError=false in Maven
+    ignoreFailures = true
     showViolations = true
 }
 checkstyleTest {
-    enabled = true           // matches includeTestSourceDirectory=true in Maven
+    enabled = true
 }
 
 tasks.withType(Checkstyle).configureEach {
-    // configDirectory sets ${config_loc} used by the SuppressionFilter inside checkstyle.xml
     configDirectory = project.file('checkstyle')
 }
 
 // ── JaCoCo ───────────────────────────────────────────────────
-// Mirrors jacoco-maven-plugin in IMS pom.xml
-// 80% LINE + BRANCH minimum (verify phase → check task)
+// 80% LINE + BRANCH minimum enforced by the 'check' task.
 jacoco {
     toolVersion = jacocoVersion
 }
@@ -206,16 +197,14 @@ jacocoTestCoverageVerification {
     }
 }
 
-// Wire coverage verification into the standard 'check' lifecycle
-// ./gradlew check  →  runs tests + enforces 80% coverage (matches ./mvnw verify)
-// ./gradlew test jacocoTestReport  →  tests + report only (matches ./mvnw test jacoco:report)
+// ./gradlew check       → tests + enforces 80% coverage
+// ./gradlew test jacocoTestReport  → tests + report only
 check.dependsOn jacocoTestCoverageVerification
 
-// ── Flyway (CLI / migration plugin) ──────────────────────────
-// Mirrors flyway-maven-plugin in IMS pom.xml
-// Use: .\gradlew :integration-management-service:flywayMigrate  (from api/ or integration-management-service/)
-// PostgreSQL driver + flyway-database-postgresql are added to the flyway
-// configuration above so the plugin classloader can find them at runtime.
+// ── Flyway (migration plugin) ─────────────────────────────────
+// Use: ./gradlew :integration-management-service:flywayMigrate
+// PostgreSQL driver + flyway-database-postgresql are declared in the
+// buildscript block above so the plugin classloader can find them.
 flyway {
     url = 'jdbc:postgresql://localhost:5432/kw_ip_dev'
     user = 'postgres'
@@ -230,6 +219,3 @@ flyway {
     sqlMigrationSeparator = '__'
     sqlMigrationSuffixes = ['.sql']
 }
-
-
-

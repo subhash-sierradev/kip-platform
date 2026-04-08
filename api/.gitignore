@@ -1,23 +1,10 @@
 # ============================================================
-# Maven
-# Based on: https://github.com/github/gitignore/blob/main/Java.gitignore
-# NOTE (monorepo): patterns without a leading '/' match at any depth,
-# so target/, *.class, etc. cover all sub-modules automatically.
-# Patterns WITH a '/' in the middle are root-anchored — use **/ prefix
-# so they also match inside each sub-module directory.
+# Gradle
 # ============================================================
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-**/.mvn/timing.properties
-
-# Keep Maven wrapper JARs in ALL modules so CI can bootstrap without pre-installed Maven
-!**/.mvn/wrapper/maven-wrapper.jar
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
 
 # ============================================================
 # Java compiled output

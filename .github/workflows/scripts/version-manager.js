@@ -6,17 +6,12 @@ const { execSync } = require('child_process');
 
 class VersionManager {
   constructor() {
-    this.rootDir = path.resolve(__dirname, '..');
+    // Root of the monorepo (two levels up from .github/workflows/scripts/)
+    this.rootDir = path.resolve(__dirname, '..', '..', '..');
     this.versionFile = path.join(this.rootDir, 'version.json');
-    this.frontendPackageJson = path.join(this.rootDir, 'integration-platform-ui', 'package.json');
-
-    // All backend POM files that need version synchronization
-    // NOTE: kip-backend/pom.xml (parent) is intentionally excluded - its version is permanently locked at 1.0.0
-    this.allBackendPomFiles = [
-      path.join(this.rootDir, 'kip-backend', 'integration-execution-contract', 'pom.xml'),
-      path.join(this.rootDir, 'kip-backend', 'integration-management-service', 'pom.xml'),
-      path.join(this.rootDir, 'kip-backend', 'integration-execution-service', 'pom.xml')
-    ];
+    this.frontendPackageJson = path.join(this.rootDir, 'web', 'package.json');
+    // Single source of truth for all backend versions (Gradle-only build)
+    this.gradleProperties = path.join(this.rootDir, 'api', 'gradle.properties');
   }
 
   readVersionFile() {
@@ -106,84 +101,31 @@ class VersionManager {
   }
 
   /**
-   * Replace version in pom.xml files using pattern matching.
-   * Updates parent/child modules and integration-execution-contract.version property.
+   * Update projectVersion and contractVersion in api/gradle.properties.
+   * Both keys are bumped to the same version to keep all modules in sync.
    */
-  replacePomVersionContent(pomContent, currentVersion, newVersion) {
-    let updated = pomContent;
-    
-    // Parent POM reference in child modules: always locked to 1.0.0 (kip-backend parent version never changes)
-    const parentPattern = /(<parent>[\s\S]*?<groupId>com\.integration<\/groupId>[\s\S]*?<artifactId>kip-backend<\/artifactId>[\s\S]*?<version>)[^<]+(<\/version>[\s\S]*?<\/parent>)/i;
-    if (parentPattern.test(updated)) {
-      updated = updated.replace(parentPattern, '$11.0.0$2');
+  updateGradleProperties(newVersion) {
+    const propsFile = this.gradleProperties;
+    const relativePath = path.relative(this.rootDir, propsFile).split(path.sep).join('/');
+
+    if (!fs.existsSync(propsFile)) {
+      console.warn(`⚠️  gradle.properties not found: ${relativePath}`);
+      return;
     }
 
-    // Update child module versions
-    const childModulePattern = /(<groupId>com\.integration<\/groupId>[\s\S]*?<artifactId>integration-(?:execution-contract|management-service|execution-service)<\/artifactId>[\s\S]*?<version>)[^<]+(<\/version>)/i;
-    if (childModulePattern.test(updated)) {
-      updated = updated.replace(childModulePattern, `$1${newVersion}$2`);
+    let content = fs.readFileSync(propsFile, 'utf8');
+    const original = content;
+
+    content = content.replace(/^projectVersion=.+$/m, `projectVersion=${newVersion}`);
+    content = content.replace(/^contractVersion=.+$/m, `contractVersion=${newVersion}`);
+
+    if (content === original) {
+      console.log(`ℹ️  No version change required in ${relativePath}`);
+      return;
     }
 
-    // Update integration-execution-contract.version property (dependencies using ${...} will auto-resolve)
-    const contractPropertyPattern = /(<integration-execution-contract\.version>)[^<]+(<\/integration-execution-contract\.version>)/gi;
-    if (contractPropertyPattern.test(updated)) {
-      updated = updated.replace(contractPropertyPattern, `$1${newVersion}$2`);
-    }
-
-    // Fallback: replace exact version occurrences (limited to 3)
-    if (currentVersion) {
-      const exactVersionPattern = new RegExp(`<version>\\s*${this.escapeRegex(currentVersion)}\\s*<\\/version>`, 'g');
-      let count = 0;
-      updated = updated.replace(exactVersionPattern, (match) => {
-        count++;
-        return count <= 3 ? `<version>${newVersion}</version>` : match;
-      });
-    }
-
-    return updated;
-  }
-
-  escapeRegex(str) {
-    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  }
-
-  updateBackendVersion(newVersion) {
-    const versionData = this.readVersionFile();
-    const currentVersion = versionData.version;
-    let updatedFiles = 0;
-
-    for (const pomFile of this.allBackendPomFiles) {
-      const relativePathRaw = path.relative(this.rootDir, pomFile);
-      const relativePath = relativePathRaw.split(path.sep).join('/');
-
-      if (!fs.existsSync(pomFile)) {
-        console.warn(`⚠️ POM file not found: ${relativePath}`);
-        continue;
-      }
-
-      try {
-        let pomContent = fs.readFileSync(pomFile, 'utf8');
-        const originalContent = pomContent;
-
-        pomContent = this.replacePomVersionContent(pomContent, currentVersion, newVersion);
-
-        if (pomContent !== originalContent) {
-          fs.writeFileSync(pomFile, pomContent);
-          console.log(`✅ Updated ${relativePath}`);
-          updatedFiles++;
-        } else {
-          console.log(`ℹ️ No version change required in ${relativePath}`);
-        }
-      } catch (error) {
-        console.error(`❌ Error updating ${relativePath}:`, error.message);
-      }
-    }
-
-    if (updatedFiles > 0) {
-      console.log(`✅ Updated backend version to ${newVersion} in ${updatedFiles} POM file(s)`);
-    } else {
-      console.warn('⚠️ No backend POM files were updated. Confirm the current version in version.json matches POMs.');
-    }
+    fs.writeFileSync(propsFile, content);
+    console.log(`✅ Updated ${relativePath} -> projectVersion=${newVersion}, contractVersion=${newVersion}`);
   }
 
   determineBumpType() {
@@ -251,7 +193,7 @@ class VersionManager {
     this.writeVersionFile(versionData);
 
     this.updateFrontendVersion(newVersion);
-    this.updateBackendVersion(newVersion);
+    this.updateGradleProperties(newVersion);
     this.createLocalTag(newVersion);
 
     console.log(`✅ Version bumped to ${newVersion} successfully!`);
@@ -277,7 +219,7 @@ class VersionManager {
     console.log(`🔄 Syncing version ${version} across all components...`);
 
     this.updateFrontendVersion(version);
-    this.updateBackendVersion(version);
+    this.updateGradleProperties(version);
 
     console.log(`✅ Version ${version} synced successfully!`);
   }

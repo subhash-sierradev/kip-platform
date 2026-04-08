@@ -31,16 +31,11 @@
 ### Backend Quality Requirements (MANDATORY)
 
 ```powershell
-# Gradle (primary) — these commands MUST pass before code completion
+# These commands MUST pass before code completion
 ./gradlew checkstyleMain checkstyleTest   # Checkstyle compliance - NO EXCEPTIONS
 ./gradlew test                            # All tests pass - NO EXCEPTIONS
 ./gradlew test jacocoTestReport           # 80% minimum coverage report - NO EXCEPTIONS
-./gradlew check                           # Enforces 80% threshold (equivalent to mvn verify)
-
-# Maven (dual-build fallback) — identical quality gates
-./mvnw checkstyle:check     # Checkstyle compliance - NO EXCEPTIONS
-./mvnw test                 # All tests pass - NO EXCEPTIONS
-./mvnw jacoco:report        # 80% minimum coverage - NO EXCEPTIONS
+./gradlew check                           # Enforces 80% threshold
 ```
 
 ### Frontend Quality Requirements (MANDATORY)
@@ -76,7 +71,7 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 
 **Active Components** (focus areas):
 
-- **kip-backend**: Multi-module project with **Gradle 9.4.1** (primary) + **Maven 3.8+** (dual-build) — modules: integration-execution-contract, integration-management-service, integration-execution-service
+- **kip-backend**: Multi-module project with **Gradle 9.4.1** — modules: integration-execution-contract, integration-management-service, integration-execution-service
 - **web**: Vue.js 3.5.25 + Vite 7.3.0 + DevExtreme 25.2.3 + Pinia 3.0.4
 
 **Temporary Components** (ignore - will be removed):
@@ -130,7 +125,7 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 
 ## Developer Workflows
 
-### Backend Commands (Gradle — primary)
+### Backend Commands (Gradle)
 
 ```powershell
 # Build all modules (fat JARs in build/libs/)
@@ -158,28 +153,6 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 ./gradlew :integration-management-service:flywayMigrate
 ```
 
-### Backend Commands (Maven — dual-build fallback)
-
-```powershell
-# Build all modules
-./mvnw clean install
-
-# Run management service (port 8085)
-./mvnw spring-boot:run -pl integration-management-service
-
-# Run execution service (port 8081)
-./mvnw spring-boot:run -pl integration-execution-service
-
-# Run tests with coverage (80% minimum threshold)
-./mvnw test
-./mvnw jacoco:report
-
-# Code quality checks
-./mvnw checkstyle:check
-
-# Full verification (tests + coverage + quality)
-./mvnw clean verify
-```
 
 ### Frontend Commands (npm)
 
@@ -252,12 +225,11 @@ Key principles:
 
 **See `api/.github/instructions/copilot-instructions.md` for complete backend structure.**
 
-- `api/settings.gradle` + `api/build.gradle` + `api/gradle.properties` - Gradle root configuration (primary build)
-- `api/pom.xml` - Maven root configuration (dual-build fallback)
+- `api/settings.gradle` + `api/build.gradle` + `api/gradle.properties` - Gradle root configuration
 - `api/integration-management-service/` - REST API service (port 8085)
 - `api/integration-execution-service/` - Processing engine (port 8081)
 - `api/integration-execution-contract/` - Shared DTOs and contracts
-- **Checkstyle**: each module root is the authoritative source — `checkstyle.xml` is read by **both** Maven and Gradle; `checkstyle-suppressions.xml` is read by Maven. Each module's `checkstyle/` subdirectory is Gradle's `configDirectory` containing copies of both files — required by Gradle 9 (cannot point `configDirectory` at the module root since it contains `build/`). Always update module-root files first, then sync the `checkstyle/` copies.
+- **Checkstyle**: `checkstyle.xml` at each module root is read by Gradle via `configFile`. `checkstyle/checkstyle-suppressions.xml` is Gradle's `configDirectory` content for `${config_loc}`. Edit suppressions directly in `checkstyle/checkstyle-suppressions.xml`.
 
 ### Frontend Key Files
 

@@ -92,7 +92,7 @@ KIP Backend automates data synchronization workflows:
 | -------------------- | ------------------------------------------------ |
 | **Language**         | Java 25, TypeScript 5.7.2                        |
 | **Frameworks**       | Spring Boot 4.0.4, Vue.js 3.5.25                 |
-| **Build Tools**      | Gradle 9.4.1 (primary) · Maven 3.8+ (dual-build), Vite 7.3.0 |
+| **Build Tools**      | Gradle 9.4.1, Vite 7.3.0                         |
 | **Database**         | PostgreSQL 42.7.7 with JPA/Hibernate 7.1.8.Final |
 | **Authentication**   | Keycloak 26.2.0                                  |
 | **UI Framework**     | DevExtreme 25.2.3                                |
@@ -114,11 +114,11 @@ KIP Backend automates data synchronization workflows:
 
 - Spring Boot 4.0.4, Java 25
 - Multi-module build: `integration-execution-contract`, `integration-management-service`, `integration-execution-service`
-- **Gradle 9.4.1** (primary build tool) + **Maven 3.8+** (dual-build — both fully supported)
+- **Gradle 9.4.1** (single build tool — all versions centralised in `api/gradle.properties`)
 - Azure Key Vault for secrets management
 - REST APIs, scheduling, data extraction, processing, publishing
 - Security with multi-tenant support
-- Fat JAR deployment via `bootJar` (Gradle) / `spring-boot:repackage` (Maven)
+- Fat JAR deployment via `bootJar` (Gradle)
 
 **Database & Infrastructure:**
 
@@ -136,46 +136,45 @@ kip-platform/
 ├── api/                                      # Spring Boot 4.0.4 + Java 25 multi-module
 │   ├── settings.gradle                       # Gradle root — submodule declarations
 │   ├── build.gradle                          # Gradle root — shared Java toolchain config
-│   ├── gradle.properties                     # Gradle — all versions centralised
-│   ├── gradlew / gradlew.bat                 # Gradle wrapper (primary build)
-│   ├── pom.xml                               # Maven root (dual-build — aggregator only, unchanged)
+│   ├── gradle.properties                     # All versions centralised here
+│   ├── gradlew / gradlew.bat                 # Gradle wrapper
 │   ├── integration-execution-contract/       # Shared DTOs (lightweight, no tests)
-│   │   ├── build.gradle                      # Gradle build
-│   │   ├── pom.xml                           # Maven build (unchanged)
-│   │   ├── checkstyle.xml                    # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-│   │   ├── checkstyle-suppressions.xml       # Suppressions — authoritative, read by Maven
-│   │   └── checkstyle/                       # Gradle configDirectory (copies — Gradle 9 cannot use module root as configDirectory)
+│   │   ├── build.gradle
+│   │   ├── checkstyle.xml                    # Checkstyle config — module root (authoritative)
+│   │   └── checkstyle/
+│   │       └── checkstyle-suppressions.xml   # Gradle configDirectory (${config_loc})
 │   ├── integration-management-service/       # Config API (8085, fat JAR)
-│   │   ├── build.gradle                      # Gradle build (Spring Boot + JaCoCo + Flyway)
-│   │   ├── pom.xml                           # Maven build (unchanged)
-│   │   ├── checkstyle.xml                    # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-│   │   ├── checkstyle-suppressions.xml       # Suppressions — authoritative, read by Maven
-│   │   └── checkstyle/                       # Gradle configDirectory (copies)
+│   │   ├── build.gradle
+│   │   ├── checkstyle.xml
+│   │   └── checkstyle/
+│   │       └── checkstyle-suppressions.xml
 │   └── integration-execution-service/        # Processing Engine (8081, fat JAR)
-│       ├── build.gradle                      # Gradle build (Spring Boot + JaCoCo)
-│       ├── pom.xml                           # Maven build (unchanged)
-│       ├── checkstyle.xml                    # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-│       ├── checkstyle-suppressions.xml       # Suppressions — authoritative, read by Maven
-│       └── checkstyle/                       # Gradle configDirectory (copies)
+│       ├── build.gradle
+│       ├── checkstyle.xml
+│       └── checkstyle/
+│           └── checkstyle-suppressions.xml
 │
 ├── web/                                      # Vue.js 3.5.25 + TypeScript 5.7.2
-│   ├── src/                                  # Application source code
-│   │   ├── components/                       # Feature-based Vue components
-│   │   ├── api/                              # Auto-generated OpenAPI client
-│   │   ├── store/                            # Pinia state management
-│   │   └── composables/                      # Reusable Vue logic
-│   └── vite.config.ts                        # Build configuration (80% coverage)
+│   ├── src/
+│   │   ├── components/
+│   │   ├── api/
+│   │   ├── store/
+│   │   └── composables/
+│   └── vite.config.ts
 │
 ├── e2e/                                      # Playwright E2E testing suite
-│   ├── tests/                                # Test specifications
-│   └── pages/                                # Page Object Model
+│   ├── tests/
+│   └── pages/
 │
-├── packages/                                 # Shared libraries and templates
-│   └── prompt-library/                       # AI prompt library
-└── README.md                                 # This file
+├── packages/
+│   └── prompt-library/
+└── README.md
 ```
 
-> **Checkstyle config layout**: Each module root is the **authoritative source** — `checkstyle.xml` is read by both Maven and Gradle; `checkstyle-suppressions.xml` is read by Maven. Each module's `checkstyle/` subdirectory is Gradle's `configDirectory` and contains copies of both files. Gradle 9 forbids pointing `configDirectory` at the module root (it contains `build/`). Always update module-root files first, then sync the `checkstyle/` copies.
+> **Checkstyle layout**: `checkstyle.xml` at each module root is read by Gradle via `configFile`.
+> `checkstyle/` is Gradle's `configDirectory` for `${config_loc}` resolution (Gradle 9 forbids pointing
+> `configDirectory` at the module root when `build/` output is present). `checkstyle-suppressions.xml`
+> lives only inside `checkstyle/` — edit it directly there.
 
 **Detailed documentation**: See `api/README.md`, `web/README.md`, and `e2e/README.md`
 
@@ -186,11 +185,11 @@ kip-platform/
 ### Prerequisites
 
 - **Java 25** or higher
-- **Gradle 9.4.1** (primary) **or Maven 3.6+** (dual-build — both supported)
+- **Gradle 9.4.1** (or use the included `gradlew` wrapper — no local install needed)
 - **Node.js** (for frontend)
 - **PostgreSQL 18+**
 
-### Backend — Gradle (primary)
+### Backend (Gradle)
 
 ```powershell
 cd api
@@ -201,7 +200,7 @@ cd api
 # Run management service (port 8085)
 ./gradlew :integration-management-service:bootRun
 
-# Run execution service (port 8081 — separate terminal)
+# Run execution service (port 8081)
 ./gradlew :integration-execution-service:bootRun
 
 # Run fat JARs directly
@@ -210,18 +209,6 @@ java -jar integration-management-service/build/libs/integration-management-servi
 java -jar integration-execution-service/build/libs/integration-execution-service-*.jar
 ```
 
-### Backend — Maven (dual-build fallback)
-
-```powershell
-cd api
-mvn clean install
-# Run management service
-cd integration-management-service
-mvn spring-boot:run
-# Run execution service
-cd ../integration-execution-service
-mvn spring-boot:run
-```
 
 ### Frontend (Vue.js 3.5.25 + Vite)
 
@@ -263,8 +250,6 @@ npm run sanity
 
 ### Backend Commands
 
-#### Gradle (primary)
-
 ```powershell
 cd api
 
@@ -274,7 +259,7 @@ cd api
 # Run tests with JaCoCo coverage report
 ./gradlew test jacocoTestReport
 
-# Enforce 80% coverage threshold (equivalent to mvn verify)
+# Enforce 80% coverage threshold
 ./gradlew check
 
 # Checkstyle — main + test sources
@@ -288,27 +273,6 @@ cd api
 ./gradlew :integration-management-service:flywayInfo
 ```
 
-#### Maven (dual-build fallback)
-
-```powershell
-cd api
-mvn clean install
-
-# Run tests with coverage (80% minimum)
-mvn test
-mvn jacoco:report
-
-# Code quality checks
-mvn checkstyle:check
-
-# Full verification
-mvn clean verify
-
-# Database Migration (Flyway - run from specific service)
-cd integration-management-service
-mvn flyway:migrate
-mvn --% -Dflyway.cleanDisabled=false flyway:clean flyway:migrate
-```
 
 ### Frontend Commands
 

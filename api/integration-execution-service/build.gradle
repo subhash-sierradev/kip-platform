@@ -1,6 +1,5 @@
 // ============================================================
 // integration-execution-service  (port 8081)
-// Equivalent to integration-execution-service/pom.xml
 // Plugins: Spring Boot fat-JAR, Checkstyle, JaCoCo
 // No Flyway (IES is stateless — database access only via IMS)
 // ============================================================
@@ -16,8 +15,8 @@ group = 'com.integration'
 version = projectVersion
 
 // ── BOM / Dependency Management ─────────────────────────────
-// Uses Gradle-native platform() — matches dependencyManagement in IES pom.xml
-// Spring Boot BOM + JUnit BOM + Azure SDK BOM
+// Uses Gradle-native platform() — matches dependencyManagement in IES.
+// Spring Boot BOM + JUnit BOM + Azure SDK BOM.
 dependencies {
     implementation platform("org.springframework.boot:spring-boot-dependencies:${springBootVersion}")
     implementation platform("org.junit:junit-bom:${junitVersion}")
@@ -32,7 +31,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-cache'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
-    // AOP starter pinned to 3.5.12 as in pom.xml (explicit version override)
+    // AOP starter pinned to explicit version override
     implementation "org.springframework.boot:spring-boot-starter-aop:${springBootAopVersion}"
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
 
@@ -79,8 +78,7 @@ dependencies {
     implementation "io.github.resilience4j:resilience4j-ratelimiter:${resilience4jVersion}"
 
     // ── Azure Key Vault ──────────────────────────────────────
-    // Explicit versions preserved from IES pom.xml (Azure SDK BOM provides defaults
-    // but pom had explicit overrides in dependencyManagement AND in dependency)
+    // Azure SDK BOM provides defaults; explicit versions pin the exact release.
     implementation "com.azure:azure-security-keyvault-secrets:${azureKeyvaultSecretsVersion}"
     implementation "com.azure:azure-identity:${azureIdentityVersion}"
 
@@ -133,11 +131,11 @@ test {
 }
 
 // ── Checkstyle ───────────────────────────────────────────────
-// Mirrors maven-checkstyle-plugin in IES pom.xml
-// failsOnError=false  →  ignoreFailures = true
-// configFile points to the module-root checkstyle.xml (shared with Maven — no duplication).
-// checkstyle/ subdir is the Gradle configDirectory; it contains copies of both checkstyle
-// files so that configDirectory never overlaps with build/ (Gradle 9 strict-validation safe).
+// configFile reads checkstyle.xml from the module root.
+// configDirectory is set to checkstyle/ so ${config_loc} resolves to
+// checkstyle/checkstyle-suppressions.xml (Gradle 9: configDirectory must
+// not contain build/ output, hence the dedicated subdirectory).
+// ignoreFailures=true — violations are logged but the build continues.
 checkstyle {
     toolVersion = checkstyleToolVersion
     configFile = file('checkstyle.xml')
@@ -149,13 +147,11 @@ checkstyleTest {
 }
 
 tasks.withType(Checkstyle).configureEach {
-    // configDirectory sets ${config_loc} used by the SuppressionFilter inside checkstyle.xml
     configDirectory = project.file('checkstyle')
 }
 
 // ── JaCoCo ───────────────────────────────────────────────────
-// Mirrors jacoco-maven-plugin in IES pom.xml
-// 80% LINE + BRANCH minimum
+// 80% LINE + BRANCH minimum enforced by the 'check' task.
 jacoco {
     toolVersion = jacocoVersion
 }
@@ -188,8 +184,9 @@ jacocoTestCoverageVerification {
     }
 }
 
+// ./gradlew check       → tests + enforces 80% coverage
+// ./gradlew test jacocoTestReport  → tests + report only
 check.dependsOn jacocoTestCoverageVerification
-
 
 
 

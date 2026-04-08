@@ -91,12 +91,9 @@ jobs:
         run: |
           NEW_VERSION="${{ steps.update-version.outputs.new_version }}"
           git add version.json
-          git add integration-platform-ui/package.json
-          git add kip-backend/pom.xml
-          git add kip-backend/integration-execution-contract/pom.xml
-          git add kip-backend/integration-management-service/pom.xml
-          git add kip-backend/integration-execution-service/pom.xml
-          
+          git add web/package.json || true
+          git add api/gradle.properties
+
           if git diff --staged --quiet; then
             echo "changes_committed=false" >> $GITHUB_OUTPUT
           else
@@ -104,8 +101,7 @@ jobs:
 
             - Updated version.json
             - Synced frontend package.json
-            - Synced backend POMs (parent + 3 modules)
-            - Updated integration-execution-contract.version property
+            - Synced api/gradle.properties (projectVersion + contractVersion)
 
             Source: PR #${{ github.event.pull_request.number }} (${{ github.event.pull_request.head.ref }} -> ${{ github.event.pull_request.base.ref }})
             Update type: ${{ steps.update-type.outputs.update_type }}"

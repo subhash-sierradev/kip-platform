@@ -45,7 +45,7 @@ KIP Backend automates data synchronization workflows:
 | ---------------- | ---------------------------------------------------- |
 | **Language**     | Java 25                                              |
 | **Framework**    | Spring Boot 4.0.4                                    |
-| **Build Tools**  | Gradle 9.4.1 (primary) · Maven 3.8+ (dual-build)     |
+| **Build Tool**   | Gradle 9.4.1                                         |
 | **Database**     | PostgreSQL 42.7.7 + Flyway 11.20.0                   |
 | **Scheduler**    | Quartz (clustered)                                   |
 | **Security**     | OAuth2 + Keycloak JWT                                |
@@ -63,12 +63,12 @@ KIP Backend automates data synchronization workflows:
 ### Prerequisites
 
 - Java 25 (JDK)
-- Gradle 9.4.1 **or** Maven 3.8+ (both supported — dual-build)
+- Gradle 9.4.1 (or use the included `gradlew` wrapper — no local install needed)
 - PostgreSQL 14+
 - RabbitMQ 3.x
 - Azure subscription (or use dev fallback)
 
-### Build & Run — Gradle (primary)
+### Build & Run
 
 ```powershell
 # Build all modules (produces fat JARs)
@@ -81,37 +81,10 @@ cd api
 # Run execution service (port 8081 — separate terminal)
 ./gradlew :integration-execution-service:bootRun
 
-# Or run fat JARs directly
+# Run fat JARs directly
 ./gradlew bootJar -x test
 java -jar integration-management-service/build/libs/integration-management-service-*.jar
 java -jar integration-execution-service/build/libs/integration-execution-service-*.jar
-```
-
-### Build & Run — Maven (dual-build fallback)
-
-```powershell
-# Build entire project
-mvn clean install
-
-# Build specific module
-cd integration-execution-contract
-mvn clean install
-
-# Run management service (port 8085)
-cd integration-management-service
-mvn spring-boot:run
-
-# Or run fat JAR
-mvn clean package
-java -jar target/integration-management-service-<version>.jar
-
-# Run execution service (port 8081 - separate terminal)
-cd integration-execution-service
-mvn spring-boot:run
-
-# Or run fat JAR
-mvn clean package
-java -jar target/integration-execution-service-<version>.jar
 ```
 
 ### Access Services
@@ -157,45 +130,26 @@ java -jar target/integration-execution-service-<version>.jar
 
 ## Testing
 
-### Gradle
-
 ```powershell
+cd api
+
 # Run all tests
 ./gradlew test
 
 # Run tests + generate JaCoCo HTML coverage report
 ./gradlew test jacocoTestReport
 
-# Enforce 80% coverage threshold (mirrors ./mvnw verify)
+# Enforce 80% coverage threshold
 ./gradlew check
 
 # Run checkstyle on main sources
-./gradlew checkstyleMain
+./gradlew checkstyleMain checkstyleTest
 
 # Run specific test class
 ./gradlew :integration-management-service:test --tests "com.integration.management.*JiraApiClientTest"
 
 # View JaCoCo coverage report
 # integration-management-service/build/reports/jacoco/test/html/index.html
-```
-
-### Maven (dual-build)
-
-```powershell
-# Run all tests
-mvn test
-
-# Run with coverage
-mvn clean test jacoco:report
-
-# Run checkstyle validation
-mvn checkstyle:check
-
-# View coverage report
-open target/site/jacoco/index.html
-
-# Run specific test class
-mvn test -Dtest=JiraApiClientTest
 ```
 
 **Current Coverage**: IMS ~39% (Target: 80%) · IES: 0% (Target: 80%)
@@ -208,40 +162,33 @@ mvn test -Dtest=JiraApiClientTest
 api/
 ├── settings.gradle                      # Gradle root — declares all submodules
 ├── build.gradle                         # Gradle root — shared Java toolchain config
-├── gradle.properties                    # Gradle — all version strings centralised
+├── gradle.properties                    # All version strings centralised here
 ├── gradlew / gradlew.bat                # Gradle wrapper scripts
 ├── gradle/wrapper/                      # Gradle wrapper JAR + properties
-├── pom.xml                              # Maven root (dual-build — aggregator only)
 │
 ├── integration-execution-contract/      # Shared DTOs (lightweight, no tests)
 │   ├── build.gradle                     # Gradle build (java-library + checkstyle)
-│   ├── pom.xml                          # Maven build (unchanged)
-│   ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-│   ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
-│   └── checkstyle/                      # Gradle configDirectory (must not contain build/ — Gradle 9 rule)
-│       ├── checkstyle.xml               # Copy — kept in sync with module-root checkstyle.xml
-│       └── checkstyle-suppressions.xml  # Copy — Gradle resolves ${config_loc}/checkstyle-suppressions.xml here
+│   ├── checkstyle.xml                   # Checkstyle config — module root (authoritative)
+│   └── checkstyle/                      # Gradle configDirectory
+│       └── checkstyle-suppressions.xml  # Suppression rules (${config_loc} reference)
 │
 ├── integration-management-service/      # Config API (8085, fat JAR)
 │   ├── build.gradle                     # Gradle build (Spring Boot + JaCoCo + Flyway)
-│   ├── pom.xml                          # Maven build (unchanged)
-│   ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-│   ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
+│   ├── checkstyle.xml                   # Checkstyle config — module root (authoritative)
 │   └── checkstyle/                      # Gradle configDirectory
-│       ├── checkstyle.xml               # Copy — kept in sync with module-root
-│       └── checkstyle-suppressions.xml  # Copy — read by Gradle
+│       └── checkstyle-suppressions.xml  # Suppression rules (${config_loc} reference)
 │
 └── integration-execution-service/       # Processing Engine (8081, fat JAR)
     ├── build.gradle                     # Gradle build (Spring Boot + JaCoCo)
-    ├── pom.xml                          # Maven build (unchanged)
-    ├── checkstyle.xml                   # Checkstyle config — authoritative, read by BOTH Maven & Gradle
-    ├── checkstyle-suppressions.xml      # Suppressions — authoritative, read by Maven
+    ├── checkstyle.xml                   # Checkstyle config — module root (authoritative)
     └── checkstyle/                      # Gradle configDirectory
-        ├── checkstyle.xml               # Copy — kept in sync with module-root
-        └── checkstyle-suppressions.xml  # Copy — read by Gradle
+        └── checkstyle-suppressions.xml  # Suppression rules (${config_loc} reference)
 ```
 
-> **Note on Checkstyle config layout**: Each module root is the **authoritative source**: `checkstyle.xml` is read by both Maven (`<configLocation>`) and Gradle (`configFile`); `checkstyle-suppressions.xml` is read by Maven (`<suppressionsLocation>`). The `checkstyle/` subdirectory is Gradle's `configDirectory` — it must not overlap with `build/` (Gradle 9 strict validation), so copies of both files are kept there. Always update the module-root files first, then sync the copies in `checkstyle/`.
+> **Checkstyle layout**: `checkstyle.xml` lives at the module root and is read by Gradle via `configFile`.
+> `checkstyle/` is Gradle's `configDirectory` — it cannot point to the module root (Gradle 9 forbids it
+> when `build/` output is present), so a dedicated subdirectory holds `checkstyle-suppressions.xml`.
+> When editing suppression rules, update `checkstyle/checkstyle-suppressions.xml` directly.
 
 ---
 
@@ -280,56 +227,45 @@ Set `azure.keyvault.enabled: false` to use PostgreSQL `vault_secrets` table.
 
 ## Development Status
 
-> **Note**: The root `kip-backend` parent POM is permanently fixed at `1.0.0`. Only child module versions (`integration-execution-contract`, `integration-management-service`, `integration-execution-service`) are updated during releases.
-
 **Recent Updates**:
 
+- **Gradle-only build**: Maven removed; all versions centralised in `api/gradle.properties`
 - **Notification System**: Full async notification pipeline via RabbitMQ + SSE — rules, templates, recipient policies, per-user delivery, real-time browser push
 - Fat JAR deployment configured
 - Contract module optimized (lightweight)
-- EditorConfig for IDE consistency
 - Multi-environment configurations
 - Code coverage improvement (39% → 80% target)
 
 ### Code Standards
 
 1. **IDE Formatting**: Use .editorconfig (automatic in IntelliJ/VS Code/Eclipse)
-2. **Checkstyle (Gradle)**: Run `./gradlew checkstyleMain checkstyleTest` — reads `checkstyle.xml` from module root, suppressions from `checkstyle/`
-3. **Checkstyle (Maven)**: Run `./mvnw checkstyle:check` — reads `checkstyle.xml` + `checkstyle-suppressions.xml` from module root
-4. **Keep in sync**: When editing checkstyle files, update the module-root files **and** the copies in `checkstyle/`
-5. **Testing**: Write tests first (TDD preferred), maintain >80% coverage
-6. **Database**: Always use Flyway migrations for schema changes
-7. **Contract Module**: Coordinate changes — shared by both services
+2. **Checkstyle**: Run `./gradlew checkstyleMain checkstyleTest` — reads `checkstyle.xml` from module root, suppressions from `checkstyle/`
+3. **Testing**: Write tests first (TDD preferred), maintain >80% coverage
+4. **Database**: Always use Flyway migrations for schema changes
+5. **Contract Module**: Coordinate changes — shared by both services
 
-### Development Workflow
+### Developer Workflow
 
 ```powershell
-# ── Gradle (primary) ─────────────────────────────────────────
-# 1. Format code (automatic with EditorConfig)
-# 2. Validate checkstyle
+cd api
+
+# 1. Validate checkstyle
 ./gradlew checkstyleMain checkstyleTest
 
-# 3. Run tests with coverage report
+# 2. Run tests with coverage report
 ./gradlew test jacocoTestReport
 
-# 4. Enforce 80% coverage threshold (like mvn verify)
+# 3. Enforce 80% coverage threshold
 ./gradlew check
 
-# 5. Build all modules (fat JARs)
+# 4. Build all modules (fat JARs)
 ./gradlew build -x test
 
-# 6. Database migration (IMS only)
+# 5. Database migration (IMS only)
 ./gradlew :integration-management-service:flywayMigrate
-
-# ── Maven (dual-build fallback) ───────────────────────────────
-./mvnw checkstyle:check
-./mvnw clean test jacoco:report
-./mvnw clean verify
-./mvnw clean install
-cd integration-management-service && ./mvnw flyway:migrate
 ```
 
-**Last Updated**: March 16, 2026
+**Last Updated**: April 8, 2026
 
 ### Naming Conventions (enforced by Checkstyle)
 
@@ -355,66 +291,6 @@ cd integration-management-service && ./mvnw flyway:migrate
 
 All constants live in `integration-execution-contract/.../queue/QueueNames.java` (shared by both services).
 
-### Notification Flow
-
-```
-Service method (@PublishNotification)
-        │
-        ▼
-  NotificationAspect (AOP @Around)
-        │  builds NotificationEvent { eventKey, tenantId, userId, metadata }
-        ▼
-  NotificationEventPublisher (IMS or IES)
-        │  rabbitTemplate.convertAndSend("integration.notification.exchange", "notification.event", event)
-        ▼
-  RabbitMQ → integration.notification.ims queue
-        │
-        ▼
-  NotificationListener (@RabbitListener — IMS only)
-        │
-        ▼
-  NotificationDispatchService
-        │  1. Lookup enabled NotificationRule for (eventKey, tenantId)
-        │  2. Resolve recipients via RecipientType (ALL_USERS / ADMINS_ONLY / SELECTED_USERS)
-        │  3. Render NotificationTemplate ({{placeholder}} substitution)
-        │  4. Persist AppNotification per user
-        │  5. SseEmitterRegistry.send(userId, payload)
-        ▼
-  Browser ← SSE event "notification" (GET /api/management/notifications/stream)
-```
-
-### Key Classes
-
-| Class                                   | Module    | Role                                                                   |
-| --------------------------------------- | --------- | ---------------------------------------------------------------------- |
-| `@PublishNotification`                  | IMS       | Annotation — triggers async notification on method success             |
-| `NotificationAspect`                    | IMS       | `@Around` AOP — pre-fetches metadata, publishes after `proceed()`      |
-| `NotificationEventPublisher`            | IMS + IES | Sends `NotificationEvent` to topic exchange                            |
-| `NotificationListener`                  | IMS       | `@RabbitListener` consumer on `integration.notification.ims`           |
-| `NotificationDispatchService`           | IMS       | Orchestrates rule → recipient → template → persist → SSE               |
-| `SseEmitterRegistry`                    | IMS       | Per-user emitter map; 30-min timeout; 25s heartbeat; multi-tab support |
-| `AppNotificationController`             | IMS       | SSE stream + REST: paginated list, unread count, mark-as-read          |
-| `NotificationRuleController`            | IMS       | CRUD + toggle + batch-create per-tenant rules                          |
-| `NotificationTemplateController`        | IMS       | Per-tenant `{{placeholder}}` message templates                         |
-| `NotificationRecipientPolicyController` | IMS       | Audience policy per rule                                               |
-| `NotificationEventCatalogController`    | IMS       | Read-only catalog of 22 platform event types                           |
-
-### Entities (`notifications` DB schema)
-
-`AppNotification` · `NotificationRule` · `NotificationEventCatalog` · `NotificationTemplate` · `NotificationRecipientPolicy` · `NotificationRecipientUser` · `NotificationEventLog`
-
-### Enums
-
-`NotificationType` (22 values: `ARCGIS_INTEGRATION_*`, `JIRAWEBHOOK_INTEGRATION_*`, `SITE_CONFIG_*`, etc.) · `NotificationSeverity` (INFO / WARNING / ERROR / SUCCESS) · `NotificationEntityType` · `RecipientType` (ALL_USERS / ADMINS_ONLY / SELECTED_USERS)
-
-### Metadata Providers (pre-fetch AOP strategy)
-
-| Bean                                      | Resolves For                        |
-| ----------------------------------------- | ----------------------------------- |
-| `arcGISNotificationMetadataProvider`      | ArcGIS integration CRUD & lifecycle |
-| `jiraWebhookNotificationMetadataProvider` | Jira webhook CRUD & toggle          |
-| `siteConfigNotificationMetadataProvider`  | Site config changes                 |
-
 ---
 
 ## Contributing
@@ -422,7 +298,7 @@ Service method (@PublishNotification)
 **Standards**:
 
 - Follow EditorConfig (automatic formatting)
-- Run `mvn checkstyle:check` before commits
+- Run `./gradlew checkstyleMain checkstyleTest` before commits
 - Maintain >80% test coverage
 - Use Flyway for database changes
 
@@ -438,4 +314,3 @@ Service method (@PublishNotification)
 
 Copyright © 2026 Kaseware. All rights reserved.
 
----

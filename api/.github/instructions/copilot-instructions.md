@@ -19,9 +19,7 @@ api/
 - **Dependencies**: Minimal (jakarta.validation-api, jackson-annotations, lombok, hibernate-validator)
 - **No Tests**: This module contains only DTOs, no business logic
 - **No Fat JAR**: Library module, not executable
-- **Checkstyle**: Minimal rules (formatting + naming only, 75 lines)
-
-#### integration-management-service
+- **Checkstyle**: Minimal rules (formatting + naming only, 75 lines)#### integration-management-service
 
 - **Purpose**: User-facing REST APIs for configuration and monitoring
 - **Port**: 8085
@@ -54,21 +52,17 @@ api/
 
 #### Fat JAR Build (Management & Execution Services)
 
-```xml
-<plugin>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-maven-plugin</artifactId>
-    <executions>
-        <execution>
-            <goals>
-                <goal>repackage</goal>
-            </goals>
-        </execution>
-    </executions>
-    <configuration>
-        <mainClass>com.integration.[service].Application</mainClass>
-    </configuration>
-</plugin>
+```groovy
+// build.gradle
+springBoot {
+    mainClass = 'com.integration.[service].Application'
+}
+bootJar {
+    archiveClassifier = ''
+}
+jar {
+    enabled = false   // disable plain jar — only fat JAR produced
+}
 ```
 
 #### Multi-Environment Profiles
@@ -82,8 +76,6 @@ api/
 
 ```bash
 ./gradlew :integration-management-service:bootRun --args='--spring.profiles.active=sandbox'
-# Maven equivalent:
-./mvnw spring-boot:run -Dspring-boot.run.profiles=sandbox
 java -jar service.jar --spring.profiles.active=prod
 ```
 
@@ -553,13 +545,8 @@ void getIntegration_nonExistent_throwsNotFoundException()
 - Full rules for services (181 lines)
 - Minimal rules for contract module (75 lines - formatting + naming only)
 - Line length: 120 characters
-- **Dual-path layout** (pom.xml is unchanged — no changes needed for Maven):
-  - Maven reads `checkstyle.xml` + `checkstyle-suppressions.xml` from each **module root** (`<configLocation>` + `<suppressionsLocation>` in pom.xml)
-  - Gradle uses `configFile = file('checkstyle.xml')` (module root — shared, no duplicate) and `configDirectory = project.file('checkstyle')` pointing to a `checkstyle/` subdir that contains copies of both `checkstyle.xml` and `checkstyle-suppressions.xml`
-  - Gradle 9 requires `configDirectory` to be a dedicated dir not containing `build/` output — that is why `checkstyle/` exists alongside the module-root files
-  - When editing Checkstyle rules: update the **module-root** files first, then sync the copies in `checkstyle/`
-- Run (Gradle primary): `./gradlew checkstyleMain checkstyleTest`
-- Run (Maven fallback): `./mvnw checkstyle:check`
+- **Layout**: `checkstyle.xml` at each module root is read by Gradle via `configFile`. `configDirectory` points to the `checkstyle/` subdir (Gradle 9 cannot use the module root as `configDirectory` because it contains `build/`). `checkstyle-suppressions.xml` lives only in `checkstyle/` — edit it there directly.
+- Run: `./gradlew checkstyleMain checkstyleTest`
 
 #### EditorConfig
 
@@ -605,53 +592,20 @@ java -jar integration-execution-service/build/libs/integration-execution-service
 ./gradlew :integration-management-service:flywayInfo
 ```
 
-#### Maven Commands (dual-build fallback)
+#### Versioning
 
-```powershell
-# Build all modules (order matters: contract → services)
-mvn clean install
-
-# Build specific module
-cd integration-execution-contract
-mvn clean install
-
-# Run management service (port 8085)
-cd integration-management-service
-./mvnw spring-boot:run
-
-# Run execution service (port 8081)
-cd integration-execution-service
-./mvnw spring-boot:run
-
-# Fat JAR deployment
-mvn clean package
-java -jar target/integration-management-service-<version>.jar
-java -jar target/integration-execution-service-<version>.jar
-
-# Tests with coverage
-mvn test jacoco:report
-
-# Full verification
-mvn clean verify
-```
-
-#### Parent POM Version (Fixed)
-
-The root `kip-backend` parent POM is permanently fixed at `1.0.0` and **must never be changed**.
-Only the child module `<version>` tags (`integration-execution-contract`, `integration-management-service`, `integration-execution-service`) are updated during version bumps.
-Do **not** include `kip-backend` parent version in any version management, `mvn versions:set`, or release automation.
-When bumping module versions, update the `<version>` tags in each `pom.xml` **and** the `projectVersion` / `contractVersion` in `api/gradle.properties` to keep both builds in sync.
+All module versions are stored in `api/gradle.properties` (`projectVersion` and `contractVersion`).
+Update those two keys when bumping versions — no other files need editing.
 
 #### Deployment Checklist
 
-- ✅ Both services build as fat JARs (`./gradlew bootJar -x test` or `./mvnw clean package`)
-- ✅ Checkstyle passes on both builds (`./gradlew checkstyleMain checkstyleTest` + `./mvnw checkstyle:check`)
+- ✅ Both services build as fat JARs (`./gradlew bootJar -x test`)
+- ✅ Checkstyle passes (`./gradlew checkstyleMain checkstyleTest`)
 - ✅ All tests pass
 - ✅ Coverage ≥80%
 - ✅ Environment variables configured
 - ✅ Database migrations applied (`./gradlew :integration-management-service:flywayMigrate`)
-- ✅ Parent POM version remains `1.0.0` (never bumped)
-- ✅ When changing Checkstyle rules: update module-root `checkstyle.xml` / `checkstyle-suppressions.xml` AND sync copies in `<module>/checkstyle/`
+- ✅ When changing Checkstyle rules: update module-root `checkstyle.xml` **and** `checkstyle/checkstyle-suppressions.xml`
 
 ---
 
@@ -676,8 +630,8 @@ When bumping module versions, update the `<version>` tags in each `pom.xml` **an
 
 ### Issue: Fat JAR not created
 
-**Cause**: Missing `repackage` goal in `spring-boot-maven-plugin`  
-**Solution**: Add `<executions>` block with `<goal>repackage</goal>` and explicit `mainClass`
+**Cause**: `bootJar` task not configured, or `jar.enabled = true` produces a plain jar instead  
+**Solution**: Ensure `bootJar { archiveClassifier = '' }` and `jar { enabled = false }` are set in `build.gradle`
 
 ---
 
