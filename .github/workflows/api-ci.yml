@@ -29,6 +29,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Make gradlew executable
+        run: chmod +x ./api/gradlew
+
       - name: Build & Test Management Service
         working-directory: api
         run: ./gradlew :integration-management-service:build --no-daemon
@@ -52,6 +55,9 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        run: chmod +x ./api/gradlew
 
       - name: Build & Test Execution Service
         working-directory: api
