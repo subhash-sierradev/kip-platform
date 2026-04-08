@@ -25,11 +25,9 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant execute permission for Gradle wrapper
-        working-directory: api
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build & Test Management Service
         working-directory: api
@@ -51,11 +49,9 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: gradle
 
-      - name: Grant execute permission for Gradle wrapper
-        working-directory: api
-        run: chmod +x gradlew
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build & Test Execution Service
         working-directory: api

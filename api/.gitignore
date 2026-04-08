@@ -4,7 +4,6 @@
 .gradle/
 build/
 gradle-app.setting
-!gradle-wrapper.jar
 
 # ============================================================
 # Java compiled output
@@ -21,6 +20,8 @@ gradle-app.setting
 *.rar
 hs_err_pid*
 replay_pid*
+# Gradle wrapper JAR must be committed — negation must come AFTER *.jar
+!gradle-wrapper.jar
 
 # ============================================================
 # Spring Boot / Secrets

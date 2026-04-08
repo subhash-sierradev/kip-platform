@@ -56,7 +56,6 @@ target/
 build/
 .gradle/
 gradle-app.setting
-!gradle-wrapper.jar
 
 *.class
 *.ctxt
@@ -70,6 +69,8 @@ gradle-app.setting
 *.rar
 hs_err_pid*
 replay_pid*
+# Gradle wrapper JAR must be committed — negation must come AFTER *.jar
+!gradle-wrapper.jar
 
 # NetBeans
 **/nbproject/private/
