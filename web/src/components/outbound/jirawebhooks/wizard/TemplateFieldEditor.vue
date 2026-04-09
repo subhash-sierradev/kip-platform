@@ -9,7 +9,6 @@
         <button
           type="button"
           class="ps-add-icon"
-          title="Insert fields"
           :aria-label="`Add JSON key to ${label}`"
           :aria-describedby="actionTipId"
           @mouseenter="e => onActionEnter('Insert fields', e)"
@@ -23,7 +22,6 @@
           type="button"
           class="ps-eye-icon"
           :disabled="!hasValue"
-          :title="showPreview ? 'Hide preview' : 'Show preview'"
           aria-label="Toggle preview"
           :aria-describedby="actionTipId"
           @mouseenter="e => onActionEnter(showPreview ? 'Hide preview' : 'Show preview', e)"
