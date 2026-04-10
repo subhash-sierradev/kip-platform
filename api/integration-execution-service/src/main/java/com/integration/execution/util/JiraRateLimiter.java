@@ -29,6 +29,29 @@ public class JiraRateLimiter {
     private final ConcurrentHashMap<String, Bulkhead> bulkheads = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, RateLimiter> rateLimiters = new ConcurrentHashMap<>();
 
+    /**
+     * Executes a Jira API call with per-instance bulkhead and rate-limiter protection.
+     *
+     * <p>Both the bulkhead slot and the rate-limiter token are managed entirely by
+     * Resilience4j's decorator chain ({@link Bulkhead#decorateCallable} wrapping
+     * {@link RateLimiter#decorateCallable}).  The decorators acquire the necessary
+     * permits before the call and release them automatically on completion or
+     * exception — no manual acquire/release is needed by callers.
+     *
+     * <p>Limits are tracked per Jira instance, keyed on the lowercase hostname
+     * extracted from {@code jiraBaseUrl} (falls back to the full URL when parsing
+     * fails).
+     *
+     * @param <T>         the return type of the API call
+     * @param jiraBaseUrl the base URL of the Jira instance (used to derive the
+     *                    per-instance rate-limiter key)
+     * @param call        the API operation to execute
+     * @return the result returned by {@code call}
+     * @throws BulkheadFullException  if no bulkhead slot becomes available within 10 seconds
+     * @throws RequestNotPermitted    if the rate limit is exceeded and no token is
+     *                                granted within 10 seconds
+     * @throws Exception              any checked exception thrown by {@code call}
+     */
     public <T> T executeWithRateLimit(String jiraBaseUrl, JiraApiCall<T> call) throws Exception {
         String key = extractInstanceKey(jiraBaseUrl);
         Bulkhead bulkhead = getOrCreateBulkhead(key);
