@@ -308,7 +308,7 @@ github_repo({
    → Validate no errors
 
 3. Run quality gates based on file types:
-   - Java: ./mvnw checkstyle:check test jacoco:report
+   - Java: ./gradlew checkstyleMain checkstyleTest test jacocoTestReport
    - TypeScript: npm run lint type-check test:run
 
 4. Extract ticket ID from branch name
@@ -389,9 +389,9 @@ get_errors([file1, file2, file3]);
 3. Run quality gates based on file types:
 
    Backend (Java/Spring Boot):
-   - ./mvnw checkstyle:check  # NO EXCEPTIONS
-   - ./mvnw test              # NO EXCEPTIONS
-   - ./mvnw jacoco:report     # 80% minimum
+   - ./gradlew checkstyleMain checkstyleTest  # NO EXCEPTIONS
+   - ./gradlew test              # NO EXCEPTIONS
+   - ./gradlew jacocoTestReport  # 80% minimum
 
    Frontend (Vue.js/TypeScript):
    - npm run lint             # NO EXCEPTIONS
@@ -409,9 +409,9 @@ Include in ticket description:
 ```markdown
 ## Verification
 
-1. Run `./mvnw clean test -pl integration-execution-service` - all tests pass
-2. Run `./mvnw checkstyle:check -pl integration-execution-service` - no violations
-3. Run `./mvnw jacoco:report` - coverage meets 80% threshold
+1. Run `./gradlew :integration-execution-service:test` - all tests pass
+2. Run `./gradlew :integration-execution-service:checkstyleMain` - no violations
+3. Run `./gradlew :integration-execution-service:jacocoTestReport` - coverage meets 80% threshold
 4. Search codebase: `grep -r "methodName" api/` - zero unexpected matches
 ```
 

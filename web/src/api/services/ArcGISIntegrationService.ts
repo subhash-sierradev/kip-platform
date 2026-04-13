@@ -1,6 +1,5 @@
 import type { ArcGISFeatureField } from '@/api/models/ArcGISFeatureField';
 import type { ArcGISIntegrationCreateUpdateRequest } from '@/api/models/ArcGISIntegrationCreateUpdateRequest';
-import type { ArcGISIntegrationDto } from '@/api/models/ArcGISIntegrationDto';
 import type { ArcGISIntegrationResponse } from '@/api/models/ArcGISIntegrationResponse';
 import type { ArcGISIntegrationSummaryResponse } from '@/api/models/ArcGISIntegrationSummaryResponse';
 import type { CreationResponse } from '@/api/models/CreationResponse';
@@ -157,19 +156,4 @@ export class ArcGISIntegrationService {
       url: '/integrations/arcgis/normalized/names',
     });
   }
-}
-
-// Type guards
-function isRecord(obj: unknown): obj is Record<string, unknown> {
-  return typeof obj === 'object' && obj !== null;
-}
-
-function isArcGISIntegrationDto(obj: unknown): obj is ArcGISIntegrationDto {
-  if (!isRecord(obj)) return false;
-  return (
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    typeof obj.itemType === 'string' &&
-    typeof obj.connectionId === 'string'
-  );
 }

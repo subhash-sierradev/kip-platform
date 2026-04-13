@@ -1,5 +1,5 @@
 import type { ArcGISIntegrationSummaryResponse } from '@/api/models/ArcGISIntegrationSummaryResponse';
-import { cronToText } from '@/composables/useCron';
+import { cronToText } from '@/composables/cron/useCron';
 
 interface SchedulableIntegration {
   frequencyPattern?: string;

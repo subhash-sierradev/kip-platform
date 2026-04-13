@@ -133,6 +133,7 @@ describe('useArcGISIntegrationActions', () => {
 
       expect(result).toBe('int-999');
       expect(buildIntegrationRequest).toHaveBeenCalledWith(form, 'conn-789');
+      expect(IntegrationConnectionService.testAndCreateConnection).not.toHaveBeenCalled();
     });
 
     it('creates new connection when needed', async () => {
@@ -270,6 +271,7 @@ describe('useArcGISIntegrationEditor', () => {
 
       expect(result).toBe(true);
       expect(buildIntegrationRequest).toHaveBeenCalledWith(form, 'conn-789');
+      expect(IntegrationConnectionService.testAndCreateConnection).not.toHaveBeenCalled();
     });
 
     it('creates new connection for update when method is new', async () => {
@@ -408,6 +410,42 @@ describe('useArcGISIntegrationTrigger', () => {
       await triggerJobExecution('int-999');
 
       expect(toastSpies.showError).toHaveBeenCalledWith('Trigger failed');
+    });
+
+    it('extracts error text from JSON body strings, body objects, and status text', async () => {
+      const { triggerJobExecution } = useArcGISIntegrationTrigger();
+
+      (ArcGISIntegrationService.triggerJobExecution as any).mockRejectedValueOnce({
+        body: JSON.stringify({ message: 'Job already running' }),
+      });
+      await triggerJobExecution('int-body-json', 'Named Integration');
+      expect(toastSpies.showError).toHaveBeenLastCalledWith('Job already running');
+
+      (ArcGISIntegrationService.triggerJobExecution as any).mockRejectedValueOnce({
+        body: { error: 'Body object error' },
+      });
+      await triggerJobExecution('int-body-object', 'Named Integration');
+      expect(toastSpies.showError).toHaveBeenLastCalledWith('Body object error');
+
+      (ArcGISIntegrationService.triggerJobExecution as any).mockRejectedValueOnce({
+        statusText: 'Gateway Timeout',
+      });
+      await triggerJobExecution('int-status-text', 'Named Integration');
+      expect(toastSpies.showError).toHaveBeenLastCalledWith('Gateway Timeout');
+    });
+
+    it('falls back to raw body strings and default trigger prefixes', async () => {
+      const { triggerJobExecution } = useArcGISIntegrationTrigger();
+
+      (ArcGISIntegrationService.triggerJobExecution as any).mockRejectedValueOnce({
+        body: 'Raw backend error',
+      });
+      await triggerJobExecution('int-raw-body', 'Named Integration');
+      expect(toastSpies.showError).toHaveBeenLastCalledWith('Raw backend error');
+
+      (ArcGISIntegrationService.triggerJobExecution as any).mockRejectedValueOnce('boom');
+      await triggerJobExecution('int-fallback');
+      expect(toastSpies.showError).toHaveBeenLastCalledWith('Failed to trigger Integration');
     });
   });
 });

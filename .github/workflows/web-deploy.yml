@@ -1,0 +1,90 @@
+name: Frontend / Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - 'release/**'
+    paths:
+      - 'web/**'
+      - 'version.json'
+      - '.github/workflows/web-deploy.yml'
+
+concurrency:
+  group: web-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-ci:
+    name: UI • Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./web
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint, type-check, test and build
+        run: npm run ci
+
+      - name: Install licensee
+        run: sudo gem install licensee > /dev/null
+
+      - name: Run license scan
+        run: |
+          licensee detect . --confidence 60 --json > license-report.json 2>/dev/null
+          if grep -q '"licenses":' license-report.json && grep -q 'AND' license-report.json; then
+            echo "License conflict detected (multiple license types found)."
+            exit 1
+          fi
+
+  publish-web:
+    name: Web • Docker Push
+    needs: frontend-ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' version.json)
+          echo "Resolved version: $VERSION"
+          [ -z "$VERSION" ] && echo "ERROR: version is empty!" && exit 1
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push kip-integration:web
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./web/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/kip-integration:web-${{ steps.version.outputs.version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/kip-integration:web-latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

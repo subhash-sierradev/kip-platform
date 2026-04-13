@@ -7,6 +7,8 @@ import { NotificationSeverity } from '@/api/models/NotificationSeverity';
 const handleToggleClick = vi.fn();
 const handleToggleCancel = vi.fn();
 const handleToggleConfirm = vi.fn();
+const rowToggleLoadingState = ref<Record<string, boolean>>({});
+const ruleEnabledState = ref(true);
 const confirmWithHandlers = vi.fn(async (handlers: { delete: () => Promise<boolean> }) =>
   handlers.delete()
 );
@@ -28,8 +30,8 @@ vi.mock('devextreme-vue/switch', () => ({
 vi.mock('@/composables/useNotificationRulesToggle', () => ({
   useNotificationRulesToggle: () => ({
     rulesGridRef: ref(null),
-    rowToggleLoading: ref<Record<string, boolean>>({}),
-    getRuleEnabled: () => true,
+    rowToggleLoading: rowToggleLoadingState,
+    getRuleEnabled: () => ruleEnabledState.value,
     handleToggleClick,
     handleToggleCancel,
     handleToggleConfirm,
@@ -104,6 +106,8 @@ const ConfirmationDialogStub = {
 describe('NotificationsRulesTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    rowToggleLoadingState.value = {};
+    ruleEnabledState.value = true;
   });
 
   function mountTab(overrides: Record<string, unknown> = {}) {
@@ -131,7 +135,10 @@ describe('NotificationsRulesTab', () => {
           GenericDataGrid: GenericDataGridStub,
           NotificationRuleModal: NotificationRuleModalStub,
           ConfirmationDialog: ConfirmationDialogStub,
-          StatusChipForDataTable: true,
+          StatusChipForDataTable: {
+            props: ['status', 'label'],
+            template: '<span class="status-chip-stub">{{ label || status }}</span>',
+          },
         },
       },
     });
@@ -190,5 +197,63 @@ describe('NotificationsRulesTab', () => {
 
     expect(confirmWithHandlers).toHaveBeenCalled();
     expect(deleteRule).toHaveBeenCalledWith('r1');
+  });
+
+  it('closes the rule modal and clears the selected rule when close is emitted', async () => {
+    const wrapper = mountTab();
+
+    (wrapper.vm as { openRuleModal: (id?: string) => void }).openRuleModal('r1');
+    await wrapper.vm.$nextTick();
+    expect(wrapper.find('.rule-modal').exists()).toBe(true);
+
+    await wrapper.find('.emit-close').trigger('click');
+    expect(wrapper.find('.rule-modal').exists()).toBe(false);
+  });
+
+  it('keeps the rule modal open when update fails', async () => {
+    const updateRule = vi.fn(async () => false);
+    const wrapper = mountTab({ updateRule });
+
+    (wrapper.vm as { openRuleModal: (id?: string) => void }).openRuleModal('r1');
+    await wrapper.find('.emit-update').trigger('click');
+
+    expect(updateRule).toHaveBeenCalledWith('r1', 'ERROR');
+    expect(wrapper.find('.rule-modal').exists()).toBe(true);
+  });
+
+  it('returns false from delete confirmation when no pending delete rule id exists', async () => {
+    const wrapper = mountTab();
+
+    await (wrapper.vm as any).handleConfirm();
+
+    expect(confirmWithHandlers).toHaveBeenCalled();
+  });
+
+  it('renders disabled status and loading styles when a rule is inactive and toggling', () => {
+    ruleEnabledState.value = false;
+    rowToggleLoadingState.value = { r1: true };
+
+    const wrapper = mountTab();
+    const toggleInterceptor = wrapper.find('.toggle-interceptor');
+    const toggleInput = wrapper.find('.dx-switch');
+
+    expect(wrapper.text()).toContain('Disabled');
+    expect(toggleInterceptor.classes()).toContain('toggle-interceptor--disabled');
+    expect(toggleInput.attributes('disabled')).toBeDefined();
+  });
+
+  it('renders an em dash when the modifier is missing', () => {
+    const wrapper = mountTab({
+      filteredRules: [
+        {
+          id: 'r1',
+          severity: NotificationSeverity.INFO,
+          lastModifiedDate: new Date().toISOString(),
+          lastModifiedBy: '',
+        },
+      ],
+    });
+
+    expect(wrapper.text()).toContain('—');
   });
 });

@@ -138,4 +138,184 @@ describe('useJiraWebhookConnection', () => {
     expect(options.lastResetConnectionId.value).toBe('new-conn');
     expect(options.syncMappingDataRef).toHaveBeenCalled();
   });
+
+  it('does not overwrite connectionId when validation fails or connectionId is already set', () => {
+    const options = createOptions();
+    options.connectionId.value = 'existing-id';
+
+    const { handleConnectionValidation } = useJiraWebhookConnection({
+      editMode: false,
+      cloneMode: false,
+      ...options,
+    });
+
+    handleConnectionValidation(false);
+    expect(options.jiraConnected.value).toBe(false);
+    expect(options.connectionId.value).toBe('existing-id');
+
+    handleConnectionValidation(true);
+    expect(options.jiraConnected.value).toBe(true);
+    expect(options.connectionId.value).toBe('existing-id');
+  });
+
+  it('stores created connection ids for new connections without hydrating outside edit mode', async () => {
+    const options = createOptions();
+    options.connectionData.value.connectionMethod = 'new';
+    options.connectionData.value.createdConnectionId = '';
+    options.mappingDataState.selectedProject = 'P1';
+
+    const { handleConnectionSuccess } = useJiraWebhookConnection({
+      editMode: false,
+      cloneMode: false,
+      ...options,
+    });
+
+    handleConnectionSuccess('created-9');
+    await flushPromises();
+
+    expect(options.connectionId.value).toBe('created-9');
+    expect(options.connectionData.value.createdConnectionId).toBe('created-9');
+    expect(serviceHoisted.getProjectsByConnectionId).not.toHaveBeenCalled();
+  });
+
+  it('skips hydration in edit mode when clone mode is enabled or mapping edit is disabled', async () => {
+    const optionsClone = createOptions();
+    const cloneComposable = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: true,
+      ...optionsClone,
+    });
+    cloneComposable.handleConnectionSuccess('conn-clone');
+
+    const optionsNoEdit = createOptions();
+    optionsNoEdit.mappingModeEdit.value = false;
+    const noEditComposable = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...optionsNoEdit,
+    });
+    noEditComposable.handleConnectionSuccess('conn-no-edit');
+
+    await flushPromises();
+    expect(serviceHoisted.getProjectsByConnectionId).not.toHaveBeenCalled();
+  });
+
+  it('skips hydration when dropdown collections are already loaded', async () => {
+    const options = createOptions();
+    options.projects.value = [{ key: 'P1', name: 'Existing Project' } as JiraProject];
+    options.issueTypes.value = [{ id: 'I1', name: 'Bug' } as JiraIssueType];
+    options.users.value = [{ accountId: 'U1', displayName: 'User 1' } as JiraUser];
+
+    const { handleConnectionSuccess } = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...options,
+    });
+
+    handleConnectionSuccess('conn-loaded');
+    await flushPromises();
+
+    expect(serviceHoisted.getProjectsByConnectionId).not.toHaveBeenCalled();
+  });
+
+  it('hydrates only projects when no project is selected and normalizes non-string responses', async () => {
+    serviceHoisted.getProjectsByConnectionId.mockResolvedValueOnce([
+      { key: 'P1', name: 'Project 1' },
+      { key: 99, name: null },
+    ]);
+
+    const options = createOptions();
+    options.mappingDataState.selectedProject = '';
+
+    const { hydrateDropdownsForConnection, isHydrating } = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...options,
+    });
+
+    const promise = hydrateDropdownsForConnection('conn-projects-only');
+    expect(isHydrating.value).toBe(true);
+    await promise;
+
+    expect(options.projects.value).toEqual([
+      { key: 'P1', name: 'Project 1' },
+      { key: '', name: '' },
+    ]);
+    expect(serviceHoisted.getProjectIssueTypesByConnectionId).not.toHaveBeenCalled();
+    expect(serviceHoisted.getProjectUsersByConnectionId).not.toHaveBeenCalled();
+    expect(isHydrating.value).toBe(false);
+  });
+
+  it('handles hydration failures and always clears the hydrating flag', async () => {
+    serviceHoisted.getProjectsByConnectionId.mockRejectedValueOnce(new Error('boom'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const options = createOptions();
+    const { hydrateDropdownsForConnection, isHydrating } = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...options,
+    });
+
+    await hydrateDropdownsForConnection('conn-error');
+
+    expect(errorSpy).toHaveBeenCalled();
+    expect(isHydrating.value).toBe(false);
+
+    errorSpy.mockRestore();
+  });
+
+  it('tracks original connection ids without resetting when first assigned or unchanged', () => {
+    const initialOptions = createOptions();
+    initialOptions.connectionId.value = 'conn-1';
+
+    const initialComposable = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...initialOptions,
+    });
+    initialComposable.handleConnectionChangeCheck();
+
+    expect(initialOptions.originalConnectionIdRef.value).toBe('conn-1');
+    expect(initialOptions.syncMappingDataRef).not.toHaveBeenCalled();
+
+    const unchangedOptions = createOptions();
+    unchangedOptions.connectionId.value = 'conn-2';
+    unchangedOptions.originalConnectionIdRef.value = 'conn-2';
+
+    const unchangedComposable = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...unchangedOptions,
+    });
+    unchangedComposable.handleConnectionChangeCheck();
+
+    expect(unchangedOptions.originalConnectionIdRef.value).toBe('conn-2');
+    expect(unchangedOptions.syncMappingDataRef).not.toHaveBeenCalled();
+  });
+
+  it('restores mapping edit mode when switching back to the last reset connection', () => {
+    const options = createOptions();
+    options.connectionId.value = 'conn-reset';
+    options.originalConnectionIdRef.value = 'old-conn';
+    options.lastResetConnectionId.value = 'conn-reset';
+    options.mappingModeEdit.value = false;
+
+    const { handleConnectionChangeCheck, resetMappingData } = useJiraWebhookConnection({
+      editMode: true,
+      cloneMode: false,
+      ...options,
+    });
+
+    options.mappingDataState.customFields = { custom: 'value' } as any;
+    resetMappingData();
+    expect(options.mappingDataState.customFields).toBeUndefined();
+
+    options.syncMappingDataRef.mockClear();
+    handleConnectionChangeCheck();
+
+    expect(options.mappingModeEdit.value).toBe(true);
+    expect(options.originalConnectionIdRef.value).toBe('conn-reset');
+    expect(options.syncMappingDataRef).not.toHaveBeenCalled();
+  });
 });

@@ -650,5 +650,533 @@ class KwGraphQLServiceTest {
         formDef.set("versions", versions);
         return formDef;
     }
-}
 
+    // -----------------------------------------------------------------------
+    // Additional branch-coverage tests for resolveFieldValue, putIfPresent,
+    // putArrayAttributeIfPresent, buildFieldLabels, selectTargetVersion
+    // -----------------------------------------------------------------------
+
+    @Test
+    void fetchMonitoringData_docWithTextualDynamicFieldAndOptionMatch_resolvesLabel() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-opt");
+        doc.put("dynamicFormDefinitionId", "form-opt");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("priority", "HIGH");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = buildFormDef(mapper, "priority", "Priority Label", "HIGH", "High Priority");
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-opt", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-opt")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-opt", 0, 99999, 0, 500);
+
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap.get("Priority Label")).isEqualTo("High Priority");
+    }
+
+    @Test
+    void fetchMonitoringData_docWithTextualDynamicFieldNoOptionMatch_returnsRawText() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-raw");
+        doc.put("dynamicFormDefinitionId", "form-raw");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("priority", "UNKNOWN_VAL");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = buildFormDef(mapper, "priority", "Priority Label", "HIGH", "High Priority");
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-raw", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-raw")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-raw", 0, 99999, 0, 500);
+
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap.get("Priority Label")).isEqualTo("UNKNOWN_VAL");
+    }
+
+    @Test
+    void fetchMonitoringData_docWithObjectContainingInnerArrayWithOptions_resolvesArrayLabels() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-inner-arr");
+        doc.put("dynamicFormDefinitionId", "form-inner-arr");
+        ObjectNode dynData = mapper.createObjectNode();
+        ObjectNode nestedObj = mapper.createObjectNode();
+        ArrayNode innerArr = mapper.createArrayNode();
+        innerArr.add("VAL1");
+        innerArr.add("VAL2");
+        nestedObj.set("tags", innerArr);
+        nestedObj.put("simple", "text");
+        dynData.set("nested", nestedObj);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = buildFormDefWithArrayValues(mapper, "tags", "Tag Label",
+                new String[]{"VAL1", "VAL2"}, new String[]{"Label One", "Label Two"});
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-inner-arr", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-inner-arr")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-inner-arr", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithObjectContainingInnerTextWithOption_resolvesLabel() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-inner-opt");
+        doc.put("dynamicFormDefinitionId", "form-inner-opt");
+        ObjectNode dynData = mapper.createObjectNode();
+        ObjectNode nestedObj = mapper.createObjectNode();
+        nestedObj.put("status", "OPEN");
+        dynData.set("wrapper", nestedObj);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = buildFormDef(mapper, "status", "Status Label", "OPEN", "Open");
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-inner-opt", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-inner-opt")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-inner-opt", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithObjectContainingInnerNonTextNoOption_passesThrough() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-inner-num");
+        doc.put("dynamicFormDefinitionId", "form-inner-num");
+        ObjectNode dynData = mapper.createObjectNode();
+        ObjectNode nestedObj = mapper.createObjectNode();
+        nestedObj.put("count", 42);
+        dynData.set("wrapper", nestedObj);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-inner-num", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-inner-num")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-inner-num", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithDocumentMetadataFields_putsPresent() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-meta");
+        doc.put("dynamicFormDefinitionId", "form-meta");
+        doc.put("documentType", "REPORT");
+        doc.put("occurrenceDate", "2026-01-01");
+        doc.put("occurrenceTime", "10:00");
+        doc.put("legacyId", "LEGACY-1");
+        doc.put("tenantId", "tenant-abc");
+        doc.put("dynamicFormDefinitionName", "Test Form");
+        doc.put("dynamicFormVersionNumber", 3);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-meta", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-meta")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-meta", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        KwMonitoringDocument kwDoc = result.get(0);
+        assertThat(kwDoc.getAttributes().get("documentType")).isEqualTo("REPORT");
+        assertThat(kwDoc.getAttributes().get("occurrenceDate")).isEqualTo("2026-01-01");
+        assertThat(kwDoc.getAttributes().get("legacyId")).isEqualTo("LEGACY-1");
+        assertThat(kwDoc.getTenantId()).isEqualTo("tenant-abc");
+        assertThat(kwDoc.getDynamicFormDefinitionName()).isEqualTo("Test Form");
+        assertThat(kwDoc.getDynamicFormVersionNumber()).isEqualTo(3);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithNonTextualDocumentTypeField_doesNotPutIfPresent() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-nontext");
+        doc.put("dynamicFormDefinitionId", "form-nontext");
+        doc.put("documentType", 123); // non-textual
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-nontext", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-nontext")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nontext", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAttributes()).doesNotContainKey("documentType");
+    }
+
+    @Test
+    void fetchMonitoringData_docWithPeopleAndCaseArrayAttributes_addsThem() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-people");
+        doc.put("dynamicFormDefinitionId", "form-people");
+        ArrayNode authors = mapper.createArrayNode();
+        authors.add(mapper.createObjectNode().put("name", "Alice"));
+        doc.set("authors", authors);
+        ArrayNode approvers = mapper.createArrayNode();
+        approvers.add(mapper.createObjectNode().put("name", "Bob"));
+        doc.set("approvers", approvers);
+        ArrayNode serials = mapper.createArrayNode();
+        serials.add(mapper.createObjectNode().put("serial", "S-1"));
+        doc.set("serials", serials);
+        ArrayNode caseLabels = mapper.createArrayNode();
+        caseLabels.add("label1");
+        doc.set("caseLabels", caseLabels);
+        ArrayNode relatedEntities = mapper.createArrayNode();
+        relatedEntities.add(mapper.createObjectNode().put("type", "PERSON"));
+        doc.set("relatedEntities", relatedEntities);
+        ArrayNode tags = mapper.createArrayNode();
+        doc.set("tags", tags); // empty array
+        ArrayNode classifications = mapper.createArrayNode();
+        classifications.add("classified");
+        doc.set("classifications", classifications);
+        ArrayNode attachments = mapper.createArrayNode();
+        attachments.add(mapper.createObjectNode().put("filename", "test.pdf"));
+        doc.set("attachments", attachments);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-people", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-people")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-people", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAttributes()).containsKey("authors");
+        assertThat(result.get(0).getAttributes()).containsKey("approvers");
+        assertThat(result.get(0).getAttributes()).containsKey("serials");
+        assertThat(result.get(0).getAttributes()).containsKey("caseLabels");
+        assertThat(result.get(0).getAttributes()).containsKey("relatedEntities");
+        assertThat(result.get(0).getAttributes()).containsKey("attachments");
+        assertThat(result.get(0).getAttributes()).containsKey("classifications");
+        // tags is empty array but requireNonEmpty is false, so it's included
+        assertThat(result.get(0).getAttributes()).containsKey("tags");
+    }
+
+    @Test
+    void fetchMonitoringData_docWithEmptyNonEmptyRequiredArrays_excludesEmptyOnes() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-emptyarr");
+        doc.put("dynamicFormDefinitionId", "form-emptyarr");
+        doc.set("authors", mapper.createArrayNode()); // empty, requireNonEmpty=true
+        doc.set("serials", mapper.createArrayNode()); // empty, requireNonEmpty=true
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-emptyarr", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-emptyarr")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-emptyarr", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getAttributes()).doesNotContainKey("authors");
+        assertThat(result.get(0).getAttributes()).doesNotContainKey("serials");
+    }
+
+    @Test
+    void fetchMonitoringData_formDefWithNullNameField_skipsLabelMapping() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-nullname");
+        doc.put("dynamicFormDefinitionId", "form-nullname");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("fieldX", "somevalue");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        // Build form def with a field that has null name
+        ObjectNode formDef = mapper.createObjectNode();
+        ArrayNode versions = mapper.createArrayNode();
+        ObjectNode version = mapper.createObjectNode();
+        version.put("status", "ACTIVE");
+        ArrayNode formFields = mapper.createArrayNode();
+        ObjectNode field = mapper.createObjectNode();
+        // name is missing
+        field.put("label", "X Label");
+        field.set("values", mapper.createArrayNode());
+        formFields.add(field);
+        version.set("formFields", formFields);
+        versions.add(version);
+        formDef.set("versions", versions);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-nullname", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-nullname")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nullname", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_formDefWithNullLabelField_usesNameAsKey() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-nulllabel");
+        doc.put("dynamicFormDefinitionId", "form-nulllabel");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("fieldY", "value");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = mapper.createObjectNode();
+        ArrayNode versions = mapper.createArrayNode();
+        ObjectNode version = mapper.createObjectNode();
+        version.put("status", "ACTIVE");
+        ArrayNode formFields = mapper.createArrayNode();
+        ObjectNode field = mapper.createObjectNode();
+        field.put("name", "fieldY");
+        // label is missing
+        field.set("values", mapper.createArrayNode());
+        formFields.add(field);
+        version.set("formFields", formFields);
+        versions.add(version);
+        formDef.set("versions", versions);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-nulllabel", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-nulllabel")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nulllabel", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap).containsKey("fieldY");
+    }
+
+    @Test
+    void fetchMonitoringData_formDefWithEmptyVersionsArray_returnsEmptyFieldLabels() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-nover");
+        doc.put("dynamicFormDefinitionId", "form-nover");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("f", "v");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = mapper.createObjectNode();
+        formDef.set("versions", mapper.createArrayNode());
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-nover", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-nover")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nover", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap).containsKey("f");
+    }
+
+    @Test
+    void fetchMonitoringData_formDefWithNonArrayVersions_returnsEmptyFieldLabels() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-badver");
+        doc.put("dynamicFormDefinitionId", "form-badver");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("f", "v");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = mapper.createObjectNode();
+        formDef.put("versions", "not-array");
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-badver", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-badver")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-badver", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_formDefWithNonArrayFormFields_returnsEmptyFieldLabels() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-badflds");
+        doc.put("dynamicFormDefinitionId", "form-badflds");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("f", "v");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = mapper.createObjectNode();
+        ArrayNode versions = mapper.createArrayNode();
+        ObjectNode version = mapper.createObjectNode();
+        version.put("status", "ACTIVE");
+        version.put("formFields", "not-array");
+        versions.add(version);
+        formDef.set("versions", versions);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-badflds", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-badflds")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-badflds", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithNumericDynamicField_passesThrough() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-num");
+        doc.put("dynamicFormDefinitionId", "form-num");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("count", 42);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-num", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-num")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-num", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap.get("count")).isEqualTo(42);
+    }
+
+    @Test
+    void fetchMonitoringData_docWithArrayDynamicField_passesThrough() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-arr-dyn");
+        doc.put("dynamicFormDefinitionId", "form-arr-dyn");
+        ObjectNode dynData = mapper.createObjectNode();
+        ArrayNode arr = mapper.createArrayNode();
+        arr.add("a");
+        arr.add("b");
+        dynData.set("items", arr);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-arr-dyn", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-arr-dyn")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-arr-dyn", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        assertThat(dynMap.get("items")).isInstanceOf(java.util.List.class);
+    }
+
+    @Test
+    void fetchMonitoringData_formFieldOptionWithNullValueOrLabel_skipsOption() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-nullopt");
+        doc.put("dynamicFormDefinitionId", "form-nullopt");
+        ObjectNode dynData = mapper.createObjectNode();
+        dynData.put("status", "OPEN");
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        ObjectNode formDef = mapper.createObjectNode();
+        ArrayNode versions = mapper.createArrayNode();
+        ObjectNode version = mapper.createObjectNode();
+        version.put("status", "ACTIVE");
+        ArrayNode formFields = mapper.createArrayNode();
+        ObjectNode field = mapper.createObjectNode();
+        field.put("name", "status");
+        field.put("label", "Status");
+        ArrayNode values = mapper.createArrayNode();
+        // option with null value
+        ObjectNode opt1 = mapper.createObjectNode();
+        opt1.putNull("value");
+        opt1.put("label", "Null Value");
+        values.add(opt1);
+        // option with null label
+        ObjectNode opt2 = mapper.createObjectNode();
+        opt2.put("value", "OPEN");
+        opt2.putNull("label");
+        values.add(opt2);
+        field.set("values", values);
+        formFields.add(field);
+        version.set("formFields", formFields);
+        versions.add(version);
+        formDef.set("versions", versions);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-nullopt", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-nullopt")).thenReturn(formDef);
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nullopt", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> dynMap =
+                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
+        // No valid option match, raw value returned
+        assertThat(dynMap.get("Status")).isEqualTo("OPEN");
+    }
+
+    @Test
+    void fetchMonitoringData_objectWithInnerArrayNoOptionsMatch_passesElementThrough() {
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-arr-noopt");
+        doc.put("dynamicFormDefinitionId", "form-arr-noopt");
+        ObjectNode dynData = mapper.createObjectNode();
+        ObjectNode nestedObj = mapper.createObjectNode();
+        ArrayNode innerArr = mapper.createArrayNode();
+        innerArr.add(123); // non-textual element in array
+        nestedObj.set("nums", innerArr);
+        dynData.set("wrapper", nestedObj);
+        doc.set("dynamicData", dynData);
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-arr-noopt", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-arr-noopt")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-arr-noopt", 0, 99999, 0, 500);
+        assertThat(result).hasSize(1);
+    }
+}

@@ -11,6 +11,10 @@ on:
       - 'web/**'
       - '.github/workflows/web-ci.yml'
 
+concurrency:
+  group: web-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend-ci:
     name: UI • Build

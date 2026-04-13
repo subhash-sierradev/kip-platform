@@ -31,7 +31,7 @@ public abstract class BaseEntity<T extends Serializable> {
 
     @CreationTimestamp
     @Column(name = "created_date", nullable = false, updatable = false)
-    private Instant createdDate; // Always UTC - UI handles timezone conversion
+    private Instant createdDate;
 
     @UpdateTimestamp
     @Column(name = "last_modified_date", nullable = false)

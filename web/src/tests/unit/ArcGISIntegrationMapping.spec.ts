@@ -8,23 +8,36 @@ vi.mock('@/utils/timezoneUtils', async () => {
   return {
     ...actual,
     getUserTimezone: () => 'Asia/Kolkata',
-    // Mock conversion for deterministic testing across all environments
-    // Simulates Asia/Kolkata (UTC+5:30) to UTC conversion
-    convertUserTimezoneToUtc: (localTimeStr: string) => {
-      const [hhStr, mmStr, ssStr] = localTimeStr.split(':');
+    // Mock for deterministic testing: simulates Asia/Kolkata (UTC+5:30) combined date+time conversion
+    convertLocalDateTimeToUtc: (localDate: string, localTime: string) => {
+      const [hhStr, mmStr, ssStr] = localTime.split(':');
       const hours = parseInt(hhStr || '0', 10);
       const minutes = parseInt(mmStr || '0', 10);
       const seconds = parseInt(ssStr || '0', 10);
+      const [yyyy, mm, dd] = localDate.split('-').map(Number);
 
-      // Convert IST (UTC+5:30) to UTC by subtracting 5 hours 30 minutes
-      const totalMinutes = hours * 60 + minutes - 330; // 330 = 5*60 + 30
+      // IST is UTC+5:30: subtract 330 minutes to get UTC; handle midnight crossing
+      let totalMinutes = hours * 60 + minutes - 330;
+      let dateOffset = 0;
+      if (totalMinutes < 0) {
+        totalMinutes += 1440;
+        dateOffset = -1;
+      } else if (totalMinutes >= 1440) {
+        totalMinutes -= 1440;
+        dateOffset = 1;
+      }
 
-      // Handle negative values with proper modulo
-      const utcHours = ((Math.floor(totalMinutes / 60) % 24) + 24) % 24;
-      const utcMinutes = ((totalMinutes % 60) + 60) % 60;
+      const utcHours = Math.floor(totalMinutes / 60);
+      const utcMins = totalMinutes % 60;
+      const d = new Date(yyyy, mm - 1, dd + dateOffset);
 
-      return `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+      return {
+        utcDate: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+        utcTime: `${String(utcHours).padStart(2, '0')}:${String(utcMins).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`,
+      };
     },
+    // Fake time is 2025-02-05T10:30:00Z = 2025-02-05T16:00:00+05:30 → local date 2025-02-05
+    getLocalDateString: () => '2025-02-05',
   };
 });
 
@@ -650,6 +663,26 @@ describe('arcgisIntegrationMapping', () => {
       const req = buildIntegrationRequest(form, 'conn-22');
       const schedule = req.schedule;
       expect(schedule.executionTime).toBe('13:15:30'); // 18:45:30 IST → 13:15:30 UTC
+    });
+
+    it('KIP-422: midnight crossing — IST time before 05:30 sends UTC date of previous day', () => {
+      // Equivalent to CDT bug: a user picks Feb 5 00:30 IST (just after midnight).
+      // In UTC that is Feb 4 19:00 — the executionDate must be '2025-02-04', not '2025-02-05'.
+      const form: any = {
+        name: 'Midnight Crossing Integration',
+        description: 'KIP-422 regression: midnight wrap',
+        itemType: 'DOCUMENT',
+        subType: '',
+        executionDate: '2025-02-05',
+        executionTime: '00:30', // 00:30 IST  → 19:00 UTC on 2025-02-04
+        frequencyPattern: 'DAILY',
+        fieldMappings: [],
+      };
+
+      const req = buildIntegrationRequest(form, 'conn-kip422');
+      const schedule = req.schedule;
+      expect(schedule.executionDate).toBe('2025-02-04'); // UTC date is the previous day
+      expect(schedule.executionTime).toBe('19:00:00'); // 00:30 IST → 19:00 UTC
     });
   });
 

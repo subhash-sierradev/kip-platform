@@ -2,26 +2,26 @@
 import { describe, beforeEach, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 
-// Mock router
 const pushMock = vi.fn();
 let currentPath = '/';
 vi.mock('vue-router', () => ({
   useRouter: () => ({
     push: (route: string) => {
       currentPath = route;
+      pushMock(route);
       return Promise.resolve();
     },
     currentRoute: { value: { path: currentPath } },
   }),
 }));
 
-// Mock auth store for role-based visibility
 let hasSuper = true;
 let hasTenantAdmin = true;
 let featureSet: Record<string, boolean> = {
   feature_integration: true,
   feature_jira_webhook: true,
   feature_arcgis_integration: true,
+  feature_confluence_integration: true,
 };
 vi.mock('@/store/auth', () => ({
   useAuthStore: () => ({
@@ -43,80 +43,107 @@ describe('SideNav branches', () => {
       feature_integration: true,
       feature_jira_webhook: true,
       feature_arcgis_integration: true,
+      feature_confluence_integration: true,
     };
     currentPath = '/';
     pushMock.mockReset();
   });
 
-  it('shows admin-only items for super admin and hides when not super admin', async () => {
+  it('shows admin-only items for super admin and hides them for tenant admin only', async () => {
     const wrapper = mount(SideNav, { props: { collapsed: false } });
-    // Open admin submenu
     await wrapper.find('[data-menu-key="admin"]').trigger('click');
-    expect(wrapper.find('.submenu-flyout-admin').exists()).toBe(true);
-    // Super admin shows Clear Cache, Cache Statistics, and Site Config
+
     const adminItems = wrapper
       .findAll('.submenu-item')
-      .map(n => n.text())
+      .map(node => node.text())
       .join('|');
     expect(adminItems).toContain('Clear Cache');
     expect(adminItems).toContain('Cache Statistics');
     expect(adminItems).toContain('Site Config');
 
-    // Re-mount as non-super admin (but still tenant_admin to see admin menu)
     hasSuper = false;
-    hasTenantAdmin = true; // Keep tenant_admin so admin menu is still visible
     const wrapper2 = mount(SideNav, { props: { collapsed: false } });
     await wrapper2.find('[data-menu-key="admin"]').trigger('click');
-    const nonSuperAdminItems = wrapper2
+
+    const tenantAdminItems = wrapper2
       .findAll('.submenu-item')
-      .map(n => n.text())
+      .map(node => node.text())
       .join('|');
-    expect(nonSuperAdminItems).not.toContain('Clear Cache');
-    expect(nonSuperAdminItems).not.toContain('Cache Statistics');
-    expect(nonSuperAdminItems).toContain('Site Config'); // tenant_admin can see this
+    expect(tenantAdminItems).not.toContain('Clear Cache');
+    expect(tenantAdminItems).not.toContain('Cache Statistics');
+    expect(tenantAdminItems).toContain('Site Config');
   });
 
-  it('hover expand/collapse toggles and closes submenus on collapse', async () => {
+  it('hover expand and collapse closes submenus', async () => {
     const wrapper = mount(SideNav, { props: { collapsed: true }, attachTo: document.body });
-    // Hover to expand
+
     await wrapper.trigger('mouseenter');
-    // Open outbound submenu
     await wrapper.find('[data-menu-key="outbound"]').trigger('click');
     expect(wrapper.find('.submenu-flyout-outbound').exists()).toBe(true);
-    // Mouseleave collapses and closes submenu
+
     await wrapper.trigger('mouseleave');
     expect(wrapper.find('.submenu-flyout-outbound').exists()).toBe(false);
   });
 
-  it('navigateToRoute pushes on different route and suppresses when same (super admin only)', async () => {
+  it('navigates for a different route and suppresses duplicate navigation', async () => {
     currentPath = '/admin/audit-log';
     const wrapper = mount(SideNav, { props: { collapsed: false } });
-    // Open admin submenu and click Site Config (different route) - only visible to super admin
+
     await wrapper.find('[data-menu-key="admin"]').trigger('click');
     const siteConfig = wrapper
       .findAll('.submenu-item')
-      .find(n => n.text().includes('Site Config'))!;
-    expect(siteConfig).toBeTruthy(); // Should be present for super admin
-    await siteConfig.trigger('click');
-    expect(currentPath).toBe('/admin/site-config');
+      .find(node => node.text().includes('Site Config'));
+    expect(siteConfig).toBeTruthy();
 
-    // Click same route again — no change
-    await siteConfig.trigger('click');
+    await siteConfig!.trigger('click');
     expect(currentPath).toBe('/admin/site-config');
+    expect(pushMock).toHaveBeenCalledWith('/admin/site-config');
 
-    // Test that non-super admin (only tenant_admin) cannot see app_admin items but can see tenant_admin items
-    hasSuper = false;
-    hasTenantAdmin = true; // Keep tenant_admin so admin menu is still visible
+    currentPath = '/admin/site-config';
+    pushMock.mockClear();
+
     const wrapper2 = mount(SideNav, { props: { collapsed: false } });
     await wrapper2.find('[data-menu-key="admin"]').trigger('click');
-    const siteConfigNonSuper = wrapper2
+    const sameRouteSiteConfig = wrapper2
       .findAll('.submenu-item')
-      .find(n => n.text().includes('Site Config'));
-    expect(siteConfigNonSuper).toBeTruthy(); // Should be present for tenant_admin
+      .find(node => node.text().includes('Site Config'));
+    await sameRouteSiteConfig!.trigger('click');
 
-    const clearCacheNonSuper = wrapper2
-      .findAll('.submenu-item')
-      .find(n => n.text().includes('Clear Cache'));
-    expect(clearCacheNonSuper).toBeFalsy(); // Should NOT be present for non-app_admin
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it('hides menu groups when features and roles are unavailable', () => {
+    hasSuper = false;
+    hasTenantAdmin = false;
+    featureSet = {
+      feature_integration: false,
+      feature_jira_webhook: false,
+      feature_arcgis_integration: false,
+      feature_confluence_integration: false,
+    };
+
+    const wrapper = mount(SideNav, { props: { collapsed: false } });
+
+    expect(wrapper.find('[data-menu-key="inbound"]').exists()).toBe(false);
+    expect(wrapper.find('[data-menu-key="outbound"]').exists()).toBe(false);
+    expect(wrapper.find('[data-menu-key="admin"]').exists()).toBe(false);
+    expect(wrapper.find('.sidebar-menu-divider').exists()).toBe(false);
+  });
+
+  it('shows confluence outbound item only when the feature is enabled', async () => {
+    featureSet.feature_jira_webhook = false;
+    featureSet.feature_arcgis_integration = false;
+    featureSet.feature_confluence_integration = true;
+
+    const wrapper = mount(SideNav, { props: { collapsed: false } });
+    await wrapper.find('[data-menu-key="outbound"]').trigger('click');
+
+    const items = wrapper.findAll('.submenu-flyout-outbound .submenu-item');
+    expect(items).toHaveLength(1);
+    expect(items[0].text()).toContain('Confluence Integration');
+
+    featureSet.feature_confluence_integration = false;
+    const wrapper2 = mount(SideNav, { props: { collapsed: false } });
+    expect(wrapper2.find('[data-menu-key="outbound"]').exists()).toBe(false);
   });
 });

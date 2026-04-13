@@ -13,6 +13,11 @@ const actionSpies = vi.hoisted(() => ({
   toggleIntegrationStatus: vi.fn(),
 }));
 
+const routerSpies = vi.hoisted(() => ({
+  back: vi.fn(),
+  push: vi.fn(),
+}));
+
 vi.mock('@/composables/useConfluenceIntegrationActions', () => ({
   useConfluenceIntegrationActions: () => ({
     deleteIntegration: actionSpies.deleteIntegration,
@@ -48,7 +53,7 @@ vi.mock('@/composables/useConfirmationDialog', () => ({
 }));
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRouter: () => routerSpies,
 }));
 
 vi.mock('@/components/common/ConfirmationDialog.vue', () => ({
@@ -246,5 +251,99 @@ describe('ConfluenceOverviewTab', () => {
       },
     });
     expect(wrapper.text()).toContain('Type X');
+  });
+
+  it('falls back to raw subtype when subtype label is missing', () => {
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: {
+        integrationData: makeIntegration({ itemSubtypeLabel: '', itemSubtype: 'SPACE_PAGE' }),
+        integrationId: 'ci-1',
+        loading: false,
+      },
+    });
+
+    expect(wrapper.text()).toContain('SPACE_PAGE');
+  });
+
+  it('shows placeholder description when none is provided', () => {
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: {
+        integrationData: makeIntegration({ description: '' } as any),
+        integrationId: 'ci-1',
+        loading: false,
+      },
+    });
+
+    expect(wrapper.text()).toContain('No description provided');
+  });
+
+  it('handleConfirm delegates to dialog handlers', async () => {
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: { integrationData: makeIntegration(), integrationId: 'ci-1', loading: false },
+    });
+
+    await (wrapper.vm as any).handleConfirm();
+
+    expect(dialogSpies.confirmWithHandlers).toHaveBeenCalledTimes(1);
+    const handlers = dialogSpies.confirmWithHandlers.mock.calls[0]?.[0];
+    expect(Object.keys(handlers)).toEqual(expect.arrayContaining(['enable', 'disable', 'delete']));
+  });
+
+  it('shows error and returns false when toggling without an id', async () => {
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: { integrationData: makeIntegration(), integrationId: '', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(false);
+    expect(toastSpies.showError).toHaveBeenCalledWith('Integration id missing');
+  });
+
+  it('updates local enabled state and emits status-updated on toggle success', async () => {
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(false);
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: {
+        integrationData: makeIntegration({ isEnabled: true }),
+        integrationId: 'ci-1',
+        loading: false,
+      },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(true);
+    expect(actionSpies.toggleIntegrationStatus).toHaveBeenCalledWith('ci-1', true);
+    expect(wrapper.emitted('status-updated')).toEqual([[false]]);
+    expect((wrapper.vm as any).manageActions.find((item: any) => item.id === 'toggle').label).toBe(
+      'Enable Integration'
+    );
+  });
+
+  it('returns false when status toggle returns null', async () => {
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(null);
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: { integrationData: makeIntegration(), integrationId: 'ci-1', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(false);
+  });
+
+  it('shows error and returns false when deleting without an id', async () => {
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: { integrationData: makeIntegration(), integrationId: '', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(false);
+    expect(toastSpies.showError).toHaveBeenCalledWith('Integration id missing');
+  });
+
+  it('navigates back on successful delete and stays put on failure', async () => {
+    actionSpies.deleteIntegration.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const wrapper = mount(ConfluenceOverviewTab, {
+      props: { integrationData: makeIntegration(), integrationId: 'ci-1', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(true);
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(false);
+
+    expect(routerSpies.back).toHaveBeenCalledTimes(1);
   });
 });

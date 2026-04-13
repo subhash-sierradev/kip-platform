@@ -119,4 +119,187 @@ describe('ArcGISIntegrationCard', () => {
     const dynamicDocChip = wrapper.find('.dynamic-doc-chip');
     expect(dynamicDocChip.exists()).toBe(false);
   });
+
+  it('shows not scheduled when there is no frequency pattern or next run', () => {
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: {
+        integration: {
+          ...makeBaseIntegration(),
+          frequencyPattern: '',
+          nextRunAtUtc: undefined,
+        },
+        menuItems: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('Schedule:');
+    expect(wrapper.text()).toContain('Not scheduled');
+    expect(wrapper.text()).toContain('Next Run:');
+  });
+
+  it('falls back to the raw time formatter when schedule parsing fails', () => {
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: {
+        integration: {
+          ...makeBaseIntegration(),
+          executionDate: 'bad-date',
+          executionTime: '09:30:00',
+        },
+        menuItems: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('9:30 AM');
+  });
+
+  it.each([
+    ['SUCCESS', 'dx-icon-check', 'Execution completed successfully'],
+    ['FAILED', 'dx-icon-close', 'Execution failed - check logs for details'],
+    ['RUNNING', 'dx-icon-refresh', 'Currently executing'],
+    ['ABORTED', 'dx-icon-remove', 'Execution was manually aborted'],
+    ['SCHEDULED', 'dx-icon-clock', 'Scheduled for execution - waiting for executor to pick up'],
+  ])('renders status UI for %s', (status, iconClass, tooltipText) => {
+    const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
+      ArcGISIntegrationExecutionSummary;
+    integration.execution = {
+      lastSuccessTimeUtc: '2026-01-15T10:00:00Z',
+      nextRunAtUtc: '2026-01-16T09:00:00Z',
+      lastStatus: status as any,
+    };
+
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration, menuItems: [] },
+    });
+
+    expect(wrapper.find(`i.${iconClass}`).exists()).toBe(true);
+    expect((wrapper.vm as any).statusTooltip).toBe(tooltipText);
+  });
+
+  it('uses last attempt time when no successful execution exists', () => {
+    const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
+      ArcGISIntegrationExecutionSummary;
+    integration.lastAttemptTimeUtc = '2026-01-14T08:15:00Z';
+    integration.lastStatus = 'FAILED';
+
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration, menuItems: [] },
+    });
+
+    expect(wrapper.text()).not.toContain('Never Run');
+  });
+
+  it('falls back to default card labels when core fields are missing', () => {
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: {
+        integration: {
+          ...makeBaseIntegration(),
+          name: '',
+          isEnabled: undefined,
+          itemSubtypeLabel: '',
+          itemSubtype: 'Raw subtype',
+          nextRunAtUtc: undefined,
+        } as any,
+        menuItems: [],
+      },
+    });
+
+    expect(wrapper.text()).toContain('Unnamed Integration');
+    expect(wrapper.text()).toContain('Enabled');
+    expect(wrapper.text()).toContain('Raw subtype');
+    expect(wrapper.text()).toContain('Next Run:');
+    expect(wrapper.text()).toContain('Not scheduled');
+  });
+
+  it('shows Never Run when there is no success or attempt timestamp', () => {
+    const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
+      ArcGISIntegrationExecutionSummary;
+    integration.execution = {
+      lastSuccessTimeUtc: undefined,
+      lastAttemptTimeUtc: undefined,
+      nextRunAtUtc: undefined,
+      lastStatus: undefined,
+    } as any;
+
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration, menuItems: [] },
+    });
+
+    expect(wrapper.text()).toContain('Last Run:');
+    expect(wrapper.text()).toContain('Never Run');
+  });
+
+  it('falls back to default status presentation for unknown execution states', () => {
+    const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
+      ArcGISIntegrationExecutionSummary;
+    integration.execution = {
+      lastSuccessTimeUtc: '2026-01-15T10:00:00Z',
+      nextRunAtUtc: '2026-01-16T09:00:00Z',
+      lastStatus: 'PAUSED' as any,
+    };
+
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration, menuItems: [] },
+    });
+
+    expect(wrapper.find('i.dx-icon-check').exists()).toBe(false);
+    expect(wrapper.find('i.dx-icon-close').exists()).toBe(false);
+    expect((wrapper.vm as any).statusIcon).toBe('');
+    expect((wrapper.vm as any).statusColor).toBe('#6c757d');
+    expect((wrapper.vm as any).statusTooltip).toBe('PAUSED');
+  });
+
+  it('shows and hides the status tooltip while hovering the status icon', async () => {
+    const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
+      ArcGISIntegrationExecutionSummary;
+    integration.execution = {
+      lastSuccessTimeUtc: '2026-01-15T10:00:00Z',
+      nextRunAtUtc: '2026-01-16T09:00:00Z',
+      lastStatus: 'SUCCESS',
+    };
+
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration, menuItems: [] },
+    });
+
+    const statusIcon = wrapper.find('i.dx-icon-check');
+    expect(statusIcon.exists()).toBe(true);
+
+    await statusIcon.trigger('mouseenter', { clientX: 10, clientY: 20 });
+    expect((wrapper.vm as any).statusTooltipVisible).toBe(true);
+    expect((wrapper.vm as any).statusTooltipX).toBe(22);
+    expect((wrapper.vm as any).statusTooltipY).toBe(32);
+
+    await statusIcon.trigger('mousemove', { clientX: 30, clientY: 40 });
+    expect((wrapper.vm as any).statusTooltipX).toBe(42);
+    expect((wrapper.vm as any).statusTooltipY).toBe(52);
+
+    await statusIcon.trigger('mouseleave');
+    expect((wrapper.vm as any).statusTooltipVisible).toBe(false);
+  });
+
+  it('emits open and action events from the card shell', async () => {
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: {
+        integration: makeBaseIntegration(),
+        menuItems: [{ id: 'delete', label: 'Delete' } as any],
+      },
+      global: {
+        stubs: {
+          ActionMenu: {
+            props: ['items'],
+            emits: ['action'],
+            template:
+              '<button class="action-menu" @click.stop="$emit(\'action\', items[0].id)">menu</button>',
+          },
+          Tooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    await wrapper.find('.action-menu').trigger('click');
+    await wrapper.find('.integration-card').trigger('click');
+
+    expect(wrapper.emitted('action')).toEqual([['delete']]);
+    expect(wrapper.emitted('open')).toEqual([['int-1']]);
+  });
 });

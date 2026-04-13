@@ -141,14 +141,18 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue';
-import type { ArcGISFormData } from '../../../../../types/ArcGISFormData';
-import { getUserTimezone, formatTimezoneInfo } from '../../../../../utils/timezoneUtils';
+import type { ArcGISFormData } from '@/types/ArcGISFormData';
+import {
+  getUserTimezone,
+  formatTimezoneInfo,
+  convertLocalDateTimeToUtc,
+} from '@/utils/timezoneUtils';
 import {
   MONTH_LABELS,
   formatSelectedDaysDisplay,
-  formatDateOnlyDisplay,
-} from '../../../../../utils/scheduleDisplayUtils';
-import { formatTime } from '../../../../../utils/scheduleFormatUtils';
+  formatScheduleExecutionDate,
+} from '@/utils/scheduleDisplayUtils';
+import { formatTime } from '@/utils/scheduleFormatUtils';
 
 defineOptions({ name: 'ReviewSummary' });
 
@@ -193,9 +197,15 @@ const frequencyPatternDisplay = computed(() => {
   return `${frequencyPattern} (${cronExpression})`;
 });
 
-const executionStartDateDisplay = computed(() =>
-  formatDateOnlyDisplay(props.formData.executionDate)
-);
+// The wizard form holds LOCAL date+time (what the user selected in their timezone).
+// formatScheduleExecutionDate expects UTC inputs, so we pre-convert here.
+const executionStartDateDisplay = computed(() => {
+  const localDate = props.formData.executionDate;
+  const localTime = props.formData.executionTime;
+  if (!localDate || !localTime) return 'N/A';
+  const { utcDate, utcTime } = convertLocalDateTimeToUtc(localDate, localTime);
+  return formatScheduleExecutionDate(utcDate, utcTime);
+});
 
 const dataWindowModeDisplay = computed(() => {
   switch (props.formData.timeCalculationMode) {

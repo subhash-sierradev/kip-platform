@@ -91,10 +91,10 @@ export function useExistingConnections(serviceType: string) {
   });
 
   const verifyButtonText = computed(() => {
-    if (isTestingExisting.value) return 'Verifying...';
-    if (existingTested.value && existingTestSuccess.value) return 'Verified ✓';
-    if (existingTested.value && !existingTestSuccess.value) return 'Failed ✗';
-    return 'Verify Connection';
+    if (isTestingExisting.value) return 'Testing...';
+    if (existingTested.value && existingTestSuccess.value) return 'Connection Verified';
+    if (existingTested.value && !existingTestSuccess.value) return 'Verification Failed';
+    return 'Test Connection';
   });
 
   const fetchExistingConnections = async (): Promise<void> => {

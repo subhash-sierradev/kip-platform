@@ -10,6 +10,13 @@ import { useToastStore } from '@/store/toast';
 vi.mock('@/api/services/IntegrationConnectionService');
 vi.mock('@/api/OpenAPI', () => ({ api: { patch: vi.fn() } }));
 vi.mock('@/store/toast');
+vi.mock('@/utils/connectionTestHelpers', () => ({
+  buildIntegrationSecret: vi.fn(() => ({
+    baseUrl: 'https://jira.example.com',
+    authType: 'BASIC_AUTH',
+    credentials: {},
+  })),
+}));
 
 const mockToast = {
   $id: 'toast',
@@ -231,6 +238,27 @@ describe('useServiceConnectionsAdmin', () => {
       );
     });
 
+    it('should use fallback message when test fails and result message is null', async () => {
+      const mockConnections: IntegrationConnectionResponse[] = [
+        { id: 'conn1', secretName: 'Test' },
+      ];
+
+      vi.mocked(IntegrationConnectionService.getAllConnections).mockResolvedValue(mockConnections);
+      vi.mocked(IntegrationConnectionService.testExistingConnection).mockResolvedValue({
+        id: 'conn1',
+        success: false,
+        message: null,
+      } as any);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.ARCGIS);
+      await composable.fetchConnections();
+      await composable.testConnection('conn1');
+
+      expect(mockToast.showError).toHaveBeenCalledWith(
+        '❌ Connection test failed: Connection verification failed. Please check your credentials and server configuration.'
+      );
+    });
+
     it('should handle test connection API error', async () => {
       const mockConnections: IntegrationConnectionResponse[] = [
         { id: 'conn1', secretName: 'Test' },
@@ -355,6 +383,127 @@ describe('useServiceConnectionsAdmin', () => {
 
       // Should not throw, list remains unchanged
       expect(composable.allConnections.value).toHaveLength(1);
+    });
+  });
+
+  describe('createConnection', () => {
+    it('should create a connection successfully and refresh the list', async () => {
+      vi.mocked(IntegrationConnectionService.getAllConnections)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 'conn-new',
+            name: 'New Connection',
+            lastConnectionStatus: ConnectionStatus.SUCCESS,
+          },
+        ] as any);
+      vi.mocked(IntegrationConnectionService.testAndCreateConnection).mockResolvedValue({
+        id: 'conn-new',
+        name: 'New Connection',
+        lastConnectionStatus: ConnectionStatus.SUCCESS,
+      } as any);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      await composable.fetchConnections();
+
+      const response = await composable.createConnection({
+        connectionMethod: 'new',
+        baseUrl: 'https://jira.example.com',
+        credentialType: 'BASIC_AUTH',
+        username: 'user',
+        password: 'secret',
+        connectionName: 'New Connection',
+        connected: false,
+      });
+
+      expect(response.id).toBe('conn-new');
+      expect(IntegrationConnectionService.testAndCreateConnection).toHaveBeenCalled();
+      expect(IntegrationConnectionService.getAllConnections).toHaveBeenCalledTimes(2);
+      expect(mockToast.showSuccess).toHaveBeenCalledWith('Connection created successfully.');
+      expect(composable.allConnections.value[0].id).toBe('conn-new');
+    });
+
+    it('should surface failed test-create responses as errors', async () => {
+      vi.mocked(IntegrationConnectionService.testAndCreateConnection).mockResolvedValue({
+        lastConnectionStatus: ConnectionStatus.FAILED,
+        lastConnectionMessage: '<p>Invalid credentials</p>',
+      } as any);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      const response = await composable.createConnection({
+        connectionMethod: 'new',
+        baseUrl: 'https://jira.example.com',
+        credentialType: 'BASIC_AUTH',
+        username: 'user',
+        password: 'secret',
+        connectionName: 'Broken Connection',
+        connected: false,
+      });
+
+      expect(response.lastConnectionStatus).toBe(ConnectionStatus.FAILED);
+      expect(mockToast.showError).toHaveBeenCalledWith('Invalid credentials');
+    });
+
+    it('should use fallback error message when lastConnectionMessage is absent', async () => {
+      vi.mocked(IntegrationConnectionService.testAndCreateConnection).mockResolvedValue({
+        lastConnectionStatus: ConnectionStatus.FAILED,
+      } as any);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      await composable.createConnection({
+        connectionMethod: 'new',
+        baseUrl: 'https://jira.example.com',
+        credentialType: 'BASIC_AUTH',
+        username: 'user',
+        password: 'secret',
+        connectionName: 'Test',
+        connected: false,
+      });
+
+      expect(mockToast.showError).toHaveBeenCalledWith('Connection test failed');
+    });
+
+    it('should use empty string for connectionName when not provided', async () => {
+      vi.mocked(IntegrationConnectionService.testAndCreateConnection).mockResolvedValue({
+        lastConnectionStatus: ConnectionStatus.SUCCESS,
+      } as any);
+      vi.mocked(IntegrationConnectionService.getAllConnections).mockResolvedValue([]);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      await composable.createConnection({
+        connectionMethod: 'new',
+        baseUrl: 'https://jira.example.com',
+        credentialType: 'BASIC_AUTH',
+        username: 'user',
+        password: 'secret',
+        connectionName: '',
+        connected: false,
+      });
+
+      expect(IntegrationConnectionService.testAndCreateConnection).toHaveBeenCalledWith(
+        expect.objectContaining({ requestBody: expect.objectContaining({ name: '' }) })
+      );
+    });
+
+    it('should show error toast and rethrow when createConnection API throws', async () => {
+      const error = new Error('Server error');
+      vi.mocked(IntegrationConnectionService.testAndCreateConnection).mockRejectedValue(error);
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+
+      await expect(
+        composable.createConnection({
+          connectionMethod: 'new',
+          baseUrl: 'https://jira.example.com',
+          credentialType: 'BASIC_AUTH',
+          username: 'user',
+          password: 'secret',
+          connectionName: 'Test',
+          connected: false,
+        })
+      ).rejects.toThrow('Server error');
+
+      expect(mockToast.showError).toHaveBeenCalledWith('Server error');
     });
   });
 
@@ -564,6 +713,34 @@ describe('useServiceConnectionsAdmin', () => {
         requestBody: { newSecret: 'new-secret' },
       });
       expect(mockToast.showSuccess).toHaveBeenCalledWith('Secret updated');
+    });
+
+    it('should return false when id is empty', async () => {
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      const result = await composable.rotateSecret('', 'new-secret');
+
+      expect(result).toBe(false);
+      expect(IntegrationConnectionService.rotateConnectionSecret).not.toHaveBeenCalled();
+    });
+
+    it('should return false when newSecret is empty', async () => {
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      const result = await composable.rotateSecret('conn1', '');
+
+      expect(result).toBe(false);
+      expect(IntegrationConnectionService.rotateConnectionSecret).not.toHaveBeenCalled();
+    });
+
+    it('should show error toast and return false when rotate secret API throws', async () => {
+      vi.spyOn(IntegrationConnectionService, 'rotateConnectionSecret').mockRejectedValue(
+        new Error('API error')
+      );
+
+      const composable = useServiceConnectionsAdmin(ServiceType.JIRA);
+      const result = await composable.rotateSecret('conn1', 'new-secret');
+
+      expect(result).toBe(false);
+      expect(mockToast.showError).toHaveBeenCalledWith('Failed to update secret');
     });
   });
 });

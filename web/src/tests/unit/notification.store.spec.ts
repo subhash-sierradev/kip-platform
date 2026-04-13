@@ -56,6 +56,21 @@ describe('notification store', () => {
     expect(store.getTabCount('error')).toBe(1);
   });
 
+  it('defaults missing count fields to zero when fetching counts', async () => {
+    (UserNotificationService.getUnreadCount as any).mockResolvedValueOnce({
+      successCount: 5,
+    });
+
+    const store = useNotificationStore();
+    await store.fetchCount();
+
+    expect(store.unreadCount).toBe(0);
+    expect(store.getTabCount('all')).toBe(0);
+    expect(store.getTabCount('read')).toBe(0);
+    expect(store.getTabCount('success')).toBe(5);
+    expect(store.getTabCount('warning')).toBe(0);
+  });
+
   it('fetches first page notifications and sets pagination state', async () => {
     (UserNotificationService.getNotifications as any).mockResolvedValueOnce({
       content: [makeNotification('n1'), makeNotification('n2', true)],
@@ -71,6 +86,19 @@ describe('notification store', () => {
     expect(store.totalElements).toBe(3);
     expect(store.currentPage).toBe(0);
     expect(store.hasMore).toBe(false);
+  });
+
+  it('falls back to content length when the first notifications page omits totalElements', async () => {
+    (UserNotificationService.getNotifications as any).mockResolvedValueOnce({
+      content: [makeNotification('n1'), makeNotification('n2')],
+      totalPages: 1,
+    });
+
+    const store = useNotificationStore();
+    await store.fetchNotifications();
+
+    expect(store.totalElements).toBe(2);
+    expect(store.getTabCount('all')).toBe(2);
   });
 
   it('loads next page, deduplicates by id, and updates hasMore', async () => {
@@ -111,6 +139,38 @@ describe('notification store', () => {
     expect(store.getTabCount('success')).toBe(10);
   });
 
+  it('uses the correct API filters for all notification tabs', async () => {
+    const store = useNotificationStore();
+    (UserNotificationService.getNotifications as any).mockResolvedValue({
+      content: [],
+      totalElements: 0,
+      totalPages: 1,
+    });
+
+    store.activeTab = 'all' as any;
+    await store.fetchTabNotifications();
+
+    store.activeTab = 'unread' as any;
+    await store.fetchTabNotifications();
+
+    store.activeTab = 'read' as any;
+    await store.fetchTabNotifications();
+
+    store.activeTab = 'warning' as any;
+    await store.fetchTabNotifications();
+
+    expect(UserNotificationService.getNotifications).toHaveBeenNthCalledWith(1, 0, 20, undefined);
+    expect(UserNotificationService.getNotifications).toHaveBeenNthCalledWith(2, 0, 20, {
+      readFilter: 'UNREAD',
+    });
+    expect(UserNotificationService.getNotifications).toHaveBeenNthCalledWith(3, 0, 20, {
+      readFilter: 'READ',
+    });
+    expect(UserNotificationService.getNotifications).toHaveBeenNthCalledWith(4, 0, 20, {
+      severity: 'WARNING',
+    });
+  });
+
   it('loads more tab notifications and updates filtered pagination state', async () => {
     const store = useNotificationStore();
     store.activeTab = 'error' as any;
@@ -146,6 +206,15 @@ describe('notification store', () => {
     expect(store.loadingMore).toBe(false);
   });
 
+  it('returns early when loading more notifications is disabled because there are no more pages', async () => {
+    const store = useNotificationStore();
+    store.hasMore = false as any;
+
+    await store.loadMoreNotifications();
+
+    expect(UserNotificationService.getNotifications).not.toHaveBeenCalled();
+  });
+
   it('returns early for tab loadMore when disabled or already loading', async () => {
     const store = useNotificationStore();
     store.filteredHasMore = false as any;
@@ -156,6 +225,18 @@ describe('notification store', () => {
     store.filteredLoadingMore = true as any;
     await store.loadMoreTabNotifications();
     expect(UserNotificationService.getNotifications).not.toHaveBeenCalled();
+  });
+
+  it('resets filtered loading state when loading more tab notifications fails', async () => {
+    const store = useNotificationStore();
+    store.activeTab = 'warning' as any;
+    store.filteredHasMore = true as any;
+    (UserNotificationService.getNotifications as any).mockRejectedValueOnce(new Error('boom'));
+
+    await store.loadMoreTabNotifications();
+
+    expect(store.filteredLoadingMore).toBe(false);
+    expect(store.filteredNotifications).toEqual([]);
   });
 
   it('adds incoming notifications, avoids duplicates, and updates unread count', () => {
@@ -186,6 +267,49 @@ describe('notification store', () => {
     expect(store.getTabCount('read')).toBe(1);
   });
 
+  it('appends incoming unread notifications to the unread filtered tab', () => {
+    const store = useNotificationStore();
+    store.activeTab = 'unread' as any;
+    store.filteredNotifications = [] as any;
+    store.filteredTotalElements = 0 as any;
+
+    store.addIncoming({ ...makeNotification('unread-1', false), createdDate: '' } as any);
+
+    expect(store.filteredNotifications.map(n => n.id)).toEqual(['unread-1']);
+    expect(store.filteredTotalElements).toBe(1);
+    expect(store.filteredHasMore).toBe(false);
+    expect(store.getTabCount('unread')).toBe(1);
+  });
+
+  it('appends incoming notifications to the all tab filtered list', () => {
+    const store = useNotificationStore();
+    store.activeTab = 'all' as any;
+    store.filteredNotifications = [makeNotification('seed', true)] as any;
+    store.filteredTotalElements = 1 as any;
+
+    store.addIncoming(makeNotification('all-2', false) as any);
+
+    expect(store.filteredNotifications.map(n => n.id)).toEqual(['all-2', 'seed']);
+    expect(store.filteredTotalElements).toBe(2);
+  });
+
+  it('appends incoming notifications to matching read and severity-filtered tabs', () => {
+    const store = useNotificationStore();
+    store.activeTab = 'read' as any;
+
+    store.addIncoming({ ...makeNotification('read-1', true), createdDate: '' } as any);
+    expect(store.filteredNotifications.map(n => n.id)).toEqual(['read-1']);
+
+    store.activeTab = 'info' as any;
+    store.filteredNotifications = [] as any;
+    store.filteredTotalElements = 0 as any;
+
+    store.addIncoming({ ...makeNotification('info-1', false), severity: undefined } as any);
+
+    expect(store.filteredNotifications).toEqual([]);
+    expect(store.getTabCount('info')).toBe(2);
+  });
+
   it('adds and auto-removes toast notifications', () => {
     const store = useNotificationStore();
     store.addNotificationToast(makeNotification('t1', false) as any);
@@ -193,6 +317,17 @@ describe('notification store', () => {
     expect(store.notificationToasts).toHaveLength(1);
     vi.advanceTimersByTime(6000);
     expect(store.notificationToasts).toHaveLength(0);
+  });
+
+  it('preserves provided toast timestamps and ignores removal of unknown toast ids', () => {
+    const store = useNotificationStore();
+    const createdDate = '2026-04-10T08:00:00.000Z';
+
+    store.addNotificationToast({ ...makeNotification('t2', false), createdDate } as any);
+    store.removeNotificationToast('missing');
+
+    expect(store.notificationToasts).toHaveLength(1);
+    expect(store.notificationToasts[0].createdDate).toBe(createdDate);
   });
 
   it('marks selected notifications read locally and updates unread count with floor at zero', () => {
@@ -227,6 +362,21 @@ describe('notification store', () => {
 
     expect(store.filteredNotifications.map(n => n.id)).toEqual(['n2']);
     expect(store.getTabCount('read')).toBe(1);
+  });
+
+  it('keeps unread filtered totals unchanged when marked ids are not present in the filtered list', () => {
+    const store = useNotificationStore();
+    store.activeTab = 'unread' as any;
+    store.notifications = [makeNotification('n1', false), makeNotification('n2', false)] as any;
+    store.filteredNotifications = [makeNotification('n2', false)] as any;
+    store.filteredTotalElements = 1 as any;
+    store.unreadCount = 2 as any;
+
+    store.markReadLocal(['n1']);
+
+    expect(store.filteredNotifications.map(n => n.id)).toEqual(['n2']);
+    expect(store.filteredTotalElements).toBe(1);
+    expect(store.unreadCount).toBe(1);
   });
 
   it('marks all notifications read locally and updates unread count', () => {
@@ -303,6 +453,33 @@ describe('notification store', () => {
     expect(store.notifications).toHaveLength(0);
     expect(store.getTabCount('read')).toBe(0);
     expect(store.getTabCount('all')).toBe(0);
+  });
+
+  it('removes matching notifications from the all tab filtered list', () => {
+    const store = useNotificationStore();
+    const notification = { ...makeNotification('all-1', false), severity: 'INFO' } as any;
+    store.activeTab = 'all' as any;
+    store.notifications = [notification] as any;
+    store.filteredNotifications = [notification] as any;
+    store.totalElements = 1 as any;
+    store.filteredTotalElements = 1 as any;
+    store.unreadCount = 1 as any;
+    store.tabCounts = {
+      all: 1,
+      unread: 1,
+      read: 0,
+      error: 0,
+      info: 1,
+      success: 0,
+      warning: 0,
+    } as any;
+
+    store.removeNotificationLocal('all-1');
+
+    expect(store.filteredNotifications).toHaveLength(0);
+    expect(store.filteredTotalElements).toBe(0);
+    expect(store.getTabCount('all')).toBe(0);
+    expect(store.getTabCount('unread')).toBe(0);
   });
 
   it('setActiveTab and setTabCount floor behavior', () => {
@@ -409,6 +586,33 @@ describe('notification store', () => {
     expect(store.getTabCount('all')).toBe(0);
   });
 
+  it('does not decrement filtered totals when removing a notification outside the active filtered tab', () => {
+    const store = useNotificationStore();
+    const warningUnread = { ...makeNotification('w1', false), severity: 'WARNING' } as any;
+    store.activeTab = 'error' as any;
+    store.notifications = [warningUnread] as any;
+    store.filteredNotifications = [warningUnread] as any;
+    store.totalElements = 1 as any;
+    store.filteredTotalElements = 1 as any;
+    store.unreadCount = 1 as any;
+    store.tabCounts = {
+      all: 1,
+      unread: 1,
+      read: 0,
+      error: 0,
+      info: 0,
+      success: 0,
+      warning: 1,
+    } as any;
+
+    store.removeNotificationLocal('w1');
+
+    expect(store.filteredNotifications).toHaveLength(0);
+    expect(store.filteredTotalElements).toBe(1);
+    expect(store.getTabCount('warning')).toBe(0);
+    expect(store.getTabCount('all')).toBe(0);
+  });
+
   it('markReadLocal updates filtered list outside unread tab', () => {
     const store = useNotificationStore();
     store.activeTab = 'all' as any;
@@ -462,5 +666,42 @@ describe('notification store', () => {
 
     expect(UserNotificationService.markAsRead).toHaveBeenCalledWith(['n1']);
     expect(store.unreadCount).toBe(1);
+  });
+
+  it('resets all notification collections and pagination state', () => {
+    const store = useNotificationStore();
+    store.notifications = [makeNotification('n1', false)] as any;
+    store.filteredNotifications = [makeNotification('n2', true)] as any;
+    store.notificationToasts = [makeNotification('toast-1', false)] as any;
+    store.totalElements = 3 as any;
+    store.filteredTotalElements = 2 as any;
+    store.unreadCount = 2 as any;
+    store.hasMore = true as any;
+    store.filteredHasMore = true as any;
+    store.currentPage = 4 as any;
+    store.filteredCurrentPage = 5 as any;
+    store.tabCounts = {
+      all: 3,
+      unread: 2,
+      read: 1,
+      error: 1,
+      info: 1,
+      success: 1,
+      warning: 0,
+    } as any;
+
+    store.removeAllNotificationsLocal();
+
+    expect(store.notifications).toEqual([]);
+    expect(store.filteredNotifications).toEqual([]);
+    expect(store.totalElements).toBe(0);
+    expect(store.filteredTotalElements).toBe(0);
+    expect(store.unreadCount).toBe(0);
+    expect(store.hasMore).toBe(false);
+    expect(store.filteredHasMore).toBe(false);
+    expect(store.currentPage).toBe(0);
+    expect(store.filteredCurrentPage).toBe(0);
+    expect(store.getTabCount('all')).toBe(0);
+    expect(store.getTabCount('success')).toBe(0);
   });
 });

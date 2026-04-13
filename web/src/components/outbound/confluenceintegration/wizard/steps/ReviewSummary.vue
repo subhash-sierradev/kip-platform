@@ -87,7 +87,7 @@
           </div>
           <div v-if="formData.executionDate" class="rs-review-item">
             <span class="rs-label">Start Date:</span>
-            <span class="rs-value">{{ formatSimpleDate(formData.executionDate) }}</span>
+            <span class="rs-value">{{ executionStartDateDisplay }}</span>
           </div>
           <div v-if="formData.timeCalculationMode" class="rs-review-item">
             <span class="rs-label">Data Window Mode:</span>
@@ -155,12 +155,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { getUserTimezone, formatTimezoneInfo } from '@/utils/timezoneUtils';
-import { formatSimpleDate } from '@/utils/dateUtils';
+import {
+  getUserTimezone,
+  formatTimezoneInfo,
+  convertLocalDateTimeToUtc,
+} from '@/utils/timezoneUtils';
 import { formatTime } from '@/utils/scheduleFormatUtils';
 import { MasterDataService } from '@/api/services/MasterDataService';
 import type { LanguageDto } from '@/api/models/LanguageDto';
 import type { ConfluenceFormData } from '@/types/ConfluenceFormData';
+import { formatScheduleExecutionDate } from '@/utils/scheduleDisplayUtils';
 
 defineOptions({ name: 'ConfluenceReviewSummary' });
 
@@ -175,6 +179,16 @@ const emit = defineEmits<{
 }>();
 
 const timezoneDisplay = computed(() => formatTimezoneInfo(getUserTimezone()));
+
+// The wizard form holds LOCAL date+time (what the user selected in their timezone).
+// formatScheduleExecutionDate expects UTC inputs, so we pre-convert here.
+const executionStartDateDisplay = computed(() => {
+  const localDate = props.formData.executionDate;
+  const localTime = props.formData.executionTime;
+  if (!localDate || !localTime) return 'N/A';
+  const { utcDate, utcTime } = convertLocalDateTimeToUtc(localDate, localTime);
+  return formatScheduleExecutionDate(utcDate, utcTime);
+});
 
 const allLanguages = ref<LanguageDto[]>([]);
 

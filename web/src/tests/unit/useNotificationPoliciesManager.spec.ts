@@ -127,12 +127,35 @@ describe('useNotificationPoliciesManager', () => {
     expect(c.saving.value).toBe(false);
   });
 
+  it('upsertPolicy update keeps list intact when the existing id is not found before fetch', async () => {
+    const c = mountComposable(() => useNotificationPoliciesManager());
+    c.policies.value = [{ id: 'p1', name: 'Existing' } as any];
+    mockAdminService.updatePolicy.mockResolvedValueOnce({ id: 'missing', name: 'Updated Name' });
+    mockAdminService.getPolicies.mockResolvedValueOnce([{ id: 'p1', name: 'Existing' }]);
+
+    const result = await c.upsertPolicy({ name: 'Updated Name' } as any, 'missing');
+
+    expect(result).toBe(true);
+    expect(c.policies.value).toEqual([{ id: 'p1', name: 'Existing' }]);
+  });
+
   it('upsertPolicy: failure shows error and returns false', async () => {
     const c = mountComposable(() => useNotificationPoliciesManager());
     mockAdminService.createPolicy.mockRejectedValueOnce(new Error('err'));
     const result = await c.upsertPolicy({ name: 'Fail' } as any, undefined);
     expect(result).toBe(false);
     expect(mockAlert.error).toHaveBeenCalledWith('Failed to create recipient policy');
+    expect(c.saving.value).toBe(false);
+  });
+
+  it('upsertPolicy update failure shows the update-specific error message', async () => {
+    const c = mountComposable(() => useNotificationPoliciesManager());
+    mockAdminService.updatePolicy.mockRejectedValueOnce(new Error('err'));
+
+    const result = await c.upsertPolicy({ name: 'Fail update' } as any, 'p1');
+
+    expect(result).toBe(false);
+    expect(mockAlert.error).toHaveBeenCalledWith('Failed to update recipient policy');
     expect(c.saving.value).toBe(false);
   });
 });

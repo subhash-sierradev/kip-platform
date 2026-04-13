@@ -12,10 +12,20 @@ vi.mock('@/api/services/MasterDataService', () => ({
   },
 }));
 
-vi.mock('@/utils/timezoneUtils', () => ({
-  getUserTimezone: () => 'UTC',
-  formatTimezoneInfo: () => 'UTC (Coordinated Universal Time)',
-}));
+vi.mock('@/utils/timezoneUtils', async () => {
+  const actual =
+    await vi.importActual<typeof import('@/utils/timezoneUtils')>('@/utils/timezoneUtils');
+  return {
+    ...actual,
+    getUserTimezone: () => 'UTC',
+    formatTimezoneInfo: () => 'UTC (Coordinated Universal Time)',
+    // Pass-through: in UTC, local === UTC so no conversion needed for tests
+    convertLocalDateTimeToUtc: (localDate: string, localTime: string) => ({
+      utcDate: localDate,
+      utcTime: localTime.length === 5 ? `${localTime}:00` : localTime,
+    }),
+  };
+});
 
 import ConfluenceReviewSummary from '@/components/outbound/confluenceintegration/wizard/steps/ReviewSummary.vue';
 import type { ConfluenceFormData } from '@/types/ConfluenceFormData';
@@ -288,5 +298,153 @@ describe('ConfluenceReviewSummary', () => {
     await new Promise(r => setTimeout(r, 0));
     // Falls back to showing code display
     expect(wrapper.exists()).toBe(true);
+  });
+
+  it('emits validation-change on mount', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: { formData: makeFormData() },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.emitted('validation-change')).toEqual([[true]]);
+  });
+
+  it('falls back to default item and subtype labels when missing', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          itemType: '',
+          subType: '',
+          subTypeLabel: '',
+        }),
+      },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.text()).toContain('Document');
+    expect(wrapper.text()).toContain('Not specified');
+  });
+
+  it('falls back to dynamic document id when no label is available', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          dynamicDocument: 'dynamic-doc-id',
+          dynamicDocumentLabel: '',
+        }),
+      },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.text()).toContain('dynamic-doc-id');
+  });
+
+  it('shows none selected when there are no language codes', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: { formData: makeFormData({ languageCodes: [] }) },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.text()).toContain('None selected');
+  });
+
+  it('prefers confluence space and folder labels when available', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          confluenceSpaceKey: 'SPACE_KEY',
+          confluenceSpaceLabel: 'Space Label',
+          confluenceSpaceKeyFolderKey: 'FOLDER_KEY',
+          confluenceSpaceFolderLabel: 'Folder Label',
+        }),
+      },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.text()).toContain('Space Label');
+    expect(wrapper.text()).toContain('Folder Label');
+  });
+
+  it('shows em dash when no space folder can be derived', async () => {
+    const wrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          confluenceSpaceKey: '',
+          confluenceSpaceKeyFolderKey: '',
+          confluenceSpaceFolderLabel: '',
+        }),
+      },
+    });
+
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.text()).toContain('—');
+  });
+
+  it('shows ROOT when folder key equals ROOT or the selected space key', async () => {
+    const rootFolderWrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          confluenceSpaceKey: 'SPACE',
+          confluenceSpaceKeyFolderKey: 'ROOT',
+          confluenceSpaceFolderLabel: '',
+        }),
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(rootFolderWrapper.text()).toContain('ROOT');
+
+    const sameKeyWrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          confluenceSpaceKey: 'SPACE',
+          confluenceSpaceKeyFolderKey: 'SPACE',
+          confluenceSpaceFolderLabel: '',
+        }),
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(sameKeyWrapper.text()).toContain('ROOT');
+  });
+
+  it('renders data window mode and business timezone branches', async () => {
+    const dailyWindowWrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          timeCalculationMode: 'FIXED_DAY_BOUNDARY',
+          businessTimeZone: 'America/Chicago',
+        }),
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(dailyWindowWrapper.text()).toContain('Daily Window');
+    expect(dailyWindowWrapper.text()).toContain('America/Chicago');
+
+    const rollingWindowWrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          timeCalculationMode: 'FLEXIBLE_INTERVAL',
+          businessTimeZone: 'America/Chicago',
+        }),
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(rollingWindowWrapper.text()).toContain('Rolling Window');
+    expect(rollingWindowWrapper.text()).not.toContain('Business Timezone:');
+
+    const rawModeWrapper = mount(ConfluenceReviewSummary, {
+      props: {
+        formData: makeFormData({
+          timeCalculationMode: 'CUSTOM_MODE' as any,
+        }),
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+    expect(rawModeWrapper.text()).toContain('CUSTOM_MODE');
   });
 });

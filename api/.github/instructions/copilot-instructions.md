@@ -54,21 +54,15 @@ api/
 
 #### Fat JAR Build (Management & Execution Services)
 
-```xml
-<plugin>
-    <groupId>org.springframework.boot</groupId>
-    <artifactId>spring-boot-maven-plugin</artifactId>
-    <executions>
-        <execution>
-            <goals>
-                <goal>repackage</goal>
-            </goals>
-        </execution>
-    </executions>
-    <configuration>
-        <mainClass>com.integration.[service].Application</mainClass>
-    </configuration>
-</plugin>
+```kotlin
+// build.gradle.kts
+springBoot {
+    mainClass.set("com.integration.[service].Application")
+}
+
+tasks.bootJar {
+    archiveClassifier.set("")
+}
 ```
 
 #### Multi-Environment Profiles
@@ -81,7 +75,7 @@ api/
 **Profile Activation**:
 
 ```bash
-./mvnw spring-boot:run -Dspring-boot.run.profiles=sandbox
+./gradlew :integration-management-service:bootRun --args='--spring.profiles.active=sandbox'
 java -jar service.jar --spring.profiles.active=prod
 ```
 
@@ -551,7 +545,7 @@ void getIntegration_nonExistent_throwsNotFoundException()
 - Full rules for services (181 lines)
 - Minimal rules for contract module (75 lines - formatting + naming only)
 - Line length: 120 characters
-- Run: `./mvnw checkstyle:check`
+- Run: `./gradlew checkstyleMain checkstyleTest`
 
 #### EditorConfig
 
@@ -563,41 +557,37 @@ If an `.editorconfig` is present, use these settings:
 
 ### Build & Deployment
 
-#### Maven Commands
+#### Gradle Commands
 
 ```bash
-# Build all modules (order matters: contract → services)
-mvn clean install
+# Build all modules (order handled automatically by Gradle)
+./gradlew clean build
 
 # Build specific module
-cd integration-execution-contract
-mvn clean install
+./gradlew :integration-execution-contract:build
 
 # Run management service (port 8085)
-cd integration-management-service
-./mvnw spring-boot:run
+./gradlew :integration-management-service:bootRun
 
 # Run execution service (port 8081)
-cd integration-execution-service
-./mvnw spring-boot:run
+./gradlew :integration-execution-service:bootRun
 
 # Fat JAR deployment
-mvn clean package
-java -jar target/integration-management-service-<version>.jar
-java -jar target/integration-execution-service-<version>.jar
+./gradlew clean bootJar
+java -jar integration-management-service/build/libs/integration-management-service-<version>.jar
+java -jar integration-execution-service/build/libs/integration-execution-service-<version>.jar
 
 # Tests with coverage
-mvn test jacoco:report
+./gradlew test jacocoTestReport
 
 # Full verification
-mvn clean verify
+./gradlew clean check
 ```
 
-#### Parent POM Version (Fixed)
+#### Version Management
 
-The root `kip-backend` parent POM is permanently fixed at `1.0.0` and **must never be changed**.
-Only the child module `<version>` tags (`integration-execution-contract`, `integration-management-service`, `integration-execution-service`) are updated during version bumps.
-Do **not** include `kip-backend` parent version in any version management, `mvn versions:set`, or release automation.
+Project versions are managed in `gradle.properties` (`projectVersion` and `contractVersion`).
+The version catalog (`gradle/libs.versions.toml`) manages all dependency versions centrally.
 
 #### Deployment Checklist
 
@@ -607,7 +597,7 @@ Do **not** include `kip-backend` parent version in any version management, `mvn 
 - ✅ Coverage ≥80%
 - ✅ Environment variables configured
 - ✅ Database migrations applied
-- ✅ Parent POM version remains `1.0.0` (never bumped)
+- ✅ Parent version managed in gradle.properties (never bump root independently)
 
 ---
 
@@ -632,8 +622,8 @@ Do **not** include `kip-backend` parent version in any version management, `mvn 
 
 ### Issue: Fat JAR not created
 
-**Cause**: Missing `repackage` goal in `spring-boot-maven-plugin`  
-**Solution**: Add `<executions>` block with `<goal>repackage</goal>` and explicit `mainClass`
+**Cause**: Missing `bootJar` task or incorrect `archiveClassifier`  
+**Solution**: Ensure `springBoot { mainClass.set(...) }` and `tasks.bootJar { archiveClassifier.set("") }` in `build.gradle.kts`
 
 ---
 

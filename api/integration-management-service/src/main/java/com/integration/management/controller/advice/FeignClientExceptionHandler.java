@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -25,8 +26,7 @@ import java.util.regex.Pattern;
 public class FeignClientExceptionHandler {
 
     private static final String GENERIC_UNAVAILABLE_MESSAGE =
-            "External service is temporarily unavailable. "
-                    + "Please try again later.";
+            "Unable to reach the processing service. Please try again in a moment.";
     private static final String ERROR_CODE_EXTERNAL_SERVICE_UNAVAILABLE = "EXTERNAL_SERVICE_UNAVAILABLE";
     private static final String ERROR_CODE_DOWNSTREAM_SERVICE_ERROR = "DOWNSTREAM_SERVICE_ERROR";
     private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
@@ -106,7 +106,7 @@ public class FeignClientExceptionHandler {
             WebRequest request) {
         String path = request.getDescription(false).replace("uri=", "");
         ErrorResponse errorResponse = new ErrorResponse(
-                LocalDateTime.now(),
+                LocalDateTime.now(ZoneOffset.UTC),
                 status.value(),
                 status.getReasonPhrase(),
                 message,

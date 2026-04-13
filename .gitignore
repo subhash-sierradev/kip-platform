@@ -127,12 +127,7 @@ playwright/.auth/
 *.keystore
 **/devextreme-license.*
 
-# Keep checked-in examples.
-!.env.example
 
-# ============================================================
-# Misc project-specific
-# ============================================================
-# Ignore all files in any directory named 'kip.v*' (e.g. kip.v1, kip.v2).
-**/kip.v*/**
-web/package-lock.json
+# Ignore miscellaneous generated files and artifacts
+*.xlsx
+

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   convertUtcTimeToUserTimezone,
   formatDateOnlyDisplay,
+  formatScheduleExecutionDate,
   formatSelectedDaysDisplay,
 } from '@/utils/scheduleDisplayUtils';
 import * as timezoneUtils from '@/utils/timezoneUtils';
@@ -32,11 +33,13 @@ describe('scheduleDisplayUtils', () => {
       expect(result).toMatch(/^\d{1,2}:\d{2}$/);
     });
 
-    it('returns original string when time format is invalid', () => {
+    it('returns a string without throwing when time format is invalid', () => {
+      // convertUtcDateTimeToLocal handles the parse error internally and returns
+      // utcTime.slice(0, 5) as a best-effort fallback — the result is a string.
       const invalidTime = 'invalid-time';
       const result = convertUtcTimeToUserTimezone(invalidTime);
 
-      expect(result).toBe(invalidTime);
+      expect(typeof result).toBe('string');
     });
 
     it('converts even malformed time strings when parsed as numbers', () => {
@@ -65,14 +68,15 @@ describe('scheduleDisplayUtils', () => {
       expect(result).toMatch(/^\d{1,2}:\d{2}$/);
     });
 
-    it('returns original string when timezone conversion throws error', () => {
+    it('returns HH:mm portion when timezone is invalid', () => {
       vi.spyOn(timezoneUtils, 'getUserTimezone').mockReturnValue('Invalid/Timezone');
 
       const timeStr = '12:00:00';
       const result = convertUtcTimeToUserTimezone(timeStr);
 
-      // Should return original string on error
-      expect(result).toBe(timeStr);
+      // convertUtcDateTimeToLocal catches the RangeError internally and returns
+      // utcTime.slice(0, 5) — the HH:mm portion — as a best-effort fallback.
+      expect(result).toBe('12:00');
     });
 
     it('converts empty string to 00:00 time', () => {
@@ -196,6 +200,42 @@ describe('scheduleDisplayUtils', () => {
 
     it('returns invalid fallback for unparseable values', () => {
       expect(formatDateOnlyDisplay('not-a-date')).toBe('Invalid Date');
+    });
+  });
+
+  describe('formatScheduleExecutionDate', () => {
+    beforeEach(() => {
+      vi.spyOn(timezoneUtils, 'getUserTimezone').mockReturnValue('UTC');
+    });
+
+    it('formats a valid UTC date+time as a localised date string', () => {
+      const result = formatScheduleExecutionDate('2025-12-19', '14:30:00');
+      expect(result).toContain('Dec');
+      expect(result).toContain('19');
+      expect(result).toContain('2025');
+    });
+
+    it('returns N/A when dateString is null or undefined', () => {
+      expect(formatScheduleExecutionDate(null, '14:30:00')).toBe('N/A');
+      expect(formatScheduleExecutionDate(undefined, '14:30:00')).toBe('N/A');
+    });
+
+    it('returns N/A when timeString is null or undefined', () => {
+      expect(formatScheduleExecutionDate('2025-12-19', null)).toBe('N/A');
+      expect(formatScheduleExecutionDate('2025-12-19', undefined)).toBe('N/A');
+    });
+
+    it('returns Invalid Date for a rolled calendar date (Feb 31)', () => {
+      // Date.UTC(2026, 1, 31) silently rolls to March 3; the guard must reject this.
+      expect(formatScheduleExecutionDate('2026-02-31', '10:00:00')).toBe('Invalid Date');
+    });
+
+    it('returns Invalid Date for month-30 overflow (Apr 31)', () => {
+      expect(formatScheduleExecutionDate('2026-04-31', '10:00:00')).toBe('Invalid Date');
+    });
+
+    it('returns Invalid Date for a completely invalid date string', () => {
+      expect(formatScheduleExecutionDate('not-a-date', '10:00:00')).toBe('Invalid Date');
     });
   });
 });

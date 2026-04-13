@@ -66,7 +66,7 @@ class IntegrationConnectionControllerErrorHandlingTest {
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message")
-                        .value("External service is temporarily unavailable. Please try again later."))
+                        .value("Unable to reach the processing service. Please try again in a moment."))
                 .andExpect(jsonPath("$.errorCode").value("EXTERNAL_SERVICE_UNAVAILABLE"))
                 .andExpect(content().string(not(containsString("localhost:8081"))))
                 .andExpect(content().string(not(containsString("http://"))));

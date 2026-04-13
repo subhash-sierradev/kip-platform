@@ -367,7 +367,6 @@ class ArcGISIntegrationServiceTest {
         service.triggerJobExecution(id, "t", "u");
 
         verify(arcGISScheduleService).triggerJob(id, "t", TriggerType.API, "u");
-        verify(notificationEventPublisher).publish(any());
     }
 
     @Test

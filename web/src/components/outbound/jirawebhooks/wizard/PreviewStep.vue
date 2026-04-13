@@ -234,6 +234,7 @@ const props = defineProps<{
   issueTypes?: Array<{ id: string; name: string; subtask?: boolean }>;
   users?: Array<{ accountId: string; displayName: string }>;
   sprints?: Array<{ value: string; label: string }>;
+  selectedParentLabel?: string;
 }>();
 
 // ---------- TEMPLATE RESOLVER ----------
@@ -325,7 +326,11 @@ const isSubtaskIssueType = computed(() => {
 });
 
 const parentName = computed(() => {
-  return formatParentName(props.mappingData.customFields ?? [], props.jsonSample);
+  return formatParentName(
+    props.mappingData.customFields ?? [],
+    props.jsonSample,
+    props.selectedParentLabel
+  );
 });
 
 const assigneeName = computed(() => {

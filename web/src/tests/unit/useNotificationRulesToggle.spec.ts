@@ -62,4 +62,34 @@ describe('useNotificationRulesToggle', () => {
     await c.handleToggleConfirm();
     expect(toggleRule).not.toHaveBeenCalled();
   });
+
+  it('opens the enable dialog for disabled rules and does not repaint on failed toggle', async () => {
+    const toggleRule = vi.fn().mockResolvedValue(false);
+    const rules = ref([{ id: 'r2', isEnabled: false }] as any);
+    const c = useNotificationRulesToggle(toggleRule, rules);
+
+    const repaint = vi.fn();
+    c.rulesGridRef.value = { instance: { repaint } } as any;
+
+    c.handleToggleClick('r2');
+    expect(c.togglePendingAction.value).toBe('enable');
+
+    await c.handleToggleConfirm();
+    await nextTick();
+
+    expect(toggleRule).toHaveBeenCalledWith('r2');
+    expect(repaint).not.toHaveBeenCalled();
+    expect(c.rowToggleLoading.value.r2).toBe(false);
+  });
+
+  it('cancels safely when there is no pending toggle rule id', () => {
+    const toggleRule = vi.fn();
+    const rules = ref([{ id: 'r1', isEnabled: true }] as any);
+    const c = useNotificationRulesToggle(toggleRule, rules);
+
+    c.handleToggleCancel();
+
+    expect(c.toggleDialogOpen.value).toBe(false);
+    expect(c.rowToggleLoading.value).toEqual({});
+  });
 });

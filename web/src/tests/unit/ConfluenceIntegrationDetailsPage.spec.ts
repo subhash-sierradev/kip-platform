@@ -2,6 +2,12 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const routerSpies = vi.hoisted(() => ({
+  back: vi.fn(),
+  push: vi.fn(),
+  route: { params: { id: 'ci-1' }, query: { search: 'abc' } },
+}));
+
 vi.mock('@/components/common/StandardDetailPageLayout.vue', () => ({
   default: {
     name: 'StandardDetailPageLayout',
@@ -39,8 +45,8 @@ vi.mock(
 );
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: 'ci-1' }, query: {} }),
-  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRoute: () => routerSpies.route,
+  useRouter: () => ({ back: routerSpies.back, push: routerSpies.push }),
 }));
 
 const serviceSpies = vi.hoisted(() => ({
@@ -162,5 +168,57 @@ describe('ConfluenceIntegrationDetailsPage', () => {
     });
     await new Promise(r => setTimeout(r, 0));
     expect((wrapper.vm as any).error).toContain('Failed to load');
+  });
+
+  it('ignores unknown tab ids and updates the selected tab for known ids', async () => {
+    const wrapper = mount(ConfluenceIntegrationDetailsPage, {
+      global: { provide: { setBreadcrumbTitle: vi.fn() } },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    const vm = wrapper.vm as any;
+    vm.handleTabChangeById('settings');
+    expect(vm.activeTab).toBe(1);
+
+    vm.handleTabChangeById('missing');
+    expect(vm.activeTab).toBe(1);
+  });
+
+  it('updates local status and refetches integration details', async () => {
+    const wrapper = mount(ConfluenceIntegrationDetailsPage, {
+      global: { provide: { setBreadcrumbTitle: vi.fn() } },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    serviceSpies.getConfluenceIntegrationById.mockClear();
+    (wrapper.vm as any).onStatusUpdated(false);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect((wrapper.vm as any).confluenceIntegrationResponse.isEnabled).toBe(true);
+    expect(serviceSpies.getConfluenceIntegrationById).toHaveBeenCalledWith('ci-1');
+  });
+
+  it('uses history back when available and falls back to the list route otherwise', async () => {
+    const wrapper = mount(ConfluenceIntegrationDetailsPage, {
+      global: { provide: { setBreadcrumbTitle: vi.fn() } },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    Object.defineProperty(window, 'history', {
+      configurable: true,
+      value: { length: 2 },
+    });
+    (wrapper.vm as any).handleBack();
+    expect(routerSpies.back).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(window, 'history', {
+      configurable: true,
+      value: { length: 1 },
+    });
+    (wrapper.vm as any).handleBack();
+    expect(routerSpies.push).toHaveBeenCalledWith({
+      path: '/outbound/integration/confluence',
+      query: { search: 'abc' },
+    });
   });
 });

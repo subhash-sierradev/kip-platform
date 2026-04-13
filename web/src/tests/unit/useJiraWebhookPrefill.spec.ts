@@ -177,4 +177,180 @@ describe('useJiraWebhookPrefill', () => {
     expect(options.isBasicDetailsValid.value).toBe(true);
     expect(options.isMappingValid.value).toBe(true);
   });
+
+  it('prefills clone data with copied name and falls back to jiraFieldMappings', async () => {
+    serviceHoisted.getProjectsByConnectionId.mockResolvedValueOnce([
+      { key: 'PROJ', name: 'Project' },
+    ]);
+    serviceHoisted.getProjectIssueTypesByConnectionId.mockResolvedValueOnce([
+      { id: 'IT', name: 'Bug' },
+    ]);
+    serviceHoisted.getProjectUsersByConnectionId.mockResolvedValueOnce([
+      { accountId: 'U1', displayName: 'User 1' },
+    ]);
+
+    const options = createOptions();
+    options.cloneMode.value = true;
+    options.cloningWebhookData.value = {
+      id: '2',
+      name: 'Clone Source',
+      webhookUrl: 'https://example.test/webhook',
+      jiraFieldMappings: [
+        { sourceField: '', targetField: '', jiraFieldId: 'project', template: 'PROJ' },
+        { sourceField: '', targetField: '', jiraFieldId: 'issuetype', template: 'IT' },
+        { sourceField: '', targetField: '', jiraFieldId: 'assignee', template: 'U1' },
+        { sourceField: '', targetField: '', jiraFieldId: 'summary', template: 'Clone Summary' },
+        {
+          sourceField: '',
+          targetField: '',
+          jiraFieldId: 'description',
+          template: 'Clone Description',
+        },
+        {
+          sourceField: '',
+          targetField: '',
+          jiraFieldId: 'customfield_7',
+          jiraFieldName: 'Literal Field',
+          template: 'literal value',
+          dataType: 'unsupported-type',
+          required: true,
+        },
+      ],
+      isEnabled: true,
+      isDeleted: false,
+      createdBy: 'tester',
+      createdDate: '2024-01-01T00:00:00Z',
+      lastEventHistory: {
+        eventId: 'e1',
+        eventType: 'TEST',
+        timestamp: '2024-01-01T00:00:00Z',
+        status: 'SUCCESS',
+      },
+      description: 'Clone Desc',
+      samplePayload: '{"clone":true}',
+      connectionId: 'conn-1',
+    } as JiraWebhook;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({
+      ...options,
+    });
+
+    await handleOpenChange(true);
+    await flushPromises();
+
+    expect(options.integrationName.value).toBe('Copy of Clone Source');
+    expect(options.mappingDataState.summary).toBe('Clone Summary');
+    expect(options.mappingDataState.customFields?.[0]).toMatchObject({
+      jiraFieldKey: 'customfield_7',
+      type: 'string',
+      valueSource: 'literal',
+      required: true,
+    });
+  });
+
+  it('resets fields when the wizard closes', async () => {
+    const options = createOptions();
+    options.editMode.value = true;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({
+      ...options,
+    });
+
+    await handleOpenChange(false);
+
+    expect(options.resetAllFields).toHaveBeenCalledWith(true);
+  });
+
+  it('skips unmatched hydrated dropdown values after loading remote metadata', async () => {
+    serviceHoisted.getProjectsByConnectionId.mockResolvedValueOnce([
+      { key: 'OTHER', name: 'Other' },
+    ]);
+    serviceHoisted.getProjectIssueTypesByConnectionId.mockResolvedValueOnce([
+      { id: 'OTHER_IT', name: 'Task' },
+    ]);
+    serviceHoisted.getProjectUsersByConnectionId.mockResolvedValueOnce([
+      { accountId: 'OTHER_USER', displayName: 'Other User' },
+    ]);
+
+    const options = createOptions();
+    options.editMode.value = true;
+    options.editingWebhookData.value = {
+      id: '3',
+      name: 'Webhook Mismatch',
+      webhookUrl: 'https://example.test/webhook',
+      jiraFieldMappings: [],
+      isEnabled: true,
+      isDeleted: false,
+      createdBy: 'tester',
+      createdDate: '2024-01-01T00:00:00Z',
+      lastEventHistory: {
+        eventId: 'e1',
+        eventType: 'TEST',
+        timestamp: '2024-01-01T00:00:00Z',
+        status: 'SUCCESS',
+      },
+      description: 'Desc',
+      samplePayload: '{}',
+      connectionId: 'conn-2',
+      fieldsMapping: [
+        { sourceField: '', targetField: '', jiraFieldId: 'project', template: 'PROJ' },
+        { sourceField: '', targetField: '', jiraFieldId: 'issuetype', template: 'IT' },
+        { sourceField: '', targetField: '', jiraFieldId: 'assignee', template: 'U1' },
+      ],
+    } as JiraWebhook;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({
+      ...options,
+    });
+
+    await handleOpenChange(true);
+    await flushPromises();
+
+    expect(options.mappingDataState.selectedProject).toBe('');
+    expect(options.mappingDataState.selectedIssueType).toBe('');
+    expect(options.mappingDataState.selectedAssignee).toBe('');
+  });
+
+  it('swallows metadata hydration failures and still finalizes validation state', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    serviceHoisted.getProjectsByConnectionId.mockRejectedValueOnce(new Error('projects failed'));
+
+    const options = createOptions();
+    options.editMode.value = true;
+    options.editingWebhookData.value = {
+      id: '4',
+      name: 'Webhook Error',
+      webhookUrl: 'https://example.test/webhook',
+      jiraFieldMappings: [],
+      isEnabled: true,
+      isDeleted: false,
+      createdBy: 'tester',
+      createdDate: '2024-01-01T00:00:00Z',
+      lastEventHistory: {
+        eventId: 'e1',
+        eventType: 'TEST',
+        timestamp: '2024-01-01T00:00:00Z',
+        status: 'SUCCESS',
+      },
+      description: 'Desc',
+      samplePayload: '{}',
+      connectionId: 'conn-3',
+      fieldsMapping: [
+        { sourceField: '', targetField: '', jiraFieldId: 'project', template: 'PROJ' },
+      ],
+    } as JiraWebhook;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({
+      ...options,
+    });
+
+    await handleOpenChange(true);
+    await flushPromises();
+
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(options.isBasicDetailsValid.value).toBe(true);
+    expect(options.isMappingValid.value).toBe(true);
+
+    consoleErrorSpy.mockRestore();
+  });
 });

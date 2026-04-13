@@ -3,11 +3,9 @@ package com.integration.management.service;
 import com.integration.execution.contract.message.NotificationEvent;
 import com.integration.execution.contract.messaging.MessagePublisher;
 import com.integration.execution.contract.model.enums.NotificationEventKey;
-import com.integration.execution.contract.model.IntegrationJobExecutionDto;
 import com.integration.execution.contract.model.enums.TriggerType;
 import com.integration.execution.contract.rest.response.CreationResponse;
 import com.integration.execution.contract.rest.response.confluence.ConfluencePageDto;
-import com.integration.execution.contract.rest.response.confluence.ConfluenceSpaceDto;
 import com.integration.management.entity.ConfluenceIntegration;
 import com.integration.management.entity.IntegrationJobExecution;
 import com.integration.management.entity.IntegrationSchedule;
@@ -35,11 +33,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static com.integration.management.constants.IntegrationManagementConstants.ROOT_FOLDER_KEY;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -368,7 +366,7 @@ class ConfluenceIntegrationServiceTest {
         verify(confluenceScheduleService).scheduleJob(integration);
 
         ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
-        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventKey())
                 .isEqualTo(NotificationEventKey.CONFLUENCE_INTEGRATION_ENABLED.name());
     }
@@ -399,7 +397,7 @@ class ConfluenceIntegrationServiceTest {
         verify(confluenceScheduleService).unscheduleJob(integration);
 
         ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
-        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        verify(notificationEventPublisher).publishAfterCommit(eventCaptor.capture());
         assertThat(eventCaptor.getValue().getEventKey())
                 .isEqualTo(NotificationEventKey.CONFLUENCE_INTEGRATION_DISABLED.name());
     }
@@ -570,353 +568,80 @@ class ConfluenceIntegrationServiceTest {
         assertThat(result).isNotNull();
     }
 
-    // -------------------------------------------------------------------------
-    // triggerJobExecution - edge cases
-    // -------------------------------------------------------------------------
-
     @Test
-    @DisplayName("triggerJobExecution - disabled integration throws IllegalStateException")
-    void triggerJobExecution_disabled_throwsIllegalState() {
+    @DisplayName("getByIdAndTenantWithDetails - enabled integration includes nextRunAtUtc")
+    void getByIdAndTenantWithDetails_enabled_includesNextRunAtUtc() {
         // Arrange
-        UUID integrationId = UUID.randomUUID();
-        ConfluenceIntegration integration = new ConfluenceIntegration();
-        integration.setId(integrationId);
-        integration.setIsEnabled(false);
+        UUID id = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
+        String tenantId = "tenant1";
 
-        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(any(), any()))
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(id);
+        integration.setConnectionId(connectionId);
+        integration.setTenantId(tenantId);
+        integration.setSchedule(schedule);
+        integration.setIsEnabled(Boolean.TRUE);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, tenantId))
                 .thenReturn(Optional.of(integration));
 
-        // Act & Assert
-        assertThatThrownBy(() -> service.triggerJobExecution(integrationId, "tenant1", "user1"))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Cannot trigger job for disabled integration");
-
-        verify(confluenceScheduleService, never()).triggerJob(any(), any(), any(), any());
-    }
-
-    // -------------------------------------------------------------------------
-    // getAllConfluenceNormalizedNamesByTenantId tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getAllConfluenceNormalizedNamesByTenantId - returns list of normalized names")
-    void getAllConfluenceNormalizedNamesByTenantId_success_returnsList() {
-        // Arrange
-        String tenantId = "tenant1";
-        List<String> expectedNames = List.of("integration_1", "integration_2");
-        when(confluenceIntegrationRepository.findAllNormalizedNamesByTenantId(tenantId))
-                .thenReturn(expectedNames);
+        ConfluenceIntegrationResponse response = new ConfluenceIntegrationResponse();
+        when(confluenceIntegrationMapper.toDetailsResponse(any())).thenReturn(response);
+        when(confluenceLookupService.getSpacesByConnectionId(connectionId, tenantId))
+                .thenReturn(null);
+        when(kwIntegrationService.getItemSubtypeDisplayValue(any())).thenReturn("Label");
+        when(kwIntegrationService.getDynamicDocumentTypeDisplayValue(any(), any(), any())).thenReturn("Label");
+        Instant expectedNextRun = Instant.parse("2026-04-10T12:00:00Z");
+        when(cronScheduleService.getNextRun(any(), any(), any())).thenReturn(expectedNextRun);
 
         // Act
-        List<String> result = service.getAllConfluenceNormalizedNamesByTenantId(tenantId);
+        ConfluenceIntegrationResponse result = service.getByIdAndTenantWithDetails(id, tenantId);
 
         // Assert
-        assertThat(result).isEqualTo(expectedNames);
-        verify(confluenceIntegrationRepository).findAllNormalizedNamesByTenantId(tenantId);
-    }
-
-    // -------------------------------------------------------------------------
-    // getConfluenceIntegrationNameById tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getConfluenceIntegrationNameById - returns integration name")
-    void getConfluenceIntegrationNameById_found_returnsName() {
-        // Arrange
-        String entityId = UUID.randomUUID().toString();
-        String expectedName = "Test Integration";
-        when(confluenceIntegrationRepository.findIntegrationNameById(UUID.fromString(entityId)))
-                .thenReturn(Optional.of(expectedName));
-
-        // Act
-        String result = service.getConfluenceIntegrationNameById(entityId);
-
-        // Assert
-        assertThat(result).isEqualTo(expectedName);
+        assertThat(result).isNotNull();
+        assertThat(result.getNextRunAtUtc()).isEqualTo(expectedNextRun);
+        verify(cronScheduleService).getNextRun(any(), any(), any());
     }
 
     @Test
-    @DisplayName("getConfluenceIntegrationNameById - not found throws IntegrationNotFoundException")
-    void getConfluenceIntegrationNameById_notFound_throwsException() {
+    @DisplayName("getByIdAndTenantWithDetails - disabled integration does not include nextRunAtUtc")
+    void getByIdAndTenantWithDetails_disabled_noNextRunAtUtc() {
         // Arrange
-        String entityId = UUID.randomUUID().toString();
-        when(confluenceIntegrationRepository.findIntegrationNameById(any()))
-                .thenReturn(Optional.empty());
-
-        // Act & Assert
-        assertThatThrownBy(() -> service.getConfluenceIntegrationNameById(entityId))
-                .isInstanceOf(IntegrationNotFoundException.class)
-                .hasMessageContaining("name not found");
-    }
-
-    // -------------------------------------------------------------------------
-    // getEnabledIntegrationForScheduledExecution tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getEnabledIntegrationForScheduledExecution - returns enabled integration")
-    void getEnabledIntegrationForScheduledExecution_found_returnsIntegration() {
-        // Arrange
-        UUID integrationId = UUID.randomUUID();
+        UUID id = UUID.randomUUID();
+        UUID connectionId = UUID.randomUUID();
         String tenantId = "tenant1";
+
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
         ConfluenceIntegration integration = new ConfluenceIntegration();
-        integration.setId(integrationId);
+        integration.setId(id);
+        integration.setConnectionId(connectionId);
+        integration.setTenantId(tenantId);
+        integration.setSchedule(schedule);
+        integration.setIsEnabled(Boolean.FALSE);
 
-        when(confluenceIntegrationRepository.findEnabledByIdAndTenantIdWithSchedule(integrationId, tenantId))
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, tenantId))
                 .thenReturn(Optional.of(integration));
 
-        // Act
-        Optional<ConfluenceIntegration> result =
-                service.getEnabledIntegrationForScheduledExecution(integrationId, tenantId);
-
-        // Assert
-        assertThat(result).isPresent();
-        assertThat(result.get()).isEqualTo(integration);
-    }
-
-    @Test
-    @DisplayName("getEnabledIntegrationForScheduledExecution - not found returns empty")
-    void getEnabledIntegrationForScheduledExecution_notFound_returnsEmpty() {
-        // Arrange
-        when(confluenceIntegrationRepository.findEnabledByIdAndTenantIdWithSchedule(any(), any()))
-                .thenReturn(Optional.empty());
-
-        // Act
-        Optional<ConfluenceIntegration> result =
-                service.getEnabledIntegrationForScheduledExecution(UUID.randomUUID(), "tenant1");
-
-        // Assert
-        assertThat(result).isEmpty();
-    }
-
-    // -------------------------------------------------------------------------
-    // resolveLanguages tests (via create/update)
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("create - invalid language code throws IntegrationPersistenceException")
-    void create_invalidLanguageCode_throwsException() {
-        // Arrange
-        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
-        request.setLanguageCodes(List.of("invalid-code"));
-        request.setSchedule(new IntegrationScheduleRequest());
-
-        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
-        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
-        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of());
-
-        // Act & Assert
-        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
-                .isInstanceOf(IntegrationPersistenceException.class)
-                .hasCauseInstanceOf(InvalidLanguageCodeException.class);
-    }
-
-    @Test
-    @DisplayName("create - partial invalid codes throws IntegrationPersistenceException")
-    void create_partialInvalidLanguageCodes_throwsException() {
-        // Arrange
-        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
-        request.setLanguageCodes(List.of("en-US", "invalid-code"));
-        request.setSchedule(new IntegrationScheduleRequest());
-
-        Language validLang = new Language();
-        validLang.setCode("en-US");
-
-        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
-        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
-        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(validLang));
-
-        // Act & Assert
-        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
-                .isInstanceOf(IntegrationPersistenceException.class)
-                .hasCauseInstanceOf(InvalidLanguageCodeException.class);
-    }
-
-    // -------------------------------------------------------------------------
-    // getConfluenceSpaceLabel tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getConfluenceSpaceLabel - found returns formatted label")
-    void getConfluenceSpaceLabel_found_returnsLabel() {
-        // Arrange
-        UUID connectionId = UUID.randomUUID();
-        String tenantId = "tenant1";
-        String spaceKey = "SPACE1";
-
-        ConfluenceSpaceDto space = new ConfluenceSpaceDto();
-        space.setKey("SPACE1");
-        space.setName("My Space");
-
+        ConfluenceIntegrationResponse response = new ConfluenceIntegrationResponse();
+        when(confluenceIntegrationMapper.toDetailsResponse(any())).thenReturn(response);
         when(confluenceLookupService.getSpacesByConnectionId(connectionId, tenantId))
-                .thenReturn(List.of(space));
-
-        // Act
-        String result = service.getConfluenceSpaceLabel(connectionId, tenantId, spaceKey);
-
-        // Assert
-        assertThat(result).isEqualTo("My Space (SPACE1)");
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceLabel - not found returns null")
-    void getConfluenceSpaceLabel_notFound_returnsNull() {
-        // Arrange
-        UUID connectionId = UUID.randomUUID();
-        String tenantId = "tenant1";
-
-        ConfluenceSpaceDto space = new ConfluenceSpaceDto();
-        space.setKey("SPACE2");
-        space.setName("Other Space");
-
-        when(confluenceLookupService.getSpacesByConnectionId(connectionId, tenantId))
-                .thenReturn(List.of(space));
-
-        // Act
-        String result = service.getConfluenceSpaceLabel(connectionId, tenantId, "SPACE1");
-
-        // Assert
-        assertThat(result).isNull();
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceLabel - null spaces list returns null")
-    void getConfluenceSpaceLabel_nullList_returnsNull() {
-        // Arrange
-        when(confluenceLookupService.getSpacesByConnectionId(any(), any()))
                 .thenReturn(null);
+        when(kwIntegrationService.getItemSubtypeDisplayValue(any())).thenReturn("Label");
+        when(kwIntegrationService.getDynamicDocumentTypeDisplayValue(any(), any(), any())).thenReturn("Label");
 
         // Act
-        String result = service.getConfluenceSpaceLabel(UUID.randomUUID(), "tenant1", "SPACE1");
+        ConfluenceIntegrationResponse result = service.getByIdAndTenantWithDetails(id, tenantId);
 
         // Assert
-        assertThat(result).isNull();
-    }
-
-    // -------------------------------------------------------------------------
-    // getConfluenceSpaceFolderLabel tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getConfluenceSpaceFolderLabel - root folder returns ROOT_FOLDER_KEY")
-    void getConfluenceSpaceFolderLabel_rootFolder_returnsConstant() {
-        // Act
-        String result = service.getConfluenceSpaceFolderLabel(
-                UUID.randomUUID(), "tenant1", "SPACE1", ROOT_FOLDER_KEY);
-
-        // Assert
-        assertThat(result).isEqualTo(ROOT_FOLDER_KEY);
-        verify(confluenceLookupService, never()).getPagesByConnectionIdAndSpaceKey(any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceFolderLabel - page with parent returns full path")
-    void getConfluenceSpaceFolderLabel_pageWithParent_returnsFullPath() {
-        // Arrange
-        UUID connectionId = UUID.randomUUID();
-        String tenantId = "tenant1";
-        String spaceKey = "SPACE1";
-        String folderId = "page123";
-
-        ConfluencePageDto page = new ConfluencePageDto();
-        page.setId("page123");
-        page.setTitle("Child Page");
-        page.setParentTitle("Parent Page");
-
-        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, tenantId, spaceKey))
-                .thenReturn(List.of(page));
-
-        // Act
-        String result = service.getConfluenceSpaceFolderLabel(connectionId, tenantId, spaceKey, folderId);
-
-        // Assert
-        assertThat(result).isEqualTo("Parent Page > Child Page");
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceFolderLabel - page without parent returns title only")
-    void getConfluenceSpaceFolderLabel_pageWithoutParent_returnsTitleOnly() {
-        // Arrange
-        UUID connectionId = UUID.randomUUID();
-        String tenantId = "tenant1";
-        String spaceKey = "SPACE1";
-        String folderId = "page123";
-
-        ConfluencePageDto page = new ConfluencePageDto();
-        page.setId("page123");
-        page.setTitle("Top Level Page");
-        page.setParentTitle(null);
-
-        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, tenantId, spaceKey))
-                .thenReturn(List.of(page));
-
-        // Act
-        String result = service.getConfluenceSpaceFolderLabel(connectionId, tenantId, spaceKey, folderId);
-
-        // Assert
-        assertThat(result).isEqualTo("Top Level Page");
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceFolderLabel - null pages list returns null")
-    void getConfluenceSpaceFolderLabel_nullList_returnsNull() {
-        // Arrange
-        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(any(), any(), any()))
-                .thenReturn(null);
-
-        // Act
-        String result = service.getConfluenceSpaceFolderLabel(
-                UUID.randomUUID(), "tenant1", "SPACE1", "page123");
-
-        // Assert
-        assertThat(result).isNull();
-    }
-
-    @Test
-    @DisplayName("getConfluenceSpaceFolderLabel - page not found returns null")
-    void getConfluenceSpaceFolderLabel_pageNotFound_returnsNull() {
-        // Arrange
-        UUID connectionId = UUID.randomUUID();
-        ConfluencePageDto page = new ConfluencePageDto();
-        page.setId("page999");
-        page.setTitle("Other Page");
-
-        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(any(), any(), any()))
-                .thenReturn(List.of(page));
-
-        // Act
-        String result = service.getConfluenceSpaceFolderLabel(connectionId, "tenant1", "SPACE1", "page123");
-
-        // Assert
-        assertThat(result).isNull();
-    }
-
-    // -------------------------------------------------------------------------
-    // getJobHistory tests
-    // -------------------------------------------------------------------------
-
-    @Test
-    @DisplayName("getJobHistory - returns mapped list of job executions")
-    void getJobHistory_success_returnsMappedList() {
-        // Arrange
-        UUID integrationId = UUID.randomUUID();
-        String tenantId = "tenant1";
-        IntegrationJobExecution execution = new IntegrationJobExecution();
-        execution.setId(UUID.randomUUID());
-
-        IntegrationJobExecutionDto dto = new IntegrationJobExecutionDto();
-        dto.setId(execution.getId());
-
-        when(integrationJobExecutionService.getConfluenceJobHistory(integrationId, tenantId))
-                .thenReturn(List.of(execution));
-        when(integrationJobExecutionMapper.toDto(execution)).thenReturn(dto);
-
-        // Act
-        List<IntegrationJobExecutionDto> result = service.getJobHistory(integrationId, tenantId);
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo(execution.getId());
+        assertThat(result).isNotNull();
+        assertThat(result.getNextRunAtUtc()).isNull();
+        verify(cronScheduleService, never()).getNextRun(any(), any(), any());
     }
 
     // -------------------------------------------------------------------------
@@ -1019,5 +744,434 @@ class ConfluenceIntegrationServiceTest {
         assertThatThrownBy(() -> service.delete(id, "tenant1", "user1"))
                 .isInstanceOf(IntegrationPersistenceException.class)
                 .hasMessageContaining("Failed to delete");
+    }
+
+    // -------------------------------------------------------------------------
+    // Additional branch-coverage tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("getConfluenceSpaceFolderLabel - page with blank parentTitle returns title only")
+    void getConfluenceSpaceFolderLabel_blankParentTitle_returnsTitleOnly() {
+        UUID connectionId = UUID.randomUUID();
+        ConfluencePageDto page = new ConfluencePageDto();
+        page.setId("page-blank");
+        page.setTitle("Child Only");
+        page.setParentTitle("   "); // blank
+
+        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, "tenant1", "SPACE"))
+                .thenReturn(List.of(page));
+
+        String result = service.getConfluenceSpaceFolderLabel(connectionId, "tenant1", "SPACE", "page-blank");
+        assertThat(result).isEqualTo("Child Only");
+    }
+
+    @Test
+    @DisplayName("create - non-unique DataIntegrityViolationException throws IntegrationPersistenceException")
+    void create_nonUniqueDataIntegrity_throwsPersistenceException() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("foreign key violation"));
+
+        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasMessageContaining("data integrity violation");
+    }
+
+    @Test
+    @DisplayName("update - non-unique DataIntegrityViolationException throws IntegrationPersistenceException")
+    void update_nonUniqueDataIntegrity_throwsPersistenceException() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setSchedule(new IntegrationSchedule());
+        existing.getSchedule().setCronExpression("0 0 12 * * ?");
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("foreign key violation"));
+
+        assertThatThrownBy(() -> service.update(id, request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasMessageContaining("data integrity violation");
+    }
+
+    @Test
+    @DisplayName("update - unchanged schedule does not reschedule")
+    void update_unchangedSchedule_doesNotReschedule() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setName("Existing");
+        existing.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(existing);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(id.toString(), "Existing"));
+
+        CreationResponse result = service.update(id, request, "tenant1", "user1");
+
+        assertThat(result).isNotNull();
+        verify(confluenceScheduleService, never()).updateSchedule(any());
+    }
+
+    @Test
+    @DisplayName("update - changed schedule triggers reschedule")
+    void update_changedSchedule_triggersReschedule() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setName("Existing");
+        existing.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+
+        // Simulate cron expression changing after buildCron
+        doAnswer(inv -> {
+            existing.getSchedule().setCronExpression("0 30 14 * * ?");
+            return null;
+        }).when(cronScheduleService).buildCron(any(IntegrationSchedule.class));
+
+        when(confluenceIntegrationRepository.save(any())).thenReturn(existing);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(id.toString(), "Existing"));
+
+        CreationResponse result = service.update(id, request, "tenant1", "user1");
+
+        assertThat(result).isNotNull();
+        verify(confluenceScheduleService).updateSchedule(existing);
+    }
+
+    @Test
+    @DisplayName("triggerJobExecution - enabled integration triggers job")
+    void triggerJobExecution_enabled_triggersJob() {
+        UUID integrationId = UUID.randomUUID();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(integrationId);
+        integration.setIsEnabled(true);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(integrationId, "tenant1"))
+                .thenReturn(Optional.of(integration));
+
+        service.triggerJobExecution(integrationId, "tenant1", "user1");
+
+        verify(confluenceScheduleService).triggerJob(integrationId, "tenant1", TriggerType.API, "user1");
+    }
+
+    @Test
+    @DisplayName("triggerJobExecution - disabled integration throws IllegalStateException")
+    void triggerJobExecution_disabled_throwsException() {
+        UUID integrationId = UUID.randomUUID();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(integrationId);
+        integration.setIsEnabled(false);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(integrationId, "tenant1"))
+                .thenReturn(Optional.of(integration));
+
+        assertThatThrownBy(() -> service.triggerJobExecution(integrationId, "tenant1", "user1"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Cannot trigger job for disabled integration");
+    }
+
+    @Test
+    @DisplayName("toggleActiveStatus - enabling schedules job")
+    void toggleActiveStatus_enabling_schedulesJob() {
+        UUID id = UUID.randomUUID();
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(id);
+        integration.setName("My Int");
+        integration.setIsEnabled(false); // currently disabled
+        integration.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(integration));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+
+        boolean result = service.toggleActiveStatus(id, "tenant1", "user1");
+
+        assertThat(result).isTrue();
+        verify(confluenceScheduleService).scheduleJob(integration);
+        verify(confluenceScheduleService, never()).unscheduleJob(any());
+    }
+
+    @Test
+    @DisplayName("toggleActiveStatus - disabling unschedules job")
+    void toggleActiveStatus_disabling_unschedulesJob() {
+        UUID id = UUID.randomUUID();
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(id);
+        integration.setName("My Int");
+        integration.setIsEnabled(true); // currently enabled
+        integration.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(integration));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+
+        boolean result = service.toggleActiveStatus(id, "tenant1", "user1");
+
+        assertThat(result).isFalse();
+        verify(confluenceScheduleService).unscheduleJob(integration);
+        verify(confluenceScheduleService, never()).scheduleJob(any());
+    }
+
+    @Test
+    @DisplayName("toggleActiveStatus - no schedule on integration skips schedule/unschedule")
+    void toggleActiveStatus_noSchedule_skipsScheduling() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(id);
+        integration.setName("No Schedule");
+        integration.setIsEnabled(false);
+        integration.setSchedule(null);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(integration));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+
+        boolean result = service.toggleActiveStatus(id, "tenant1", "user1");
+
+        assertThat(result).isTrue();
+        verify(confluenceScheduleService, never()).scheduleJob(any());
+        verify(confluenceScheduleService, never()).unscheduleJob(any());
+    }
+
+    @Test
+    @DisplayName("update - unique constraint violation throws IntegrationNameAlreadyExistsException")
+    void update_uniqueViolation_throwsNameAlreadyExists() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+
+        DataIntegrityViolationException uniqueEx = new DataIntegrityViolationException(
+                "unique constraint: duplicate key value");
+        when(confluenceIntegrationRepository.save(any())).thenThrow(uniqueEx);
+
+        assertThatThrownBy(() -> service.update(id, request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationNameAlreadyExistsException.class)
+                .hasMessageContaining("name already exists");
+    }
+
+    @Test
+    @DisplayName("update - IntegrationNotFoundException propagates unchanged")
+    void update_notFound_throwsNotFoundDirectly() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.update(id, request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("update - unexpected exception throws IntegrationPersistenceException")
+    void update_unexpectedException_throwsPersistence() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        IntegrationSchedule schedule = new IntegrationSchedule();
+        schedule.setCronExpression("0 0 12 * * ?");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setSchedule(schedule);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any()))
+                .thenThrow(new RuntimeException("unexpected"));
+
+        assertThatThrownBy(() -> service.update(id, request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasMessageContaining("Failed to update");
+    }
+
+    @Test
+    @DisplayName("delete - integration with null schedule does not try to unschedule")
+    void delete_nullSchedule_doesNotUnschedule() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(id);
+        integration.setSchedule(null);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(integration));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+
+        service.delete(id, "tenant1", "user1");
+
+        verify(confluenceScheduleService, never()).unscheduleJob(any());
+        verify(confluenceIntegrationRepository).save(any());
+    }
+
+    // -------------------------------------------------------------------------
+    // Additional branch-coverage tests for resolveLanguages, getByIdAndTenantWithDetails
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("create - empty language codes with no matching active languages throws InvalidLanguageCodeException")
+    void create_emptyActiveLanguages_throwsInvalidLanguageCode() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasCauseInstanceOf(InvalidLanguageCodeException.class);
+    }
+
+
+    @Test
+    @DisplayName("create - IntegrationPersistenceException is rethrown as-is")
+    void create_integrationPersistenceException_rethrownAsIs() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        IntegrationPersistenceException original = new IntegrationPersistenceException("original error");
+        when(confluenceIntegrationRepository.save(any())).thenThrow(original);
+
+        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .isSameAs(original);
+    }
+
+    @Test
+    @DisplayName("update - existing schedule is null, currentCronExpression should be null")
+    void update_existingScheduleNull_currentCronIsNull() {
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        ConfluenceIntegration existing = new ConfluenceIntegration();
+        existing.setId(id);
+        existing.setSchedule(null);
+
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "tenant1"))
+                .thenReturn(Optional.of(existing));
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+
+        // When schedule is null, the update mapper and buildCron will work on null schedule
+        // This should trigger the currentCronExpression=null branch
+        IntegrationSchedule newSchedule = new IntegrationSchedule();
+        newSchedule.setCronExpression("0 0 12 * * ?");
+        doAnswer(inv -> {
+            existing.setSchedule(newSchedule);
+            return null;
+        }).when(integrationSchedulerMapper).updateEntity(any(), any());
+
+        when(confluenceIntegrationRepository.save(any())).thenReturn(existing);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(id.toString(), "Test"));
+
+        CreationResponse result = service.update(id, request, "tenant1", "user1");
+
+        assertThat(result).isNotNull();
+        verify(confluenceScheduleService).updateSchedule(existing);
+    }
+
+    @Test
+    @DisplayName("resolveLanguages - matched count differs from input throws InvalidLanguageCodeException")
+    void resolveLanguages_mismatchCount_throwsException() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US", "fr-FR", "invalid-code"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language en = new Language();
+        en.setCode("en-US");
+        Language fr = new Language();
+        fr.setCode("fr-FR");
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(en, fr));
+
+        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasCauseInstanceOf(InvalidLanguageCodeException.class);
     }
 }

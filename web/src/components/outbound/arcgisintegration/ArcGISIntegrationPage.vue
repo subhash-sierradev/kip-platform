@@ -13,7 +13,7 @@
       create-button-text="+ Add ArcGIS Integration"
       @update:search="search = $event"
       @update:sortBy="sortBy = $event"
-      @update:pageSize="pageSize = $event"
+      @update:pageSize="setPageSize($event)"
       @setViewMode="setViewMode"
       @prevPage="prevPage"
       @nextPage="nextPage"
@@ -101,6 +101,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useListRouteSync } from '@/composables/useListRouteSync';
+import { useResponsivePageSize } from '@/composables/useResponsivePageSize';
 // formatMetadataDate no longer used in page; handled in card component
 import ArcGISIntegrationWizard from './wizard/ArcGISIntegrationWizard.vue';
 import ArcGISIntegrationCard from './ArcGISIntegrationCard.vue';
@@ -140,9 +141,9 @@ const cloneWizardOpen = ref(false);
 const cloningIntegrationId = ref<string | null>(null);
 
 // Pagination state
-const pageSize = ref(6);
+const { manualPageSize, pageSize, resetPageSize, setPageSize } = useResponsivePageSize();
 const currentPage = ref(1);
-const pageSizeOptions = [6, 12, 24, 48];
+const pageSizeOptions = [6, 9, 12, 24, 48];
 
 // Sort options for ArcGIS integrations
 const arcgisSortOptions: DashboardSortOption[] = [
@@ -479,8 +480,11 @@ const {
     sortBy,
     viewMode,
     currentPage,
+    manualPageSize,
     pageSize,
     pageSizeOptions,
+    resetPageSize,
+    setPageSize,
   }
 );
 

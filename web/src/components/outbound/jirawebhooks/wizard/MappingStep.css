@@ -351,17 +351,18 @@
 }
 
 .ms-search-select__toggle {
-  width: 36px;
+  width: 25px;
   border: none;
-  border-left: 1px solid #d1d5db;
-  background: #fff;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #374151;
+  cursor: pointer;
 }
 
 .ms-search-select__toggle:hover:not(:disabled) {
-  background: #f9fafb;
+  color: #111827;
 }
 
 .ms-search-select__toggle:disabled {
@@ -371,8 +372,11 @@
 }
 
 .ms-search-select__caret {
-  font-size: 12px;
-  line-height: 1;
+  width: 5px;
+  height: 5px;
+  border-right: 2.5px solid currentColor;
+  border-bottom: 2.5px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
 }
 
 .ms-search-select__menu {

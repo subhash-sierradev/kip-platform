@@ -1,5 +1,6 @@
 import type { CustomFieldMapping } from '@/api/services/JiraWebhookService';
 import { formatDisplayDate, formatMetadataDate } from '@/utils/dateUtils';
+import { extractParentKey, parentLabelMatchesKey } from '@/utils/parentFieldUtils';
 
 type JsonMap = Record<string, unknown>;
 
@@ -185,33 +186,6 @@ function formatDefaultValue(value: unknown): string {
   return String(value ?? '');
 }
 
-function formatParentValue(value: unknown): string {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'object') {
-    const keyValue = (value as { key?: unknown }).key;
-    return typeof keyValue === 'string' ? keyValue : String(value);
-  }
-
-  const raw = String(value).trim();
-  if (!raw) {
-    return '';
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as { key?: unknown };
-    if (parsed && typeof parsed.key === 'string' && parsed.key.trim()) {
-      return parsed.key.trim();
-    }
-  } catch {
-    // ignore parse error and return raw value below
-  }
-
-  return raw;
-}
-
 function formatUser(value: unknown, userMap: Map<string, string>): string {
   if (!value) {
     return '';
@@ -285,7 +259,11 @@ export function formatCustomValue(
   return formatter(value);
 }
 
-export function formatParentName(customFields: CustomFieldMapping[], jsonSample: string): string {
+export function formatParentName(
+  customFields: CustomFieldMapping[],
+  jsonSample: string,
+  selectedParentLabel?: string
+): string {
   const parentField = (customFields || []).find(
     customField =>
       String(customField.jiraFieldKey || '')
@@ -301,8 +279,16 @@ export function formatParentName(customFields: CustomFieldMapping[], jsonSample:
     parentField.valueSource === 'json'
       ? resolveJsonSmart(String(parentField.value ?? ''), json)
       : parentField.value;
+  const parentKey = extractParentKey(
+    baseValue === null || baseValue === undefined ? '' : baseValue
+  );
+  const trimmedLabel = String(selectedParentLabel || '').trim();
 
-  return formatParentValue(baseValue === null || baseValue === undefined ? '' : baseValue);
+  if (!parentKey || !trimmedLabel) {
+    return parentKey;
+  }
+
+  return parentLabelMatchesKey(trimmedLabel, parentKey) ? trimmedLabel : parentKey;
 }
 
 export function getFieldLabel(customField: CustomFieldMapping): string {

@@ -2,10 +2,17 @@
 import { mount } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
 
+const routerSpies = vi.hoisted(() => ({
+  back: vi.fn(),
+  push: vi.fn(),
+  route: { params: { id: 'A1' }, query: { page: '2' } },
+}));
+
 vi.mock('@/components/common/StandardDetailPageLayout.vue', () => ({
   default: {
     name: 'StandardDetailPageLayoutStub',
-    props: ['title'],
+    props: ['title', 'componentEvents'],
+    emits: ['back', 'retry', 'tab-change', 'status-updated', 'refresh'],
     template: '<div class="standard-layout-stub">{{ title }}</div>',
   },
 }));
@@ -20,8 +27,8 @@ vi.mock('@/components/outbound/arcgisintegration/wizard/ArcGISIntegrationWizard.
 }));
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: 'A1' } }),
-  useRouter: () => ({ back: vi.fn() }),
+  useRoute: () => routerSpies.route,
+  useRouter: () => ({ back: routerSpies.back, push: routerSpies.push }),
 }));
 
 vi.mock('@/api/services/ArcGISIntegrationService', () => ({
@@ -55,6 +62,23 @@ describe('ArcGISIntegrationDetailsPage', () => {
     expect(setBreadcrumbTitle).toHaveBeenCalledWith('ArcGIS Integration Details');
   });
 
+  it('opens edit wizard and updates active tab only for known tab ids', async () => {
+    const wrapper = mount(ArcGISIntegrationDetailsPage, {
+      global: {
+        provide: { setBreadcrumbTitle: vi.fn() },
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    const vm = wrapper.vm as any;
+    vm.openEditWizard();
+    vm.handleTabChangeById('mapping');
+    vm.handleTabChangeById('unknown-tab');
+
+    expect(vm.editWizardOpen).toBe(true);
+    expect(vm.activeTab).toBe(2);
+  });
+
   it('shows error UI on service failure', async () => {
     const { ArcGISIntegrationService } = await import('@/api/services/ArcGISIntegrationService');
     (ArcGISIntegrationService.getArcGISIntegrationById as any).mockRejectedValueOnce(
@@ -67,6 +91,21 @@ describe('ArcGISIntegrationDetailsPage', () => {
     await new Promise(r => setTimeout(r, 0));
     // With the StandardDetailPageLayout stub, we assert the computed title
     expect(wrapper.text()).toContain('Error loading integration');
+  });
+
+  it('updates local enabled state and refetches when status changes', async () => {
+    const { ArcGISIntegrationService } = await import('@/api/services/ArcGISIntegrationService');
+    const wrapper = mount(ArcGISIntegrationDetailsPage, {
+      global: { provide: { setBreadcrumbTitle: vi.fn() } },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    (ArcGISIntegrationService.getArcGISIntegrationById as any).mockClear();
+    (wrapper.vm as any).onStatusUpdated(false);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect((wrapper.vm as any).arcGISIntegrationResponse.isEnabled).toBe(true);
+    expect(ArcGISIntegrationService.getArcGISIntegrationById).toHaveBeenCalledWith('A1');
   });
 
   it('handles clone-requested event and opens clone wizard', async () => {
@@ -86,5 +125,31 @@ describe('ArcGISIntegrationDetailsPage', () => {
     // Verify clone wizard state is set
     expect(vm.cloneWizardOpen).toBe(true);
     expect(vm.cloningIntegrationId).toBe('A1');
+  });
+
+  it('uses history back when available and falls back to list navigation otherwise', async () => {
+    const wrapper = mount(ArcGISIntegrationDetailsPage, {
+      global: {
+        provide: { setBreadcrumbTitle: vi.fn() },
+      },
+    });
+    await new Promise(r => setTimeout(r, 0));
+
+    Object.defineProperty(window, 'history', {
+      configurable: true,
+      value: { length: 2 },
+    });
+    (wrapper.vm as any).handleBack();
+    expect(routerSpies.back).toHaveBeenCalledTimes(1);
+
+    Object.defineProperty(window, 'history', {
+      configurable: true,
+      value: { length: 1 },
+    });
+    (wrapper.vm as any).handleBack();
+    expect(routerSpies.push).toHaveBeenCalledWith({
+      path: '/outbound/integration/arcgis',
+      query: { page: '2' },
+    });
   });
 });

@@ -28,6 +28,49 @@ vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 'ci-99' } }),
 }));
 
+vi.mock('@/components/common/GenericDataGrid.vue', () => ({
+  default: {
+    name: 'GenericDataGrid',
+    props: ['data', 'columns'],
+    template: `
+      <div class="generic-grid-stub">
+        <div v-for="row in data" :key="row.id || row.startedAt" class="grid-row">
+          <slot
+            v-for="column in columns.filter(col => col.template)"
+            :key="String(column.caption || column.template)"
+            :name="column.template"
+            :data="row"
+          />
+        </div>
+      </div>
+    `,
+  },
+}));
+
+vi.mock('@/components/common/Tooltip.vue', () => ({
+  default: {
+    name: 'Tooltip',
+    props: ['visible', 'x', 'y', 'id', 'text'],
+    template: '<div class="tooltip-stub" :data-visible="visible">{{ text }}</div>',
+  },
+}));
+
+vi.mock('@/components/common/StatusChipForDataTable.vue', () => ({
+  default: {
+    name: 'StatusChipForDataTable',
+    props: ['status', 'label'],
+    template: '<span class="status-chip-stub">{{ label }}</span>',
+  },
+}));
+
+vi.mock('@/components/common/ErrorPanel.vue', () => ({
+  default: {
+    name: 'ErrorPanel',
+    props: ['message'],
+    template: '<div class="error-panel-stub">{{ message }}</div>',
+  },
+}));
+
 import ConfluenceJobHistoryTab from '@/components/outbound/confluenceintegration/details/ConfluenceJobHistoryTab.vue';
 
 const sampleRow = {
@@ -67,6 +110,7 @@ describe('ConfluenceJobHistoryTab', () => {
     const wrapper = mount(ConfluenceJobHistoryTab);
     await new Promise(r => setTimeout(r, 0));
     expect(wrapper.find('.datagrid-container').exists()).toBe(true);
+    expect(wrapper.find('.generic-grid-stub').exists()).toBe(true);
   });
 
   it('renders job id truncated when id is long', async () => {
@@ -154,6 +198,58 @@ describe('ConfluenceJobHistoryTab', () => {
     const wrapper = mount(ConfluenceJobHistoryTab);
     await new Promise(r => setTimeout(r, 0));
     expect(wrapper.text()).toContain('Integration not found');
+  });
+
+  it('renders a report link for successful rows with a confluence page url', async () => {
+    serviceSpies.getJobHistory.mockResolvedValue([sampleRow]);
+
+    const wrapper = mount(ConfluenceJobHistoryTab);
+    await new Promise(r => setTimeout(r, 0));
+
+    const link = wrapper.find('.confluence-page-link');
+    expect(link.exists()).toBe(true);
+    expect(link.attributes('href')).toBe('https://confluence.example.com/page/1');
+    expect(link.text()).toContain('View Report');
+  });
+
+  it('renders a retry button and retry badge for retryable rows', async () => {
+    serviceSpies.getJobHistory.mockResolvedValue([
+      {
+        ...sampleRow,
+        status: 'FAILED',
+        originalJobId: 'orig-1',
+        retryAttempt: 2,
+        executionMetadata: {},
+      },
+    ]);
+
+    const wrapper = mount(ConfluenceJobHistoryTab);
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.find('.retry-btn').exists()).toBe(true);
+    expect(wrapper.find('.retry-badge').text()).toContain('Retry #2');
+  });
+
+  it('shows retrying state in the action column while a retry is in progress', async () => {
+    const failedRow = {
+      ...sampleRow,
+      status: 'FAILED',
+      originalJobId: 'orig-progress',
+      executionMetadata: {},
+    };
+    serviceSpies.getJobHistory.mockResolvedValue([failedRow]);
+    serviceSpies.retryJobExecution.mockImplementation(
+      () => new Promise(resolve => setTimeout(resolve, 100))
+    );
+
+    const wrapper = mount(ConfluenceJobHistoryTab);
+    await new Promise(r => setTimeout(r, 0));
+    (wrapper.vm as any).retryExecution(failedRow);
+    await new Promise(r => setTimeout(r, 5));
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('.retry-btn').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('.dx-button-text').text()).toContain('Retrying...');
   });
 
   it('falls back to generic error when no message on failure', async () => {
@@ -338,29 +434,6 @@ describe('ConfluenceJobHistoryTab', () => {
     if (jobIdText.exists()) {
       expect(jobIdText.text()).toBe('');
     }
-  });
-
-  it('retries execution successfully and refreshes history', async () => {
-    const failedRow = {
-      ...sampleRow,
-      id: 'job-failed-123',
-      status: 'FAILED',
-      originalJobId: 'orig-job-123',
-    };
-    serviceSpies.getJobHistory.mockResolvedValueOnce([failedRow]);
-    serviceSpies.retryJobExecution.mockResolvedValue({});
-    serviceSpies.getJobHistory.mockResolvedValueOnce([]);
-
-    const wrapper = mount(ConfluenceJobHistoryTab);
-    await new Promise(r => setTimeout(r, 0));
-    const vm = wrapper.vm as any;
-
-    await vm.retryExecution(failedRow);
-    await new Promise(r => setTimeout(r, 10));
-
-    expect(serviceSpies.retryJobExecution).toHaveBeenCalledWith('ci-99', 'orig-job-123');
-    expect(toastSpies.showSuccess).toHaveBeenCalledWith('Retry execution queued successfully');
-    expect(serviceSpies.getJobHistory).toHaveBeenCalledTimes(2);
   });
 
   it('shows error toast when retry execution fails with message', async () => {

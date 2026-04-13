@@ -571,4 +571,448 @@ class JiraWebhookProcessorTest {
 
         assertThat(result.isSuccess()).isTrue();
     }
+
+    @Test
+    void processWebhookExecution_parentFieldIsNullInResult_removedFromPayload() {
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-null-parent")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        Map<String, Object> fields = new java.util.HashMap<>();
+        fields.put("summary", "Test");
+        fields.put("parent", null);
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-null-parent"), any()))
+                .thenReturn(fields);
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsStringWithValidIssueKey_normalizedToKeyMap() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-key")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-key"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", "PRJ-42"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-2\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsStringWithValidNumericId_normalizedToIdMap() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-id")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-id"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", "10042"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-3\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsStringInvalidValue_removedFromPayload() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-invalid")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-invalid"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", "invalid-value"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-4\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsMapWithValidKey_normalizedToKeyMap() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-map-key")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-map-key"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", Map.of("key", "PRJ-100")));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-5\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsMapWithValidId_normalizedToIdMap() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-map-id")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-map-id"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", Map.of("id", "20001")));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-6\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsMapWithInvalidKeyAndId_removedFromPayload() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-map-invalid")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-map-invalid"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", Map.of("key", "invalid", "id", "not-numeric")));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-7\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentAsNonStringNonMap_removedFromPayload() {
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-nontype")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        Map<String, Object> fields = new java.util.HashMap<>();
+        fields.put("summary", "Test");
+        fields.put("parent", 12345);  // Integer is neither String nor Map
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-nontype"), any()))
+                .thenReturn(fields);
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-8\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_issueTypeMapSubtask_withMissingParentAndParentMapping_returnsFailure() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype")
+                .jiraFieldName("Issue Type")
+                .dataType(JiraDataType.STRING)
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-map-no-parent")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-map-no-parent"), any()))
+                .thenReturn(Map.of("issuetype", Map.of("name", "Subtask"), "summary", "Missing parent"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("Parent field is required");
+    }
+
+    @Test
+    void processWebhookExecution_issueTypeStringSubTask_withValidParentKey_succeeds() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype")
+                .jiraFieldName("Issue Type")
+                .dataType(JiraDataType.STRING)
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-str-valid-parent")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-str-valid-parent"), any()))
+                .thenReturn(Map.of(
+                        "issuetype", "Sub-task",
+                        "parent", Map.of("key", "PRJ-50"),
+                        "summary", "Valid subtask"
+                ));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/10\",\"key\":\"PRJ-51\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithParentStringKey_hasValidParent_succeeds() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-parent-str-key")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-parent-str-key"), any()))
+                .thenReturn(Map.of("issuetype", "subtask", "parent", "PRJ-99", "summary", "Sub"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/11\",\"key\":\"PRJ-100\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithParentNumericString_hasValidParent_succeeds() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-parent-num-str")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-parent-num-str"), any()))
+                .thenReturn(Map.of("issuetype", "subtask", "parent", "12345", "summary", "Sub"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/11\",\"key\":\"PRJ-101\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithParentMapId_hasValidParent_succeeds() {
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent")
+                .jiraFieldName("Parent")
+                .dataType(JiraDataType.STRING)
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-parent-map-id")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-parent-map-id"), any()))
+                .thenReturn(Map.of("issuetype", "subtask", "parent", Map.of("id", "99001"), "summary", "Sub"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/12\",\"key\":\"PRJ-102\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_calculateJiraIssueUrl_trailingSlashBase_normalizedCorrectly() {
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-url-trailing")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-url-trailing"), any()))
+                .thenReturn(Map.of("summary", "Test"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/999\",\"key\":\"PROJ-999\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getJiraIssueUrl()).isEqualTo("https://jira.example.com/browse/PROJ-999");
+    }
+
+    @Test
+    void processWebhookExecution_calculateJiraIssueUrl_invalidJson_returnsNullUrl() {
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-url-invalid-json")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-url-invalid-json"), any()))
+                .thenReturn(Map.of("summary", "Test"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true, "not-json-at-all"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getJiraIssueUrl()).isNull();
+    }
+
+    @Test
+    void processWebhookExecution_missingKey_returnsNullIssueUrl() {
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-missing-key")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-missing-key"), any()))
+                .thenReturn(Map.of("summary", "Test"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+        assertThat(result.getJiraIssueUrl()).isNull();
+    }
+
+    @Test
+    void processWebhookExecution_metadataFlagNonBoolean_notDetectedAsSubtask() {
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype")
+                .jiraFieldName("Issue Type")
+                .dataType(JiraDataType.STRING)
+                .metadata(Map.of("subtask", "yes"))  // non-boolean
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-metadata-nonbool")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-metadata-nonbool"), any()))
+                .thenReturn(Map.of("issuetype", "Task", "summary", "Normal"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
 }

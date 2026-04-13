@@ -8,6 +8,10 @@ import NewConnectionForm from '@/components/common/connectionstep/NewConnectionF
 import type { ConnectionStepData } from '@/types/ConnectionStepData';
 import { JIRA_CONNECTION_CONFIG } from '@/utils/connectionStepConfig';
 
+const { hasAdminAccess } = vi.hoisted(() => ({
+  hasAdminAccess: { value: true },
+}));
+
 vi.mock('@/api/services/IntegrationConnectionService', () => ({
   IntegrationConnectionService: {
     getAllConnections: vi.fn(),
@@ -16,9 +20,20 @@ vi.mock('@/api/services/IntegrationConnectionService', () => ({
   },
 }));
 
+vi.mock('@/composables/useAuth', () => ({
+  useAuth: () => ({
+    userInfo: {
+      get value() {
+        return { roles: hasAdminAccess.value ? ['tenant_admin'] : ['user'] };
+      },
+    },
+  }),
+}));
+
 describe('ConnectionStep (existing connection)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    hasAdminAccess.value = true;
     vi.mocked(IntegrationConnectionService.getAllConnections).mockResolvedValue([] as any);
   });
 
@@ -58,7 +73,7 @@ describe('ConnectionStep (existing connection)', () => {
       (emittedBeforeVerify['validation-change'] ?? []).some(args => (args[0] as boolean) === false)
     ).toBe(true);
 
-    const verifyBtn = wrapper.find('button.cs-btn-outlined-primary');
+    const verifyBtn = wrapper.find('button.cs-test-btn');
     expect(verifyBtn.exists()).toBe(true);
     expect(verifyBtn.attributes('disabled')).toBeUndefined();
 
@@ -246,5 +261,30 @@ describe('ConnectionStep (existing connection)', () => {
 
     expect(wrapper.findComponent(ExistingConnectionPanel).exists()).toBe(false);
     expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(true);
+  });
+
+  it('hides create new option for non-admin users', async () => {
+    hasAdminAccess.value = false;
+
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: '',
+          credentialType: 'BASIC_AUTH',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.findAll('input[type="radio"]')).toHaveLength(1);
+    expect(wrapper.findComponent(ExistingConnectionPanel).exists()).toBe(true);
+    expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(false);
   });
 });

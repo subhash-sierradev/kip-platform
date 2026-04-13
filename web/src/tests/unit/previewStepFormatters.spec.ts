@@ -303,7 +303,7 @@ describe('previewStepFormatters', () => {
     expect(parent).toBe('');
   });
 
-  it('formatParentName handles object parent values without a key', () => {
+  it('formatParentName returns empty for object parent values without a key', () => {
     const value = formatParentName(
       [
         {
@@ -316,7 +316,7 @@ describe('previewStepFormatters', () => {
       '{}'
     );
 
-    expect(value).toBe('[object Object]');
+    expect(value).toBe('');
   });
 
   it('formatCustomValue formats boolean false value', () => {
@@ -345,5 +345,220 @@ describe('previewStepFormatters', () => {
     );
 
     expect(value).toBe('');
+  });
+
+  it('resolveTemplate handles array indexes, non-placeholder strings, and null json input', () => {
+    const jsonSample = JSON.stringify({
+      fields: {
+        labels: ['alpha', 'beta'],
+        owner: null,
+      },
+    });
+
+    expect(resolveTemplate('First={{fields.labels.0}}', jsonSample)).toBe('First=alpha');
+    expect(resolveTemplate('Static value', jsonSample)).toBe('Static value');
+    expect(resolveTemplate('Owner={{fields.owner}}', jsonSample)).toBe('Owner=');
+  });
+
+  it('formatJsonSample falls back to an empty object when input is blank', () => {
+    expect(formatJsonSample('')).toContain('{}');
+  });
+
+  it('formatCustomValue covers json template interpolation branches', () => {
+    const userMap = toUserMap([]);
+    const sprintMap = toSprintMap([]);
+    const jsonSample = JSON.stringify({
+      fields: {
+        summary: 'Issue summary',
+        details: { id: 7 },
+        optional: null,
+      },
+    });
+
+    const mixedTemplateField = {
+      jiraFieldKey: 'summary',
+      jiraFieldLabel: 'Summary',
+      type: 'string',
+      valueSource: 'json',
+      value: 'Summary: {{fields.summary}}',
+    } as any;
+
+    const objectTemplateField = {
+      jiraFieldKey: 'details',
+      jiraFieldLabel: 'Details',
+      type: 'string',
+      valueSource: 'json',
+      value: 'Payload={{fields.details}}',
+    } as any;
+
+    const nullTemplateField = {
+      jiraFieldKey: 'optional',
+      jiraFieldLabel: 'Optional',
+      type: 'string',
+      valueSource: 'json',
+      value: 'Optional={{fields.optional}}',
+    } as any;
+
+    const missingTemplateField = {
+      jiraFieldKey: 'missing',
+      jiraFieldLabel: 'Missing',
+      type: 'string',
+      valueSource: 'json',
+      value: 'Missing={{fields.missing}}',
+    } as any;
+
+    expect(formatCustomValue(mixedTemplateField, jsonSample, userMap, sprintMap)).toBe(
+      'Summary: Issue summary'
+    );
+    expect(formatCustomValue(objectTemplateField, jsonSample, userMap, sprintMap)).toBe(
+      'Payload={"id":7}'
+    );
+    expect(formatCustomValue(nullTemplateField, jsonSample, userMap, sprintMap)).toBe('Optional=');
+    expect(formatCustomValue(missingTemplateField, jsonSample, userMap, sprintMap)).toBe(
+      'Missing={{fields.missing}}'
+    );
+  });
+
+  it('formatCustomValue covers blank json templates, boolean literals, and fallback branches', () => {
+    const emptyJsonField = {
+      jiraFieldKey: 'empty',
+      jiraFieldLabel: 'Empty',
+      type: '',
+      valueSource: 'json',
+      value: '',
+    } as any;
+
+    const booleanLiteralField = {
+      jiraFieldKey: 'flag',
+      jiraFieldLabel: 'Flag',
+      type: 'boolean',
+      valueSource: 'literal',
+      value: false,
+    } as any;
+
+    const unknownBooleanField = {
+      jiraFieldKey: 'flag2',
+      jiraFieldLabel: 'Flag2',
+      type: 'boolean',
+      valueSource: 'literal',
+      value: 'maybe',
+    } as any;
+
+    const emptyUserField = {
+      jiraFieldKey: 'assignee',
+      jiraFieldLabel: 'Assignee',
+      type: 'user',
+      valueSource: 'literal',
+      value: '',
+    } as any;
+
+    const emptyMultiUserField = {
+      jiraFieldKey: 'watchers',
+      jiraFieldLabel: 'Watchers',
+      type: 'multiuser',
+      valueSource: 'literal',
+      value: '',
+    } as any;
+
+    const emptySprintField = {
+      jiraFieldKey: 'customfield_10021',
+      jiraFieldLabel: 'Sprint',
+      type: 'sprint',
+      valueSource: 'literal',
+      value: '',
+    } as any;
+
+    expect(formatCustomValue(emptyJsonField, '', toUserMap([]), toSprintMap([]))).toBe('');
+    expect(formatCustomValue(booleanLiteralField, '{}', toUserMap([]), toSprintMap([]))).toBe(
+      'False'
+    );
+    expect(formatCustomValue(unknownBooleanField, '{}', toUserMap([]), toSprintMap([]))).toBe(
+      'maybe'
+    );
+    expect(formatCustomValue(emptyUserField, '{}', toUserMap([]), toSprintMap([]))).toBe('');
+    expect(formatCustomValue(emptyMultiUserField, '{}', toUserMap([]), toSprintMap([]))).toBe('');
+    expect(formatCustomValue(emptySprintField, '{}', toUserMap([]), toSprintMap([]))).toBe('');
+  });
+
+  it('formatCustomValue handles date, array, and default formatter fallback edge cases', () => {
+    const stringArrayField = {
+      jiraFieldKey: 'labels',
+      jiraFieldLabel: 'Labels',
+      type: 'array',
+      valueSource: 'literal',
+      value: 'one, two , , three',
+    } as any;
+
+    const emptyDateField = {
+      jiraFieldKey: 'duedate',
+      jiraFieldLabel: 'Due Date',
+      type: 'date',
+      valueSource: 'literal',
+      value: '',
+    } as any;
+
+    const symbolDateField = {
+      jiraFieldKey: 'timestamp',
+      jiraFieldLabel: 'Timestamp',
+      type: 'datetime',
+      valueSource: 'literal',
+      value: Symbol('bad-date'),
+    } as any;
+
+    const circularValue: Record<string, unknown> = {};
+    circularValue.self = circularValue;
+
+    const circularObjectField = {
+      jiraFieldKey: 'object',
+      jiraFieldLabel: 'Object',
+      type: 'string',
+      valueSource: 'literal',
+      value: circularValue,
+    } as any;
+
+    expect(formatCustomValue(stringArrayField, '{}', toUserMap([]), toSprintMap([]))).toEqual([
+      'one',
+      'two',
+      'three',
+    ]);
+    expect(formatCustomValue(emptyDateField, '{}', toUserMap([]), toSprintMap([]))).toBe('');
+    expect(formatCustomValue(symbolDateField, '{}', toUserMap([]), toSprintMap([]))).toBe(
+      'Symbol(bad-date)'
+    );
+    expect(formatCustomValue(circularObjectField, '{}', toUserMap([]), toSprintMap([]))).toBe(
+      '[object Object]'
+    );
+  });
+
+  it('formatParentName supports label matching and undefined field arrays', () => {
+    const matchingLabel = formatParentName(
+      [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          valueSource: 'literal',
+          value: 'SCRUM-42',
+        } as any,
+      ],
+      '{}',
+      'SCRUM-42 - Parent summary'
+    );
+
+    const mismatchedLabel = formatParentName(
+      [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          valueSource: 'literal',
+          value: 'SCRUM-42',
+        } as any,
+      ],
+      '{}',
+      'Different issue'
+    );
+
+    expect(formatParentName(undefined as any, '{}')).toBe('Not Selected');
+    expect(matchingLabel).toBe('SCRUM-42 - Parent summary');
+    expect(mismatchedLabel).toBe('SCRUM-42');
   });
 });

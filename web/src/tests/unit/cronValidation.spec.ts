@@ -85,6 +85,23 @@ describe('Cron Validation Utility', () => {
       expect(validateCronExpression('0 */0 * * * ?').isValid).toBe(false);
       expect(validateCronExpression('0 */-5 * * * ?').isValid).toBe(false);
     });
+
+    it('validates Quartz special day tokens', () => {
+      const validExpressions = [
+        '0 0 12 LW * ?',
+        '0 0 9 15W * ?',
+        '0 0 9 1W * ?',
+        '0 0 10 ? * MON#1',
+        '0 0 14 ? * 6L',
+      ];
+
+      validExpressions.forEach(expr => {
+        expect(validateCronExpression(expr).isValid).toBe(true);
+      });
+
+      expect(validateCronExpression('0 0 12 32W * ?').isValid).toBe(false);
+      expect(validateCronExpression('0 0 10 ? * MON#6').isValid).toBe(false);
+    });
   });
 
   describe('describeCronExpression', () => {

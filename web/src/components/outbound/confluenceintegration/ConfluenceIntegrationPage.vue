@@ -13,7 +13,7 @@
       create-button-text="+ Add Confluence Integration"
       @update:search="search = $event"
       @update:sortBy="sortBy = $event"
-      @update:pageSize="pageSize = $event"
+      @update:pageSize="setPageSize($event)"
       @setViewMode="setViewMode"
       @prevPage="prevPage"
       @nextPage="nextPage"
@@ -99,6 +99,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useListRouteSync } from '@/composables/useListRouteSync';
+import { useResponsivePageSize } from '@/composables/useResponsivePageSize';
 import ConfluenceIntegrationWizard from './wizard/ConfluenceIntegrationWizard.vue';
 import ConfluenceIntegrationCard from './ConfluenceIntegrationCard.vue';
 import DashboardToolbar from '@/components/common/DashboardToolbar.vue';
@@ -131,9 +132,9 @@ const editingIntegrationId = ref<string | null>(null);
 const cloneWizardOpen = ref(false);
 const cloningIntegrationId = ref<string | null>(null);
 
-const pageSize = ref(6);
+const { manualPageSize, pageSize, resetPageSize, setPageSize } = useResponsivePageSize();
 const currentPage = ref(1);
-const pageSizeOptions = [6, 12, 24, 48];
+const pageSizeOptions = [6, 9, 12, 24, 48];
 
 const confluenceSortOptions: DashboardSortOption[] = [
   { value: 'name', label: 'Name' },
@@ -318,7 +319,17 @@ const {
     validViewModes: ['grid', 'list'],
     totalPages,
   },
-  { search, sortBy, viewMode, currentPage, pageSize, pageSizeOptions }
+  {
+    search,
+    sortBy,
+    viewMode,
+    currentPage,
+    manualPageSize,
+    pageSize,
+    pageSizeOptions,
+    resetPageSize,
+    setPageSize,
+  }
 );
 
 onMounted(async () => {

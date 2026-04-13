@@ -26,24 +26,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationDispatchService {
-    private static final String INTEGRATION_ID_KEY = "integrationId";
-    private static final String WEBHOOK_ID_KEY = "webhookId";
-    private static final String ISSUE_KEY = "issueKey";
-    private static final String CONNECTION_ID_KEY = "connectionId";
-    private static final String SERVICE_TYPE_KEY = "serviceType";
-    private static final String ROUTE_KEY = "route";
-    private static final String ACTION_LABEL_KEY = "actionLabel";
-    private static final String SERVICE_TYPE_ARCGIS = "ARCGIS";
-    private static final String SERVICE_TYPE_JIRA = "JIRA";
 
     private final NotificationTemplateService notificationTemplateService;
     private final NotificationRuleRepository notificationRuleRepository;
@@ -171,8 +160,6 @@ public class NotificationDispatchService {
             }
         }
 
-        addNavigationActionMetadata(effectiveMetadata);
-
         if (triggeredByUserId == null || triggeredByUserId.isBlank()) {
             return effectiveMetadata;
         }
@@ -207,71 +194,6 @@ public class NotificationDispatchService {
             return "deletedBy";
         }
         return null;
-    }
-
-    private void addNavigationActionMetadata(Map<String, Object> metadata) {
-        if (metadata.isEmpty() || containsExistingNavigation(metadata)) {
-            return;
-        }
-
-        String integrationId = getMetadataValue(metadata, INTEGRATION_ID_KEY);
-        if (isValidUuid(integrationId)) {
-            metadata.put(ROUTE_KEY, "/outbound/integration/arcgis/" + integrationId);
-            metadata.put(ACTION_LABEL_KEY, "Open ArcGIS Integration");
-            return;
-        }
-
-        String webhookId = getMetadataValue(metadata, WEBHOOK_ID_KEY);
-        String issueKey = getMetadataValue(metadata, ISSUE_KEY);
-        if (!webhookId.isBlank() && !issueKey.isBlank()) {
-            metadata.put(ROUTE_KEY, "/outbound/webhook/jira/" + webhookId);
-            metadata.put(ACTION_LABEL_KEY, "Open Jira Webhook");
-            return;
-        }
-
-        String connectionId = getMetadataValue(metadata, CONNECTION_ID_KEY);
-        String serviceType = getMetadataValue(metadata, SERVICE_TYPE_KEY).toUpperCase(Locale.ROOT);
-        if (!isValidUuid(connectionId)) {
-            return;
-        }
-
-        if (SERVICE_TYPE_ARCGIS.equals(serviceType)) {
-            metadata.put(ROUTE_KEY, "/admin/connections/arcgis");
-            metadata.put(ACTION_LABEL_KEY, "Open ArcGIS Connection");
-            return;
-        }
-        if (SERVICE_TYPE_JIRA.equals(serviceType)) {
-            metadata.put(ROUTE_KEY, "/admin/connections/jira");
-            metadata.put(ACTION_LABEL_KEY, "Open Jira Connection");
-        }
-    }
-
-    private boolean containsExistingNavigation(Map<String, Object> metadata) {
-        return hasText(metadata.get("actionUrl"))
-                || hasText(metadata.get("url"))
-                || hasText(metadata.get("targetUrl"))
-                || hasText(metadata.get(ROUTE_KEY));
-    }
-
-    private String getMetadataValue(Map<String, Object> metadata, String key) {
-        Object value = metadata.get(key);
-        return value != null ? value.toString().trim() : "";
-    }
-
-    private boolean isValidUuid(String value) {
-        if (value == null || value.isBlank()) {
-            return false;
-        }
-        try {
-            UUID.fromString(value);
-            return true;
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
-    }
-
-    private boolean hasText(Object value) {
-        return value != null && !value.toString().trim().isBlank();
     }
 
     private List<String> resolveTargetUserIds(NotificationRecipientPolicy policy, String tenantId) {

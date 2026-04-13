@@ -113,4 +113,31 @@ describe('NotificationRuleModal', () => {
     expect(optionValues).not.toContain('e2');
     expect(optionValues).not.toContain('e3');
   });
+
+  it('resets create-mode form fields when the modal closes and reapplies edit severity on reopen', async () => {
+    const wrapper = mountModal({
+      existingRule: {
+        id: 'r1',
+        eventId: 'e1',
+        eventKey: 'A',
+        severity: NotificationSeverity.WARNING,
+      },
+    });
+
+    const select = wrapper.find('select');
+    await select.setValue('ERROR');
+    await wrapper.setProps({ show: false });
+    await wrapper.setProps({ show: true });
+
+    expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('WARNING');
+
+    const createWrapper = mountModal();
+    await createWrapper.findAll('select')[0].setValue('e1');
+    await createWrapper.findAll('select')[1].setValue('ERROR');
+    await createWrapper.setProps({ show: false });
+    await createWrapper.setProps({ show: true });
+
+    expect((createWrapper.findAll('select')[0].element as HTMLSelectElement).value).toBe('');
+    expect((createWrapper.findAll('select')[1].element as HTMLSelectElement).value).toBe('');
+  });
 });

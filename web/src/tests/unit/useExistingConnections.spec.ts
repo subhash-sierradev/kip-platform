@@ -249,7 +249,7 @@ describe('useExistingConnections', () => {
   });
 
   describe('verifyButtonText', () => {
-    it('should show "Verifying..." during test', async () => {
+    it('should show "Testing..." during test', async () => {
       let resolveTest: any;
       vi.mocked(IntegrationConnectionService.testExistingConnection).mockReturnValue(
         new Promise(resolve => {
@@ -262,13 +262,13 @@ describe('useExistingConnections', () => {
       const promise = verifyConnection('conn-1');
 
       await new Promise(resolve => setTimeout(resolve, 0));
-      expect(verifyButtonText.value).toBe('Verifying...');
+      expect(verifyButtonText.value).toBe('Testing...');
 
       resolveTest({ success: true, connectionStatus: 'SUCCESS' });
       await promise;
     });
 
-    it('should show "Verified ✓" after successful test', async () => {
+    it('should show "Connection Verified" after successful test', async () => {
       vi.mocked(IntegrationConnectionService.testExistingConnection).mockResolvedValue({
         success: true,
         connectionStatus: 'SUCCESS',
@@ -278,10 +278,10 @@ describe('useExistingConnections', () => {
 
       await verifyConnection('conn-1');
 
-      expect(verifyButtonText.value).toBe('Verified ✓');
+      expect(verifyButtonText.value).toBe('Connection Verified');
     });
 
-    it('should show "Failed ✗" after failed test', async () => {
+    it('should show "Verification Failed" after failed test', async () => {
       vi.mocked(IntegrationConnectionService.testExistingConnection).mockResolvedValue({
         lastConnectionStatus: 'FAILED',
       } as any);
@@ -290,7 +290,7 @@ describe('useExistingConnections', () => {
 
       await verifyConnection('conn-1');
 
-      expect(verifyButtonText.value).toBe('Failed ✗');
+      expect(verifyButtonText.value).toBe('Verification Failed');
     });
   });
 

@@ -3,7 +3,7 @@
 // Includes both legacy individual mapping functions and unified mapping approach
 import type { ArcGISFormData } from '@/types/ArcGISFormData';
 
-import { convertUtcTimeToUserTimezone } from './scheduleDisplayUtils';
+import { convertUtcDateTimeToLocal, getUserTimezone } from './timezoneUtils';
 
 interface DetailData {
   name?: string;
@@ -220,8 +220,7 @@ export function mapScheduleData(schedule: ScheduleData, formData: AnyFormData) {
     return;
   }
 
-  applyExecutionDate(schedule, formData);
-  applyExecutionTime(schedule, formData);
+  applyExecutionDateAndTime(schedule, formData);
   applyFrequencyFields(schedule, formData);
   applyScheduleSelections(schedule, formData);
   applyCronAndFlags(schedule, formData);
@@ -234,14 +233,29 @@ export function mapScheduleData(schedule: ScheduleData, formData: AnyFormData) {
   }
 }
 
-function applyExecutionDate(schedule: ScheduleData, formData: AnyFormData): void {
-  formData.executionDate = formatDateForInput(schedule.executionDate || '');
-}
+/**
+ * Convert UTC executionDate + executionTime from the backend into the LOCAL calendar date
+ * and LOCAL time for form inputs, using the browser's timezone.
+ * Both backend fields are UTC — they must be combined as a UTC instant before converting.
+ */
+function applyExecutionDateAndTime(schedule: ScheduleData, formData: AnyFormData): void {
+  if (!schedule.executionTime) {
+    formData.executionDate = formatDateForInput(schedule.executionDate || '');
+    formData.executionTime = '';
+    return;
+  }
 
-function applyExecutionTime(schedule: ScheduleData, formData: AnyFormData): void {
-  formData.executionTime = schedule.executionTime
-    ? convertUtcTimeToUserTimezone(schedule.executionTime, schedule.executionDate)
-    : '';
+  // When executionDate is absent (e.g. end-of-month schedules where no specific date is
+  // stored), use today's UTC date as an anchor so the UTC→local conversion still applies
+  // the correct timezone offset and normalises the value to HH:mm.
+  const anchorDate = schedule.executionDate ?? new Date().toISOString().split('T')[0];
+  const { localDate, localTime } = convertUtcDateTimeToLocal(
+    anchorDate,
+    schedule.executionTime,
+    getUserTimezone()
+  );
+  formData.executionDate = schedule.executionDate ? localDate : '';
+  formData.executionTime = localTime;
 }
 
 function applyFrequencyFields(schedule: ScheduleData, formData: AnyFormData): void {

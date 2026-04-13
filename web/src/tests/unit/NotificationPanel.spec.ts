@@ -139,6 +139,25 @@ describe('NotificationPanel', () => {
     expect(markAsRead).toHaveBeenCalledWith(['n1']);
   });
 
+  it('does not mark notifications as read when the selected row is already read', async () => {
+    storeState.notifications = [
+      {
+        id: 'n1',
+        isRead: true,
+        severity: 'INFO',
+        title: 'Title',
+        message: 'Message',
+        createdDate: new Date().toISOString(),
+      },
+    ] as any;
+
+    const wrapper = mount(NotificationPanel);
+    await wrapper.find('.notification-item-row').trigger('click');
+
+    expect(storeState.markReadLocal).not.toHaveBeenCalled();
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
   it('marks all unread and refreshes on API failure', async () => {
     storeState.notifications = [
       {
@@ -168,6 +187,36 @@ describe('NotificationPanel', () => {
     expect(storeState.markAllReadLocal).toHaveBeenCalled();
     expect(markAllAsRead).toHaveBeenCalled();
     expect(storeState.refreshNotifications).toHaveBeenCalled();
+  });
+
+  it('returns early when mark-all is requested with zero unread notifications', async () => {
+    const wrapper = mount(NotificationPanel);
+
+    await (wrapper.vm as any).handleMarkAllRead();
+
+    expect(storeState.markAllReadLocal).not.toHaveBeenCalled();
+    expect(markAllAsRead).not.toHaveBeenCalled();
+  });
+
+  it('marks all unread notifications without refreshing when the API succeeds', async () => {
+    storeState.notifications = [
+      {
+        id: 'n1',
+        isRead: false,
+        severity: 'WARNING',
+        title: 'A',
+        message: 'a',
+        createdDate: new Date().toISOString(),
+      },
+    ] as any;
+    storeState.unreadCount = 1;
+
+    const wrapper = mount(NotificationPanel);
+    await (wrapper.vm as any).handleMarkAllRead();
+
+    expect(storeState.markAllReadLocal).toHaveBeenCalled();
+    expect(storeState.refreshNotifications).not.toHaveBeenCalled();
+    expect((wrapper.vm as any).markingAll).toBe(false);
   });
 
   it('deletes a notification row and calls delete API', async () => {

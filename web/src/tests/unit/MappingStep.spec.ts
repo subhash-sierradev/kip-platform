@@ -585,4 +585,214 @@ describe('MappingStep', () => {
     // Should not add space at start
     expect(element.value).toMatch(/^\{\{/);
   });
+
+  it('opens the insert modal for description and inserts the selected placeholder', async () => {
+    const wrapper = mount(MappingStep, {
+      props: { ...props, mappingData: { ...props.mappingData, descriptionFieldMapping: 'Desc' } },
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    const insertButtons = wrapper.findAll('.ms-field .ps-add-icon');
+    expect(insertButtons.length).toBeGreaterThan(1);
+
+    await insertButtons[1].trigger('click');
+    await wrapper.find('.ms-field-item').trigger('click');
+
+    const descriptionTextarea = wrapper.find('textarea:not(.ms-textarea--summary)');
+    expect((descriptionTextarea.element as HTMLTextAreaElement).value).toContain('{{');
+  });
+
+  it('routes field insertion to the custom fields panel when opened from a custom row', async () => {
+    const insertJsonPlaceholder = vi.fn();
+    const CustomFieldPanelWithExpose = {
+      name: 'CustomFieldsPanel',
+      emits: ['update:rows', 'valid-change', 'open-insert', 'toggle-preview'],
+      setup(_: unknown, { emit }: { emit: (event: string, payload?: unknown) => void }) {
+        return {
+          emitOpenInsert: () => emit('open-insert', { rowIndex: 2 }),
+          insertJsonPlaceholder,
+        };
+      },
+      template: '<button class="custom-open-insert" @click="emitOpenInsert">custom</button>',
+    };
+
+    const wrapper = mount(MappingStep, {
+      props,
+      global: { stubs: { CustomFieldsPanel: CustomFieldPanelWithExpose } },
+    });
+
+    await wrapper.find('.custom-open-insert').trigger('click');
+    await wrapper.find('.ms-field-item').trigger('click');
+
+    expect(insertJsonPlaceholder).toHaveBeenCalledWith(expect.stringContaining('{{'));
+  });
+
+  it('emits the parent label payload from the selects component', async () => {
+    const wrapper = mount(MappingStep, {
+      props,
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    const selects = wrapper.findComponent({ name: 'ProjectIssueAssigneeSelects' });
+    selects.vm.$emit('parent-label-change', { value: 'SCRUM-1', label: 'Parent Issue' });
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.emitted('parent-label-change')).toEqual([
+      [{ value: 'SCRUM-1', label: 'Parent Issue' }],
+    ]);
+  });
+
+  it('updates and hides the action tooltip through the direct handlers', () => {
+    const wrapper = mount(MappingStep, {
+      props,
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    (wrapper.vm as any).onActionEnter('Preview help', { clientX: 10, clientY: 20 } as MouseEvent);
+    expect((wrapper.vm as any).actionTipVisible).toBe(true);
+    expect((wrapper.vm as any).actionTipText).toBe('Preview help');
+    expect((wrapper.vm as any).actionTipX).toBe(22);
+    expect((wrapper.vm as any).actionTipY).toBe(32);
+
+    (wrapper.vm as any).onActionMove({ clientX: 30, clientY: 40 } as MouseEvent);
+    expect((wrapper.vm as any).actionTipX).toBe(42);
+    expect((wrapper.vm as any).actionTipY).toBe(52);
+
+    (wrapper.vm as any).onActionLeave();
+    expect((wrapper.vm as any).actionTipVisible).toBe(false);
+  });
+
+  it('does not remote-search parent issues for short queries', async () => {
+    const parentIssuesSpy = vi.mocked(JiraIntegrationService.getProjectParentIssuesByConnectionId);
+    parentIssuesSpy.mockClear();
+
+    const wrapper = mount(MappingStep, {
+      props: {
+        ...props,
+        issueTypes: [{ id: 'SUB', name: 'Sub-task', subtask: true }],
+        mappingData: {
+          ...props.mappingData,
+          selectedProject: 'PR',
+          selectedIssueType: 'SUB',
+          summary: 'Issue summary',
+        },
+      },
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    await wrapper.vm.$nextTick();
+    await Promise.resolve();
+    parentIssuesSpy.mockClear();
+
+    await (wrapper.vm as any).onParentSearch('abc');
+
+    expect(parentIssuesSpy).not.toHaveBeenCalled();
+  });
+
+  it('clears dependent fields and removes parent mapping when project changes', async () => {
+    const wrapper = mount(MappingStep, {
+      props: {
+        ...props,
+        issueTypes: [{ id: 'SUB', name: 'Sub-task', subtask: true }],
+        mappingData: {
+          ...props.mappingData,
+          selectedProject: 'PR',
+          selectedIssueType: 'SUB',
+          selectedAssignee: 'u1',
+          summary: 'Issue summary',
+          customFields: [
+            {
+              _id: 'parent-1',
+              jiraFieldKey: 'parent',
+              jiraFieldLabel: 'Parent',
+              type: 'object',
+              required: true,
+              valueSource: 'literal',
+              value: '{"key":"SCRUM-1"}',
+            },
+          ],
+        },
+      },
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    (wrapper.vm as any).onProjectChange();
+    await wrapper.vm.$nextTick();
+
+    const mappingEvents = wrapper.emitted('update:mappingData');
+    expect(mappingEvents).toBeTruthy();
+    const lastMapping = mappingEvents![mappingEvents!.length - 1][0] as any;
+    expect(lastMapping.selectedIssueType).toBe('');
+    expect(lastMapping.selectedAssignee).toBe('');
+    expect(lastMapping.customFields).toEqual([]);
+  });
+
+  it('removes parent mapping when issue type changes to a known non-subtask type', async () => {
+    const wrapper = mount(MappingStep, {
+      props: {
+        ...props,
+        issueTypes: [{ id: 'BUG', name: 'Bug', subtask: false }],
+        mappingData: {
+          ...props.mappingData,
+          selectedProject: 'PR',
+          selectedIssueType: 'BUG',
+          summary: 'Issue summary',
+          customFields: [
+            {
+              _id: 'parent-1',
+              jiraFieldKey: 'parent',
+              jiraFieldLabel: 'Parent',
+              type: 'object',
+              required: true,
+              valueSource: 'literal',
+              value: '{"key":"SCRUM-1"}',
+            },
+          ],
+        },
+      },
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    (wrapper.vm as any).onIssueTypeChange();
+    await wrapper.vm.$nextTick();
+
+    const mappingEvents = wrapper.emitted('update:mappingData');
+    const lastMapping = mappingEvents![mappingEvents!.length - 1][0] as any;
+    expect(lastMapping.customFields).toEqual([]);
+  });
+
+  it('keeps parent mapping when issue type is unknown', async () => {
+    const wrapper = mount(MappingStep, {
+      props: {
+        ...props,
+        issueTypes: [{ id: 'BUG', name: 'Bug', subtask: false }],
+        mappingData: {
+          ...props.mappingData,
+          selectedProject: 'PR',
+          selectedIssueType: 'UNKNOWN',
+          summary: 'Issue summary',
+          customFields: [
+            {
+              _id: 'parent-1',
+              jiraFieldKey: 'parent',
+              jiraFieldLabel: 'Parent',
+              type: 'object',
+              required: true,
+              valueSource: 'literal',
+              value: '{"key":"SCRUM-1"}',
+            },
+          ],
+        },
+      },
+      global: { stubs: { CustomFieldsPanel: StubPanel } },
+    });
+
+    (wrapper.vm as any).onIssueTypeChange();
+    await wrapper.vm.$nextTick();
+
+    const mappingEvents = wrapper.emitted('update:mappingData');
+    const lastMapping = mappingEvents![mappingEvents!.length - 1][0] as any;
+    expect(lastMapping.customFields).toHaveLength(1);
+    expect(lastMapping.customFields[0].jiraFieldKey).toBe('parent');
+  });
 });

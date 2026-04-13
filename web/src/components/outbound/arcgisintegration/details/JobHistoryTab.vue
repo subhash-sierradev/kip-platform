@@ -65,8 +65,9 @@
           </template>
           <template #addedTemplate="{ data: row }">
             <div class="count-cell">
+              <span v-if="row.status === 'RUNNING'" class="count-badge">-</span>
               <span
-                v-if="row.addedRecords > 0"
+                v-else-if="row.addedRecords > 0"
                 class="count-badge clickable success"
                 @click="showMetadataDetails('added', row)"
               >
@@ -77,8 +78,9 @@
           </template>
           <template #updatedTemplate="{ data: row }">
             <div class="count-cell">
+              <span v-if="row.status === 'RUNNING'" class="count-badge">-</span>
               <span
-                v-if="row.updatedRecords > 0"
+                v-else-if="row.updatedRecords > 0"
                 class="count-badge clickable info"
                 @click="showMetadataDetails('updated', row)"
               >
@@ -89,8 +91,9 @@
           </template>
           <template #failedTemplate="{ data: row }">
             <div class="count-cell">
+              <span v-if="row.status === 'RUNNING'" class="count-badge">-</span>
               <span
-                v-if="row.failedRecords > 0"
+                v-else-if="row.failedRecords > 0"
                 class="count-badge clickable error"
                 @click="showMetadataDetails('failed', row)"
                 :title="row.errorMessage || ''"
@@ -102,8 +105,9 @@
           </template>
           <template #totalTemplate="{ data: row }">
             <div class="count-cell">
+              <span v-if="row.status === 'RUNNING'" class="count-badge">-</span>
               <span
-                v-if="row.totalRecords > 0"
+                v-else-if="row.totalRecords > 0"
                 class="count-badge clickable total"
                 @click="showMetadataDetails('all', row)"
               >

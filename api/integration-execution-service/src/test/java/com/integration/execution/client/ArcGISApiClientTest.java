@@ -7,6 +7,7 @@ import com.integration.execution.contract.model.BasicAuthCredential;
 import com.integration.execution.contract.model.IntegrationSecret;
 import com.integration.execution.contract.model.OAuthClientCredential;
 import com.integration.execution.contract.model.enums.CredentialAuthType;
+import com.integration.execution.contract.rest.response.arcgis.ArcGISFieldDto;
 import com.integration.execution.exception.IntegrationApiException;
 import com.integration.execution.service.VaultService;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequest;
@@ -24,9 +25,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.List;
 
 @ExtendWith(MockitoExtension.class)
 class ArcGISApiClientTest {
@@ -58,6 +62,22 @@ class ArcGISApiClientTest {
 
         assertThat(token).isEqualTo("cached-token");
         verify(vaultService, never()).getSecret(anyString());
+    }
+
+    @Test
+    void getAccessToken_cacheMiss_fetchesSecretFromVault() throws Exception {
+        IntegrationSecret secret = oauthSecret("https://example.com/FeatureServer");
+        when(tokenCache.getValidToken("secret")).thenReturn(null);
+        when(vaultService.getSecret("secret")).thenReturn(secret);
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"access_token\":\"fresh-token\",\"expires_in\":120}"));
+        mockHttpExecution(classicHttpResponse);
+
+        String token = client.getAccessToken("secret");
+
+        assertThat(token).isEqualTo("fresh-token");
+        verify(vaultService).getSecret("secret");
     }
 
     @Test
@@ -289,6 +309,64 @@ class ArcGISApiClientTest {
         assertThatThrownBy(() -> client.applyEditsWithPartition("secret", "{\"adds\":[],\"updates\":[]}"))
                 .isInstanceOf(IntegrationApiException.class)
                 .hasMessageContaining("ArcGIS applyEdits failed");
+    }
+
+    @Test
+    void fetchArcGISFields_whenFieldsMissing_returnsEmptyList() {
+        ArcGISApiClient spyClient = org.mockito.Mockito.spy(client);
+        doReturn(new ObjectMapper().createObjectNode())
+                .when(spyClient).queryFeatures("secret");
+
+        assertThat(spyClient.fetchArcGISFields("secret")).isEmpty();
+    }
+
+    @Test
+    void fetchArcGISFields_mapsNullableAndPresentFieldValues() throws Exception {
+        ArcGISApiClient spyClient = org.mockito.Mockito.spy(client);
+        ObjectMapper objectMapper = new ObjectMapper();
+        JsonNode root = objectMapper.readTree("""
+                {
+                  "fields": [
+                    {
+                      "name": "external_location_id",
+                      "type": "esriFieldTypeString",
+                      "alias": "External Location Id",
+                      "sqlType": "sqlTypeNVarchar",
+                      "nullable": false,
+                      "editable": true,
+                      "length": 255,
+                      "precision": 0,
+                      "description": "external id",
+                      "defaultValue": "n/a",
+                      "domain": {"type": "codedValue"}
+                    },
+                    {
+                      "name": "optional_field",
+                      "type": "esriFieldTypeInteger",
+                      "alias": "Optional",
+                      "sqlType": "sqlTypeInteger",
+                      "nullable": true,
+                      "editable": false,
+                      "length": null,
+                      "precision": null,
+                      "description": null,
+                      "defaultValue": null,
+                      "domain": null
+                    }
+                  ]
+                }
+                """);
+        doReturn(root).when(spyClient).queryFeatures("secret");
+
+        List<ArcGISFieldDto> fields = spyClient.fetchArcGISFields("secret");
+
+        assertThat(fields).hasSize(2);
+        assertThat(fields.get(0).getName()).isEqualTo("external_location_id");
+        assertThat(fields.get(0).getLength()).isEqualTo(255);
+        assertThat(fields.get(0).getDescription()).isEqualTo("external id");
+        assertThat(fields.get(1).getLength()).isNull();
+        assertThat(fields.get(1).getDescription()).isNull();
+        assertThat(fields.get(1).getDefaultValue()).isNull();
     }
 
     private void mockHttpExecution(ClassicHttpResponse response) throws Exception {

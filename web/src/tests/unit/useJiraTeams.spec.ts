@@ -72,4 +72,26 @@ describe('useJiraTeams', () => {
     expect(items.value).toEqual([]);
     expect(options.value).toEqual([]);
   });
+
+  it('normalizes non-array responses to an empty list', async () => {
+    getTeamsByConnectionId.mockResolvedValueOnce({ items: [] } as any);
+
+    const { search, items, options, error } = useJiraTeams({ connectionId: 'conn-4' });
+    await search('ops');
+
+    expect(error.value).toBeNull();
+    expect(items.value).toEqual([]);
+    expect(options.value).toEqual([]);
+  });
+
+  it('uses a fallback error message for non-Error rejections', async () => {
+    getTeamsByConnectionId.mockRejectedValueOnce({});
+
+    const { search, error, loading, items } = useJiraTeams({ connectionId: 'conn-10' });
+    await search('ops');
+
+    expect(loading.value).toBe(false);
+    expect(error.value).toBe('Failed to load teams');
+    expect(items.value).toEqual([]);
+  });
 });

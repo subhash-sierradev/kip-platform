@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+// Make getUserTimezone deterministic so applyExecutionDateAndTime conversions are consistent.
+// With UTC as the timezone, UTC instant → local date/time is identity (no offset).
+vi.mock('@/utils/timezoneUtils', async () => {
+  const actual = await vi.importActual('@/utils/timezoneUtils');
+  return { ...actual, getUserTimezone: vi.fn(() => 'UTC') };
+});
+
 import {
   formatDateForInput,
   mapArcGISDetailToFormData,
@@ -540,6 +547,7 @@ describe('arcgisWizardMappingHelpers', () => {
       mapScheduleData(schedule, formData);
 
       expect(formData.executionDate).toBe('2024-03-15');
+      expect(formData.executionTime).toBe('14:30'); // UTC 14:30 → UTC local = 14:30
       expect(formData.frequencyPattern).toBe('DAILY');
       expect(formData.dailyFrequency).toBe('4');
       expect(formData.dailyFrequencyRule).toBe('4');
@@ -565,6 +573,20 @@ describe('arcgisWizardMappingHelpers', () => {
       mapScheduleData(schedule, formData);
 
       expect(formData.executionTime).toBe('');
+    });
+
+    it('converts executionTime UTC→local HH:mm when executionDate is absent (end-of-month)', () => {
+      // getUserTimezone() is mocked to 'UTC', so UTC 14:30:00 → local 14:30 (no offset).
+      // Critically, the raw HH:mm:ss must NOT be passed through; it must be normalised to HH:mm.
+      const schedule = {
+        frequencyPattern: 'MONTHLY',
+        isExecuteOnMonthEnd: true,
+        executionTime: '14:30:00',
+      };
+      mapScheduleData(schedule, formData);
+
+      expect(formData.executionDate).toBe('');
+      expect(formData.executionTime).toBe('14:30');
     });
 
     it('defaults dailyFrequencyRule to 12 when dailyExecutionInterval is missing', () => {

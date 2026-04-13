@@ -21,7 +21,7 @@
         @input="onQueryInput"
         @keydown.stop
       />
-      <span class="ms-chevron">▾</span>
+      <span class="ms-chevron" aria-hidden="true"></span>
     </div>
 
     <div v-if="dropdownOpen" class="ms-dropdown" :class="dropdownPlacement" ref="dropdownRef">

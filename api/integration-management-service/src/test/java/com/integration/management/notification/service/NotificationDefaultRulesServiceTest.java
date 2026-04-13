@@ -63,7 +63,7 @@ class NotificationDefaultRulesServiceTest {
 
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(false);
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of(event));
             when(notificationRuleRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
             when(recipientPolicyRepository.saveAll(any())).thenReturn(List.of());
@@ -80,7 +80,7 @@ class NotificationDefaultRulesServiceTest {
         @DisplayName("returns zero when no applicable events are found")
         void returns_zero_when_no_events() {
             when(serviceTypeAuth.hasAccessToServiceType(any())).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of());
 
             int result = notificationDefaultRulesService
@@ -95,7 +95,7 @@ class NotificationDefaultRulesServiceTest {
         void includes_jira_types_when_has_jira_role() {
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(true);
             when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of());
 
             notificationDefaultRulesService.initializeDefaultRulesForTenant(TENANT_ID, USER_ID);
@@ -103,10 +103,34 @@ class NotificationDefaultRulesServiceTest {
             @SuppressWarnings("unchecked")
             ArgumentCaptor<java.util.Set<NotificationEntityType>> captor =
                     ArgumentCaptor.forClass(java.util.Set.class);
-            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeIn(captor.capture());
+            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(captor.capture());
             assertThat(captor.getValue()).contains(
                     NotificationEntityType.JIRA_WEBHOOK,
                     NotificationEntityType.INTEGRATION_CONNECTION);
+        }
+
+        @Test
+        @DisplayName("includes CONFLUENCE_INTEGRATION and INTEGRATION_CONNECTION when user has Confluence role")
+        void includes_confluence_type_and_connection_when_has_confluence_role() {
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.JIRA)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.ARCGIS)).thenReturn(false);
+            when(serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE)).thenReturn(true);
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
+                    .thenReturn(List.of());
+
+            notificationDefaultRulesService.initializeDefaultRulesForTenant(TENANT_ID, USER_ID);
+
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<java.util.Set<NotificationEntityType>> captor =
+                    ArgumentCaptor.forClass(java.util.Set.class);
+            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(captor.capture());
+            assertThat(captor.getValue())
+                    .contains(
+                            NotificationEntityType.CONFLUENCE_INTEGRATION,
+                            NotificationEntityType.INTEGRATION_CONNECTION)
+                    .doesNotContain(
+                            NotificationEntityType.JIRA_WEBHOOK,
+                            NotificationEntityType.ARCGIS_INTEGRATION);
         }
 
         @Test
@@ -115,7 +139,7 @@ class NotificationDefaultRulesServiceTest {
             NotificationEventCatalog event = buildEvent("SITE_CONFIG_UPDATED",
                     NotificationEntityType.SITE_CONFIG);
             when(serviceTypeAuth.hasAccessToServiceType(any())).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of(event));
             when(notificationRuleRepository.saveAll(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -150,7 +174,7 @@ class NotificationDefaultRulesServiceTest {
             when(recipientUserRepository.findByRecipientPolicyId(policy.getId()))
                     .thenReturn(List.of(user));
             when(serviceTypeAuth.hasAccessToServiceType(any())).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of());
 
             notificationDefaultRulesService.resetRulesToDefaults(TENANT_ID, USER_ID);
@@ -172,14 +196,14 @@ class NotificationDefaultRulesServiceTest {
                     .findByTenantIdOrderByLastModifiedDateDesc(TENANT_ID))
                     .thenReturn(List.of());
             when(serviceTypeAuth.hasAccessToServiceType(any())).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of());
 
             int result = notificationDefaultRulesService
                     .resetRulesToDefaults(TENANT_ID, USER_ID);
 
             assertThat(result).isZero();
-            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeIn(any());
+            verify(eventCatalogRepository).findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any());
         }
     }
 
@@ -252,7 +276,7 @@ class NotificationDefaultRulesServiceTest {
             NotificationEventCatalog event = buildEvent(eventKey,
                     NotificationEntityType.SITE_CONFIG);
             when(serviceTypeAuth.hasAccessToServiceType(any())).thenReturn(false);
-            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeIn(any()))
+            when(eventCatalogRepository.findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(any()))
                     .thenReturn(List.of(event));
 
             ArgumentCaptor<List<NotificationRule>> ruleCaptor =

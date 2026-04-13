@@ -107,6 +107,57 @@ describe('jiraFieldMappingUtils.createFieldMappings', () => {
     expect(byId('cf10').dataType).toBe('NUMBER');
     expect(byId('cf10').metadata).toEqual({ fieldType: 'sprint' });
   });
+
+  it('stores comma-separated usernames in displayLabel for multiuser custom fields', () => {
+    const data: MappingData = {
+      selectedProject: 'P1',
+      selectedIssueType: 'IT1',
+      selectedAssignee: '',
+      summary: 'x',
+      descriptionFieldMapping: '',
+      customFields: [
+        {
+          jiraFieldKey: 'approver',
+          jiraFieldLabel: 'Approver',
+          value: 'U1,U2,unknown',
+          type: 'multiuser',
+          valueSource: 'literal',
+        },
+      ] as any,
+    };
+
+    const out = createFieldMappings(data, projects, issueTypes, [
+      ...users,
+      { accountId: 'U2', displayName: 'Bob' },
+    ]);
+    const approver = out.find(field => field.jiraFieldId === 'approver');
+
+    expect(approver?.displayLabel).toBe('Alice, Bob, unknown');
+  });
+
+  it('stores selected parent key+text in displayLabel when key matches', () => {
+    const data: MappingData = {
+      selectedProject: 'P1',
+      selectedIssueType: 'IT1',
+      selectedAssignee: '',
+      summary: 'x',
+      descriptionFieldMapping: '',
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          value: '{"key":"PRJ-101"}',
+          type: 'object',
+          valueSource: 'literal',
+        },
+      ] as any,
+    };
+
+    const out = createFieldMappings(data, projects, issueTypes, users, 'PRJ-101 - Parent one');
+    const parent = out.find(field => field.jiraFieldId === 'parent');
+
+    expect(parent?.displayLabel).toBe('PRJ-101 - Parent one');
+  });
 });
 
 describe('jiraFieldMappingUtils', () => {

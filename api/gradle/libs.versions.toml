@@ -1,0 +1,117 @@
+[versions]
+java = "25"
+springBoot = "4.0.5"
+springBootAop = "3.5.13"
+springCloud = "2025.1.1"
+lombok = "1.18.42"
+mapstruct = "1.6.3"
+postgresql = "42.7.7"
+flyway = "11.20.0"
+hibernate = "7.1.8.Final"
+jakartaValidation = "3.1.1"
+jakartaJson = "2.1.3"
+parsson = "1.1.7"
+commonsValidator = "1.10.1"
+commonsLang3 = "3.18.0"
+caffeine = "3.2.3"
+httpclient5 = "5.6"
+httpcore5 = "5.4"
+springRetry = "2.0.12"
+joltCore = "0.1.8"
+resilience4j = "2.3.0"
+azureSdkBom = "1.3.3"
+azureKeyvaultSecrets = "4.10.4"
+azureIdentity = "1.18.1"
+junit = "6.0.3"
+mockito = "5.14.2"
+jacoco = "0.8.14"
+testcontainers = "1.20.4"
+wiremock = "3.13.1"
+checkstyle = "10.12.4"
+jacksonAnnotations = "2.21"
+jacksonDatabind = "2.21.2"
+hibernateValidator = "8.0.1.Final"
+freemarker = "2.3.34"
+
+[libraries]
+# Spring Boot
+spring-boot-starter = { module = "org.springframework.boot:spring-boot-starter" }
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
+spring-boot-starter-aop = { module = "org.springframework.boot:spring-boot-starter-aop", version.ref = "springBootAop" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-cache = { module = "org.springframework.boot:spring-boot-starter-cache" }
+spring-boot-starter-quartz = { module = "org.springframework.boot:spring-boot-starter-quartz" }
+spring-boot-starter-amqp = { module = "org.springframework.boot:spring-boot-starter-amqp" }
+spring-boot-starter-oauth2-resource-server = { module = "org.springframework.boot:spring-boot-starter-oauth2-resource-server" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
+spring-cloud-starter-openfeign = { module = "org.springframework.cloud:spring-cloud-starter-openfeign" }
+spring-data-commons = { module = "org.springframework.data:spring-data-commons" }
+spring-retry = { module = "org.springframework.retry:spring-retry", version.ref = "springRetry" }
+
+# Database
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-database-postgresql = { module = "org.flywaydb:flyway-database-postgresql", version.ref = "flyway" }
+
+# Validation
+jakarta-validation-api = { module = "jakarta.validation:jakarta.validation-api", version.ref = "jakartaValidation" }
+hibernate-validator = { module = "org.hibernate.validator:hibernate-validator", version.ref = "hibernateValidator" }
+
+# Jackson
+jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jacksonAnnotations" }
+jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jacksonDatabind" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310" }
+
+# MapStruct
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+
+# Lombok
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+lombok-mapstruct-binding = { module = "org.projectlombok:lombok-mapstruct-binding", version = "0.2.0" }
+
+# Caching
+caffeine = { module = "com.github.ben-manes.caffeine:caffeine", version.ref = "caffeine" }
+
+# HTTP
+httpclient5 = { module = "org.apache.httpcomponents.client5:httpclient5", version.ref = "httpclient5" }
+httpcore5 = { module = "org.apache.httpcomponents.core5:httpcore5", version.ref = "httpcore5" }
+
+# Transformation
+jolt-core = { module = "com.bazaarvoice.jolt:jolt-core", version.ref = "joltCore" }
+freemarker = { module = "org.freemarker:freemarker", version.ref = "freemarker" }
+
+# Resilience
+resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }
+resilience4j-ratelimiter = { module = "io.github.resilience4j:resilience4j-ratelimiter", version.ref = "resilience4j" }
+
+# Azure
+azure-keyvault-secrets = { module = "com.azure:azure-security-keyvault-secrets", version.ref = "azureKeyvaultSecrets" }
+azure-identity = { module = "com.azure:azure-identity", version.ref = "azureIdentity" }
+
+# Jakarta JSON
+jakarta-json-api = { module = "jakarta.json:jakarta.json-api", version.ref = "jakartaJson" }
+parsson = { module = "org.eclipse.parsson:parsson", version.ref = "parsson" }
+
+# Utilities
+commons-validator = { module = "commons-validator:commons-validator", version.ref = "commonsValidator" }
+commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "commonsLang3" }
+
+# Testing
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
+spring-security-test = { module = "org.springframework.security:spring-security-test" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api" }
+junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+mockito-junit-jupiter = { module = "org.mockito:mockito-junit-jupiter", version.ref = "mockito" }
+wiremock-standalone = { module = "org.wiremock:wiremock-standalone", version.ref = "wiremock" }
+assertj-core = { module = "org.assertj:assertj-core" }
+testcontainers = { module = "org.testcontainers:testcontainers", version.ref = "testcontainers" }
+testcontainers-junit-jupiter = { module = "org.testcontainers:junit-jupiter", version.ref = "testcontainers" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql", version.ref = "testcontainers" }
+testcontainers-rabbitmq = { module = "org.testcontainers:rabbitmq", version.ref = "testcontainers" }
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "springBoot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }

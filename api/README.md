@@ -62,7 +62,6 @@ KIP Backend automates data synchronization workflows:
 ### Prerequisites
 
 - Java 25 (JDK)
-- Maven 3.8+
 - PostgreSQL 14+
 - RabbitMQ 3.x
 - Azure subscription (or use dev fallback)
@@ -70,28 +69,25 @@ KIP Backend automates data synchronization workflows:
 ### Build & Run
 
 ```bash
-# Build entire project
-mvn clean install
+# Build entire project (run from api/)
+./gradlew clean build
 
 # Build specific module
-cd integration-execution-contract
-mvn clean install
+./gradlew :integration-execution-contract:build
 
 # Run management service (port 8085)
-cd integration-management-service
-mvn spring-boot:run
+./gradlew :integration-management-service:bootRun
 
 # Or run fat JAR
-mvn clean package
-java -jar target/integration-management-service-<version>.jar
+./gradlew :integration-management-service:bootJar
+java -jar integration-management-service/build/libs/integration-management-service-<version>.jar
 
 # Run execution service (port 8081 - separate terminal)
-cd integration-execution-service
-mvn spring-boot:run
+./gradlew :integration-execution-service:bootRun
 
 # Or run fat JAR
-mvn clean package
-java -jar target/integration-execution-service-<version>.jar
+./gradlew :integration-execution-service:bootJar
+java -jar integration-execution-service/build/libs/integration-execution-service-<version>.jar
 ```
 
 ### Access Services

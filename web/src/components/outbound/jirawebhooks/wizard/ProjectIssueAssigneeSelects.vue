@@ -82,7 +82,7 @@
               @click="toggleParentDropdown"
               aria-label="Toggle parent issue options"
             >
-              <span class="ms-search-select__caret">▾</span>
+              <span class="ms-search-select__caret" aria-hidden="true"></span>
             </button>
           </div>
 
@@ -93,19 +93,6 @@
             :id="parentListboxId"
             :aria-labelledby="parentComboboxId"
           >
-            <button
-              type="button"
-              class="ms-search-select__option"
-              role="option"
-              :id="getParentOptionId('__none__')"
-              :aria-selected="!parentValue"
-              :class="{ 'is-selected': !parentValue }"
-              @click="selectParentOption({ value: '', label: 'Select Parent Field' })"
-              @keydown="onParentOptionKeydown($event, { value: '', label: 'Select Parent Field' })"
-            >
-              Select Parent Field
-            </button>
-
             <button
               v-for="option in filteredParentFieldOptions"
               :key="option.value"
@@ -153,6 +140,7 @@ const emit = defineEmits<{
   (e: 'update:selectedProject', value: string): void;
   (e: 'update:selectedIssueType', value: string): void;
   (e: 'update:selectedParent', value: string): void;
+  (e: 'parent-label-change', payload: { value: string; label: string }): void;
   (e: 'update:selectedAssignee', value: string): void;
   (e: 'project-change'): void;
   (e: 'issue-type-change'): void;
@@ -187,6 +175,8 @@ const parentSearchTerm = ref('');
 const isParentDropdownOpen = ref(false);
 const parentDropdownRef = ref<HTMLElement | null>(null);
 const lastParentSearchQuery = ref('');
+const selectedParentKeyCache = ref('');
+const selectedParentLabelCache = ref('');
 const instanceUid = getCurrentInstance()?.uid ?? '0';
 const parentComboboxId = `parent-issue-combobox-${instanceUid}`;
 const parentListboxId = `parent-issue-listbox-${instanceUid}`;
@@ -213,6 +203,8 @@ function syncParentSearchTermWithSelection() {
   }
 
   if (!props.selectedParent) {
+    selectedParentKeyCache.value = '';
+    selectedParentLabelCache.value = '';
     parentSearchTerm.value = '';
     return;
   }
@@ -220,7 +212,23 @@ function syncParentSearchTermWithSelection() {
   const selected = (props.parentFieldOptions || []).find(
     option => option.value === props.selectedParent
   );
-  parentSearchTerm.value = selected?.label || props.selectedParent;
+  if (selected) {
+    selectedParentKeyCache.value = selected.value;
+    selectedParentLabelCache.value = selected.label;
+    parentSearchTerm.value = selected.label;
+    emit('parent-label-change', { value: selected.value, label: selected.label });
+    return;
+  }
+
+  if (
+    selectedParentKeyCache.value === props.selectedParent &&
+    selectedParentLabelCache.value.trim().length > 0
+  ) {
+    parentSearchTerm.value = selectedParentLabelCache.value;
+    return;
+  }
+
+  parentSearchTerm.value = props.selectedParent;
 }
 
 function openParentDropdown() {
@@ -267,9 +275,12 @@ function getParentOptionId(value: string): string {
 
 function selectParentOption(option: { value: string; label: string }) {
   parentValue.value = option.value;
+  selectedParentKeyCache.value = option.value;
+  selectedParentLabelCache.value = option.label;
   parentSearchTerm.value = option.label;
   isParentDropdownOpen.value = false;
   lastParentSearchQuery.value = '';
+  emit('parent-label-change', { value: option.value, label: option.label });
   emit('parent-change');
 }
 

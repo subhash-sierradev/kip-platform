@@ -6,11 +6,16 @@ import {
   cronToTextWithTimezone,
   cronToTextWithTimezoneUniversal,
   generateOccurrences,
+  type LocalOccurrence,
   parseQuartzCron,
   renderScheduleDescription,
   useCron,
   validateTimeZone,
-} from '@/composables/useCron';
+} from '@/composables/cron/useCron';
+import {
+  buildCronFieldDescription,
+  getMostCommonLocalTime,
+} from '@/composables/cron/useCronFieldDescription';
 
 describe('useCron', () => {
   it('accepts common Quartz expressions (including aliases)', () => {
@@ -951,12 +956,11 @@ describe('Cron Test Cases 41–65 – America/Anchorage', () => {
     expect(r.text).toMatch(/12:00 PM|11:00 AM/);
   });
 
-  // 50. Last weekday – named token SATL
-  it('50 – 0 0 23 ? * SATL → last Saturday at 3:00 PM', () => {
+  // 50. Named last-weekday tokens are rejected; numeric Quartz forms remain supported.
+  it('50 – 0 0 23 ? * SATL → invalid named last-weekday token', () => {
     const r = cronToTextWithTimezoneUniversal('0 0 23 ? * SATL', tz, ref);
-    expect(r.success).toBe(true);
-    expect(r.text).toMatch(/last Saturday/i);
-    expect(r.text).toMatch(/3:00 PM|2:00 PM/);
+    expect(r.success).toBe(false);
+    expect(r.error).toBe('Invalid cron expression');
   });
 
   // 51. DOM with date shift (07:10 UTC on 10th = 11:10 PM on local 9th)
@@ -1231,5 +1235,380 @@ describe('Additional Cron Test Cases – America/Anchorage (cases 22–40)', () 
     expect(r.text).toMatch(/every Sunday/i);
     expect(r.text).toMatch(/January.*June|June.*January/i);
     expect(r.text).toMatch(/4:00 AM|3:00 AM/);
+  });
+});
+
+const makeLocalOccurrence = (overrides: Partial<LocalOccurrence> = {}): LocalOccurrence => ({
+  utcDate: new Date('2026-01-15T09:00:00Z'),
+  localDate: '2026-01-15',
+  localTime: '9:00 AM',
+  offset: 'GMT+0',
+  ...overrides,
+});
+
+describe('Cron description edge branches', () => {
+  it('returns the empty-period message when analysis has no occurrences', () => {
+    const text = renderScheduleDescription({ type: 'empty', occurrences: [] } as any, 'UTC');
+    expect(text).toBe('No scheduled occurrences in the next period');
+  });
+
+  it('renders a single occurrence directly', () => {
+    const text = renderScheduleDescription(
+      {
+        type: 'single-occurrence',
+        occurrences: [
+          makeLocalOccurrence({
+            localDate: '2026-04-10',
+            localTime: '7:30 AM',
+            offset: 'GMT-4',
+          }),
+        ],
+      } as any,
+      'America/New_York'
+    );
+
+    expect(text).toBe('Runs on 2026-04-10 at 7:30 AM (GMT-4)');
+  });
+
+  it('falls back to a custom schedule for unknown analysis types', () => {
+    const text = renderScheduleDescription(
+      {
+        type: 'unexpected-pattern',
+        occurrences: [makeLocalOccurrence({ localTime: '11:45 AM' })],
+      } as any,
+      'UTC'
+    );
+
+    expect(text).toBe('Runs on a custom schedule at 11:45 AM');
+  });
+
+  it('renders interval patterns only when a regularity pattern is present', () => {
+    const withPattern = renderScheduleDescription(
+      {
+        type: 'interval',
+        regularityPattern: 'every 4 hours',
+        occurrences: [makeLocalOccurrence({ localTime: '8:00 AM' })],
+      } as any,
+      'UTC'
+    );
+    const withoutPattern = renderScheduleDescription(
+      {
+        type: 'interval',
+        occurrences: [makeLocalOccurrence({ localTime: '8:00 AM' })],
+      } as any,
+      'UTC'
+    );
+
+    expect(withPattern).toBe('Runs every 4 hours at 8:00 AM');
+    expect(withoutPattern).toBe('Runs on a custom schedule at 8:00 AM');
+  });
+
+  it('renders shifted last-day schedules from local occurrence dates', () => {
+    const text = renderScheduleDescription(
+      {
+        type: 'time-varies',
+        occurrences: [
+          makeLocalOccurrence({ localDate: '2025-12-31', localTime: '4:15 PM' }),
+          makeLocalOccurrence({ localDate: '2026-03-31', localTime: '4:15 PM' }),
+          makeLocalOccurrence({ localDate: '2026-06-30', localTime: '4:15 PM' }),
+          makeLocalOccurrence({ localDate: '2026-09-30', localTime: '4:15 PM' }),
+        ],
+      } as any,
+      'America/Anchorage'
+    );
+
+    expect(text).toContain('Runs at 4:15 PM on the last day of');
+    expect(text).toContain('December');
+    expect(text).toContain('March');
+    expect(text).toContain('June');
+    expect(text).toContain('September');
+  });
+
+  it('renders specific shifted local dates when there are only a few distinct dates', () => {
+    const text = renderScheduleDescription(
+      {
+        type: 'time-varies',
+        occurrences: [
+          makeLocalOccurrence({ localDate: '2026-01-14', localTime: '5:00 PM' }),
+          makeLocalOccurrence({ localDate: '2026-02-14', localTime: '5:00 PM' }),
+        ],
+      } as any,
+      'America/Anchorage'
+    );
+
+    expect(text).toBe('Runs at 5:00 PM on January 14th and February 14th');
+  });
+
+  it('falls back to the generic time-varies message when many shifted dates exist', () => {
+    const occurrences = Array.from({ length: 13 }, (_, index) =>
+      makeLocalOccurrence({
+        localDate: `2026-${String((index % 12) + 1).padStart(2, '0')}-${String((index % 27) + 1).padStart(2, '0')}`,
+        localTime: '6:00 PM',
+      })
+    );
+
+    const text = renderScheduleDescription(
+      {
+        type: 'time-varies',
+        occurrences,
+      } as any,
+      'UTC'
+    );
+
+    expect(text).toBe('Runs around 6:00 PM with local time changes');
+  });
+
+  it('returns a no-occurrence result when the lookahead window contains no matching dates', () => {
+    const result = cronToTextWithTimezoneUniversal('0 0 0 29 FEB ?', 'UTC', '2026-03-01', 300);
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('No scheduled occurrences in the next period');
+    expect(result.isDateRangeShift).toBe(false);
+  });
+
+  it('renders winter Anchorage monthly schedules using the shifted previous-day local date', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 0 5 1 * ?',
+      'America/Anchorage',
+      '2026-01-15',
+      35
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 8:00 PM on January 31st');
+    expect(result.timezoneLabel).toContain('America/Anchorage');
+    expect(result.isDateRangeShift).toBe(true);
+  });
+
+  it('renders summer Anchorage monthly schedules using the shifted previous-day local date', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 0 5 1 * ?',
+      'America/Anchorage',
+      '2026-06-15',
+      35
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 9:00 PM on June 30th');
+    expect(result.timezoneLabel).toContain('America/Anchorage');
+    expect(result.isDateRangeShift).toBe(true);
+  });
+
+  it('renders Anchorage last-day UTC schedules as the second-to-last local day using the displayed offset', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 0 2 L * ?',
+      'America/Anchorage',
+      '2026-04-07',
+      60
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 6:00 PM on the second-to-last day of every month');
+    expect(result.timezoneLabel).toContain('America/Anchorage');
+    expect(result.timezoneLabel).toContain('GMT-08:00');
+    expect(result.isDateRangeShift).toBe(true);
+  });
+
+  it('renders last-day UTC schedules that roll forward into the first local day of the next month', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 0 23 L * ?',
+      'Asia/Kolkata',
+      '2026-04-07',
+      60
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 4:30 AM on the first day of every month');
+    expect(result.timezoneLabel).toContain('Asia/Kolkata');
+    expect(result.timezoneLabel).toContain('GMT+05:30');
+    expect(result.isDateRangeShift).toBe(true);
+  });
+
+  it('renders month-specific last-day UTC schedules that roll into the first local day of the next month', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 0 23 L 2 ?',
+      'Asia/Kolkata',
+      '2026-01-15',
+      80
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 4:30 AM on the first day of March every year');
+    expect(result.timezoneLabel).toContain('Asia/Kolkata');
+    expect(result.timezoneLabel).toContain('GMT+05:30');
+    expect(result.isDateRangeShift).toBe(true);
+  });
+
+  it('treats step-based cron fields as valid schedules without date-shift detection metadata', () => {
+    const result = cronToTextWithTimezoneUniversal('0 */15 * * * ?', 'UTC', '2026-03-01');
+
+    expect(result.success).toBe(true);
+    expect(result.isDateRangeShift).toBe(false);
+    expect(result.text).toMatch(/every 15 minutes/i);
+  });
+
+  it('rejects invalid Quartz special-field combinations', () => {
+    expect(cronToTextWithTimezoneUniversal('0 0 9 L * MON', 'UTC', '2026-03-01').success).toBe(
+      false
+    );
+    expect(cronToTextWithTimezoneUniversal('0 0 9 ? * XXL', 'UTC', '2026-03-01').success).toBe(
+      false
+    );
+    expect(cronToTextWithTimezoneUniversal('0 0 9 ? * ZZ#2', 'UTC', '2026-03-01').success).toBe(
+      false
+    );
+  });
+});
+
+describe('Cron field description helpers', () => {
+  it('returns the most common local time and null for empty occurrence arrays', () => {
+    expect(getMostCommonLocalTime([])).toBeNull();
+    expect(
+      getMostCommonLocalTime([
+        makeLocalOccurrence({ localTime: '8:00 AM' }),
+        makeLocalOccurrence({ localTime: '8:00 AM' }),
+        makeLocalOccurrence({ localTime: '9:00 AM' }),
+      ])
+    ).toBe('8:00 AM');
+  });
+
+  it('returns null for invalid cron strings and valid cron strings without occurrences', () => {
+    expect(buildCronFieldDescription('invalid cron', 'UTC', [makeLocalOccurrence()])).toBeNull();
+    expect(buildCronFieldDescription('0 0 9 * * ?', 'UTC', [])).toBeNull();
+  });
+
+  it('describes singular and ranged subdaily schedules', () => {
+    const singular = buildCronFieldDescription('0 0/1 * * * ?', 'UTC', [makeLocalOccurrence()]);
+    const ranged = buildCronFieldDescription('0 0/5 14-16 ? * MON-FRI', 'UTC', [
+      makeLocalOccurrence({ utcDate: new Date('2026-03-02T14:00:00Z') }),
+    ]);
+
+    expect(singular).toBe('Runs every 1 minute');
+    expect(ranged).toBe(
+      'Runs every 5 minutes between 2 PM and 4 PM on Monday, Tuesday, Wednesday, Thursday and Friday'
+    );
+  });
+
+  it('describes hourly intervals with and without weekday restrictions', () => {
+    expect(buildCronFieldDescription('0 0 0/1 * * ?', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs every 1 hour'
+    );
+    expect(buildCronFieldDescription('0 0 0/4 ? * MON', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs every 4 hours on Mondays'
+    );
+  });
+
+  it('describes nth weekdays and last weekdays', () => {
+    expect(buildCronFieldDescription('0 0 9 ? * 2#4', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs on the fourth Monday of every month at 9:00 AM'
+    );
+    expect(buildCronFieldDescription('0 0 9 ? * 6L', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs on the last Friday of every month at 9:00 AM'
+    );
+  });
+
+  it('describes last-day offsets for monthly and yearly schedules', () => {
+    expect(buildCronFieldDescription('0 0 9 L-1 * ?', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs at 9:00 AM on the second-to-last day of every month'
+    );
+    expect(buildCronFieldDescription('0 0 9 L-2 JAN,APR ?', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs at 9:00 AM on the 3rd-to-last day of January and April every year'
+    );
+  });
+
+  it('uses shifted local months for last-day-of-month schedules when timezone conversion changes the month', () => {
+    const description = buildCronFieldDescription('0 0 9 L JAN,APR ?', 'America/Anchorage', [
+      makeLocalOccurrence({ localDate: '2025-12-31' }),
+      makeLocalOccurrence({ localDate: '2026-03-31' }),
+    ]);
+
+    expect(description).toContain('Runs at 9:00 AM on the last day of');
+    expect(description).toContain('December');
+    expect(description).toContain('March');
+  });
+
+  it('uses the shifted local month-end offset for last-day schedules that roll back into the prior local day', () => {
+    const description = buildCronFieldDescription('0 0 2 L * ?', 'America/Anchorage', [
+      makeLocalOccurrence({ localDate: '2026-04-29', localTime: '6:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-05-30', localTime: '6:00 PM' }),
+    ]);
+
+    expect(description).toBe('Runs at 6:00 PM on the second-to-last day of every month');
+  });
+
+  it('uses first-day wording when last-day UTC schedules roll into the next local month', () => {
+    const description = buildCronFieldDescription('0 0 23 L * ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({ localDate: '2026-05-01', localTime: '4:30 AM' }),
+      makeLocalOccurrence({ localDate: '2026-06-01', localTime: '4:30 AM' }),
+    ]);
+
+    expect(description).toBe('Runs at 4:30 AM on the first day of every month');
+  });
+
+  it('uses first-day wording for month-specific last-day schedules that roll into the next local month', () => {
+    const description = buildCronFieldDescription('0 0 23 L 2 ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({ localDate: '2026-03-01', localTime: '4:30 AM' }),
+    ]);
+
+    expect(description).toBe('Runs at 4:30 AM on the first day of March every year');
+  });
+
+  it('uses shifted local weekday names and months for specific-day-of-week schedules', () => {
+    const description = buildCronFieldDescription('0 30 4 ? JAN,JUN TUE,THU', 'America/Anchorage', [
+      makeLocalOccurrence({
+        utcDate: new Date('2026-01-06T04:30:00Z'),
+        localDate: '2026-01-05',
+        localTime: '8:30 PM',
+      }),
+      makeLocalOccurrence({
+        utcDate: new Date('2026-06-11T04:30:00Z'),
+        localDate: '2026-06-10',
+        localTime: '8:30 PM',
+      }),
+    ]);
+
+    expect(description).toBe('Runs every Monday and Wednesday in January and June at 8:30 PM');
+  });
+
+  it('describes specific day-of-month schedules using shifted local dates when needed', () => {
+    const shiftedDates = buildCronFieldDescription('0 0 1 1 JAN,APR ?', 'America/Anchorage', [
+      makeLocalOccurrence({ localDate: '2025-12-31', localTime: '5:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-03-31', localTime: '5:00 PM' }),
+    ]);
+    const yearlyDate = buildCronFieldDescription('0 0 9 10 JAN ?', 'UTC', [
+      makeLocalOccurrence({ localDate: '2026-01-10' }),
+    ]);
+    const monthlyDate = buildCronFieldDescription('0 0 9 15 * ?', 'UTC', [
+      makeLocalOccurrence({ localDate: '2026-01-15' }),
+    ]);
+
+    expect(shiftedDates).toContain('Runs at 5:00 PM on');
+    expect(shiftedDates).toContain('December 31st');
+    expect(shiftedDates).toContain('March 31st');
+    expect(yearlyDate).toContain('Runs at 9:00 AM on January 10th');
+    expect(monthlyDate).toBe('Runs at 9:00 AM on the 15th of every month');
+  });
+
+  it('describes month-wide shifted day-of-month schedules as local month-end with DST-aware times', () => {
+    const description = buildCronFieldDescription('0 0 5 1 * ?', 'America/Anchorage', [
+      makeLocalOccurrence({ localDate: '2026-01-31', localTime: '8:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-02-28', localTime: '8:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-03-31', localTime: '9:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-04-30', localTime: '9:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-05-31', localTime: '9:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-06-30', localTime: '9:00 PM' }),
+      makeLocalOccurrence({ localDate: '2026-07-31', localTime: '9:00 PM' }),
+    ]);
+
+    expect(description).toBe('Runs at 8:00 PM on the last day of every month');
+  });
+
+  it('describes daily wildcards when both day fields are effectively unrestricted', () => {
+    expect(buildCronFieldDescription('0 0 9 * * ?', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs every day at 9:00 AM'
+    );
+    expect(buildCronFieldDescription('0 0 9 ? * *', 'UTC', [makeLocalOccurrence()])).toBe(
+      'Runs every day at 9:00 AM'
+    );
   });
 });

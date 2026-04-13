@@ -17,6 +17,7 @@ vi.mock('@/api/services/JiraWebhookService', () => ({
   JiraWebhookService: {
     listJiraWebhooks: vi.fn(),
     getWebhookById: vi.fn(),
+    getAllJiraNormalizedNames: vi.fn().mockResolvedValue([]),
   },
 }));
 
@@ -33,14 +34,15 @@ vi.mock('@/components/common/ConfirmationDialog.vue', () => ({
     emits: ['confirm', 'cancel'],
     props: ['open'],
     template:
-      '<div class="confirm-stub" v-if="open"><button class="confirm" @click="$emit(\'confirm\')">Confirm</button></div>',
+      '<div class="confirm-stub" v-if="open"><button class="confirm" @click="$emit(\'confirm\')">Confirm</button><button class="cancel" @click="$emit(\'cancel\')">Cancel</button></div>',
   },
 }));
 vi.mock('@/components/outbound/jirawebhooks/wizard/JiraWebhookWizard.vue', () => ({
   default: {
     name: 'JiraWebhookWizard',
-    props: ['open'],
-    template: '<div class="wizard-stub" v-if="open">Wizard</div>',
+    props: ['open', 'editMode', 'editingWebhookData', 'cloneMode', 'cloningWebhookData'],
+    template:
+      '<div class="wizard-stub" v-if="open" :data-edit-mode="String(!!editMode)" :data-clone-mode="String(!!cloneMode)">Wizard</div>',
   },
 }));
 // Dialog state hoisted to align confirm handler with last opened action
@@ -111,7 +113,19 @@ import { JiraWebhookService } from '@/api/services/JiraWebhookService';
 describe('JiraWebhookDashboard', () => {
   // Ensure router query state doesn't leak between tests
   beforeEach(() => {
+    vi.clearAllMocks();
     hoisted.routeQuery = {};
+    // Mock window.innerWidth for useResponsivePageSize composable
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1920,
+    });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      writable: true,
+      configurable: true,
+      value: 1920,
+    });
   });
 
   it('renders cards after loading and opens wizard via toolbar', async () => {
@@ -222,6 +236,16 @@ describe('JiraWebhookDashboard', () => {
   it('applies route query state and clamps/reshapes pagination on changes', async () => {
     // Initial route query with valid values and multiple pages
     hoisted.routeQuery = { search: 'web', sort: 'name', view: 'grid', page: '2', size: '6' };
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
     const data = Array.from({ length: 15 }).map((_, i) => ({
       id: `id${i}`,
       name: `Webhook ${i}`,
@@ -546,6 +570,16 @@ describe('JiraWebhookDashboard', () => {
 
   it('restores state from route query on mount', async () => {
     hoisted.routeQuery = { search: 'test', sort: 'name', view: 'list', page: '2', size: '12' };
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
     (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce(
       Array.from({ length: 20 }).map((_, i) => ({
         id: `id${i}`,
@@ -561,6 +595,7 @@ describe('JiraWebhookDashboard', () => {
     await new Promise(r => setTimeout(r, 0));
     // Check restored state is applied
     expect(wrapper.find('.title-row-list').exists()).toBe(true); // list view
+    expect((wrapper.find('#pageSizeSelect').element as HTMLSelectElement).value).toBe('12');
   });
 
   it('validates and ignores invalid route query parameters', async () => {
@@ -731,6 +766,17 @@ describe('JiraWebhookDashboard', () => {
   });
 
   it('clamps currentPage when totalPages decreases', async () => {
+    Object.defineProperty(window, 'innerWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
+    Object.defineProperty(document.documentElement, 'clientWidth', {
+      writable: true,
+      configurable: true,
+      value: 1024,
+    });
+
     (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce(
       Array.from({ length: 20 }).map((_, i) => ({
         id: `id${i}`,
@@ -771,5 +817,254 @@ describe('JiraWebhookDashboard', () => {
     await sizeSelect.setValue('12');
     await nextTick();
     expect(wrapper.vm.currentPage).toBe(2);
+  });
+
+  it('treats non-array webhook responses as an empty list', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce({ items: [] });
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+    await nextTick();
+
+    expect(wrapper.find('.simple-empty-state').exists()).toBe(true);
+    expect(wrapper.findAll('.webhook-card')).toHaveLength(0);
+  });
+
+  it('returns early from confirm when there is no pending webhook', async () => {
+    const wrapper = mount(JiraWebhookDashboard);
+
+    await wrapper.vm.handleConfirm();
+
+    expect(confirmWithHandlersMock).not.toHaveBeenCalled();
+  });
+
+  it('closes the dialog without performing an action when cancel is clicked', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce([
+      {
+        id: 'abc',
+        name: 'Webhook ABC',
+        createdBy: 'alice',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: 'http://abc',
+        jiraFieldMappings: [],
+      },
+    ]);
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    const card = wrapper.find('.webhook-card');
+    await card.find('.action-menu-trigger').trigger('click');
+    const items = card.findAll('.action-menu-item');
+    await items[3].trigger('click');
+    await wrapper.find('.cancel').trigger('click');
+
+    expect(deleteWebhookMock).not.toHaveBeenCalled();
+    expect(closeDialogMock).toHaveBeenCalled();
+  });
+
+  it('keeps the webhook list unchanged when deletion fails during confirm', async () => {
+    deleteWebhookMock.mockRejectedValueOnce(new Error('delete failed'));
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce([
+      {
+        id: 'abc',
+        name: 'Webhook ABC',
+        createdBy: 'alice',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: 'http://abc',
+        jiraFieldMappings: [],
+      },
+      {
+        id: 'def',
+        name: 'Webhook DEF',
+        createdBy: 'bob',
+        createdDate: '2024-01-02',
+        isEnabled: false,
+        webhookUrl: 'http://def',
+        jiraFieldMappings: [],
+      },
+    ]);
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    const initialCount = wrapper.findAll('.webhook-card').length;
+    const card = wrapper.find('.webhook-card');
+    await card.find('.action-menu-trigger').trigger('click');
+    const items = card.findAll('.action-menu-item');
+    await items[3].trigger('click');
+    await wrapper.find('.confirm').trigger('click');
+    await nextTick();
+
+    expect(wrapper.findAll('.webhook-card')).toHaveLength(initialCount);
+  });
+
+  it('normalizes malformed edit payloads and opens the wizard in edit mode', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce([
+      {
+        id: 'abc',
+        name: 'Webhook ABC',
+        createdBy: 'alice',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: 'http://abc',
+        jiraFieldMappings: [],
+      },
+    ]);
+    (JiraWebhookService.getWebhookById as any).mockResolvedValueOnce({
+      id: 123,
+      name: null,
+      webhookUrl: undefined,
+      jiraFieldMappings: { bad: 'shape' },
+      isEnabled: 'yes',
+      isDeleted: 'no',
+      createdBy: 99,
+      createdDate: null,
+      description: 42,
+      samplePayload: false,
+      connectionId: { nested: true },
+      fieldsMapping: 'bad-shape',
+    });
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    const card = wrapper.find('.webhook-card');
+    await card.find('.action-menu-trigger').trigger('click');
+    await card.find('.action-menu-item').trigger('click');
+    await nextTick();
+
+    const wizard = wrapper.findComponent({ name: 'JiraWebhookWizard' });
+    expect(wizard.exists()).toBe(true);
+    expect(wizard.attributes('data-edit-mode')).toBe('true');
+    expect(wizard.attributes('data-clone-mode')).toBe('false');
+    expect(wrapper.vm.editingWebhookId).toBe('abc');
+    expect(wrapper.vm.editingWebhookData).toMatchObject({
+      id: '',
+      name: '',
+      webhookUrl: '',
+      jiraFieldMappings: [],
+      isEnabled: false,
+      isDeleted: false,
+      createdBy: '',
+      createdDate: '',
+      description: '',
+      samplePayload: '',
+      connectionId: '',
+      fieldsMapping: undefined,
+    });
+  });
+
+  it('normalizes malformed clone payloads and opens the wizard in clone mode', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce([
+      {
+        id: 'abc',
+        name: 'Webhook ABC',
+        createdBy: 'alice',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: 'http://abc',
+        jiraFieldMappings: [],
+      },
+    ]);
+    (JiraWebhookService.getWebhookById as any).mockResolvedValueOnce({
+      id: 'abc',
+      name: null,
+      jiraFieldMappings: { bad: 'shape' },
+      description: 42,
+      samplePayload: false,
+      connectionId: { nested: true },
+      fieldsMapping: 'bad-shape',
+    });
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    const card = wrapper.find('.webhook-card');
+    await card.find('.action-menu-trigger').trigger('click');
+    const items = card.findAll('.action-menu-item');
+    await items[1].trigger('click');
+    await nextTick();
+
+    const wizard = wrapper.findComponent({ name: 'JiraWebhookWizard' });
+    expect(wizard.exists()).toBe(true);
+    expect(wizard.attributes('data-edit-mode')).toBe('false');
+    expect(wizard.attributes('data-clone-mode')).toBe('true');
+    expect(wrapper.vm.cloneMode).toBe(true);
+    expect(wrapper.vm.editingWebhookData).toBeUndefined();
+    expect(wrapper.vm.cloningWebhookData).toMatchObject({
+      id: '',
+      name: 'Webhook',
+      webhookUrl: '',
+      jiraFieldMappings: [],
+      isEnabled: false,
+      isDeleted: false,
+      createdBy: '',
+      createdDate: '',
+      description: '',
+      samplePayload: '',
+      connectionId: '',
+      fieldsMapping: undefined,
+    });
+  });
+
+  it('moves back one page and does not go below page one', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce(
+      Array.from({ length: 20 }).map((_, i) => ({
+        id: `id${i}`,
+        name: `Webhook ${i}`,
+        createdBy: 'user',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: `http://x${i}`,
+        jiraFieldMappings: [],
+      }))
+    );
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.nextPage();
+    await nextTick();
+    expect(wrapper.vm.currentPage).toBe(2);
+
+    wrapper.vm.prevPage();
+    await nextTick();
+    expect(wrapper.vm.currentPage).toBe(1);
+
+    wrapper.vm.prevPage();
+    await nextTick();
+    expect(wrapper.vm.currentPage).toBe(1);
+  });
+
+  it('clears the pending webhook when the dialog is cancelled', async () => {
+    (JiraWebhookService.listJiraWebhooks as any).mockResolvedValueOnce([
+      {
+        id: 'abc',
+        name: 'Webhook ABC',
+        createdBy: 'alice',
+        createdDate: '2024-01-01',
+        isEnabled: true,
+        webhookUrl: 'http://abc',
+        jiraFieldMappings: [],
+      },
+    ]);
+
+    const wrapper = mount(JiraWebhookDashboard);
+    await new Promise(r => setTimeout(r, 0));
+
+    const card = wrapper.find('.webhook-card');
+    await card.find('.action-menu-trigger').trigger('click');
+    const items = card.findAll('.action-menu-item');
+    await items[3].trigger('click');
+
+    expect(wrapper.vm.pendingWebhook).toMatchObject({ id: 'abc' });
+
+    await wrapper.find('.cancel').trigger('click');
+    await nextTick();
+
+    expect(wrapper.vm.pendingWebhook).toBe(null);
   });
 });

@@ -51,6 +51,7 @@ import StatusChipForDataTable from '@/components/common/StatusChipForDataTable.v
 import type { JiraWebhookDetail, JiraFieldMapping } from '@/api/services/JiraWebhookService';
 import { capitalizeFirst } from '@/utils/stringFormatUtils';
 import { formatDisplayDate, formatMetadataDate } from '@/utils/dateUtils';
+import { extractParentKey } from '@/utils/parentFieldUtils';
 
 interface FieldMappingDisplay {
   id: string;
@@ -78,15 +79,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-  // Optional users list to map accountId -> displayName (ref: PreviewStep.vue)
-  users: {
-    type: Array as PropType<Array<{ accountId: string; displayName: string }>>,
-    default: () => [],
-  },
-  usersLoading: {
-    type: Boolean,
-    default: false,
-  },
   sprints: {
     type: Array as PropType<Array<{ value: string; label: string }>>,
     default: () => [],
@@ -95,15 +87,6 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
-});
-
-// Build a lookup map for user IDs to display names, if provided
-const userMap = computed(() => {
-  const map = new Map<string, string>();
-  (props.users ?? []).forEach(u => {
-    map.set(u.accountId, u.displayName);
-  });
-  return map;
 });
 
 const sprintMap = computed(() => {
@@ -146,7 +129,11 @@ function chooseMappedValue(mapping: JiraFieldMapping, typeUpper: string): string
     .toLowerCase();
 
   if (jiraFieldId === 'parent') {
-    return pickFirst(mapping, ['template', 'displayLabel', 'defaultValue'], noMapping);
+    return pickFirst(mapping, ['displayLabel', 'template', 'defaultValue'], noMapping);
+  }
+
+  if (typeUpper === 'USER' || typeUpper === 'MULTIUSER') {
+    return pickFirst(mapping, ['displayLabel', 'template', 'defaultValue'], noMapping);
   }
 
   if (isTemplateOnlyType(typeUpper)) {
@@ -261,20 +248,6 @@ function hasTime(raw: string): boolean {
   return raw.includes('T') || /\d{2}:\d{2}/.test(raw);
 }
 
-function formatUsers(raw: string): string {
-  const ids = raw
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean);
-
-  if (ids.length === 0) return '';
-  if (props.usersLoading && userMap.value.size === 0) {
-    return 'Loading users...';
-  }
-
-  return ids.map(id => userMap.value.get(id) ?? id).join(', ');
-}
-
 function formatSprints(raw: string): string {
   const ids = raw
     .split(',')
@@ -290,24 +263,16 @@ function formatSprints(raw: string): string {
 }
 
 function formatParentKey(raw: string): string {
-  const value = raw.trim();
-  if (!value) return value;
-
-  if (value.startsWith('{{') && value.endsWith('}}')) {
-    return value;
+  const key = extractParentKey(raw);
+  if (!key) {
+    return key;
   }
 
-  try {
-    const parsed = JSON.parse(value) as { key?: unknown };
-    const key = parsed?.key;
-    if (typeof key === 'string' && key.trim().length > 0) {
-      return key.trim();
-    }
-  } catch {
-    // Fall through to raw value when not valid JSON.
+  if (key.startsWith('{{') && key.endsWith('}}')) {
+    return key;
   }
 
-  return value;
+  return key;
 }
 
 function getDisplayMappedValue(row: FieldMappingDisplay): string {
@@ -329,10 +294,6 @@ function getDisplayMappedValue(row: FieldMappingDisplay): string {
 
   if (type === 'DATE' || type === 'DATETIME') {
     return formatDateSmart(raw);
-  }
-
-  if (type === 'USER' || type === 'MULTIUSER') {
-    return formatUsers(raw);
   }
 
   return raw;

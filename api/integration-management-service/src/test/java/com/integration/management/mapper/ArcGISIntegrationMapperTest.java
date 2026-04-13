@@ -1,12 +1,15 @@
 package com.integration.management.mapper;
 
 import com.integration.execution.contract.model.enums.FrequencyPattern;
+import com.integration.execution.contract.model.enums.JobExecutionStatus;
 import com.integration.execution.contract.rest.response.CreationResponse;
 import com.integration.management.entity.ArcGISIntegration;
 import com.integration.management.entity.IntegrationSchedule;
 import com.integration.management.model.dto.request.ArcGISIntegrationCreateUpdateRequest;
 import com.integration.management.model.dto.request.IntegrationScheduleRequest;
 import com.integration.management.model.dto.response.ArcGISIntegrationResponse;
+import com.integration.management.model.dto.response.ArcGISIntegrationSummaryResponse;
+import com.integration.management.repository.projection.ArcGISIntegrationSummaryProjection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -244,5 +247,156 @@ class ArcGISIntegrationMapperTest {
         ArcGISIntegrationMapperImpl mapper = new ArcGISIntegrationMapperImpl();
         setField(mapper, "integrationSchedulerMapper", new IntegrationSchedulerMapperImpl());
         assertThat(mapper.projectionToResponse(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("toDetailsResponse maps non-null entity fields")
+    void toDetailsResponse_mapsNonNullEntityFields() {
+        ArcGISIntegrationMapperImpl mapper = new ArcGISIntegrationMapperImpl();
+        setField(mapper, "integrationSchedulerMapper", new IntegrationSchedulerMapperImpl());
+
+        ArcGISIntegration entity = ArcGISIntegration.builder()
+                .id(UUID.fromString("00000000-0000-0000-0000-000000000101"))
+                .name("ArcGIS")
+                .normalizedName("arcgis")
+                .description("desc")
+                .itemType("DOCUMENT")
+                .itemSubtype("REPORT")
+                .dynamicDocumentType("DYN")
+                .connectionId(UUID.fromString("00000000-0000-0000-0000-000000000102"))
+                .tenantId("tenant-1")
+                .isEnabled(true)
+                .schedule(IntegrationSchedule.builder()
+                        .frequencyPattern(FrequencyPattern.DAILY)
+                        .executionTime(LocalTime.NOON)
+                        .cronExpression("0 0 12 * * ?")
+                        .build())
+                .build();
+
+        ArcGISIntegrationResponse response = mapper.toDetailsResponse(entity);
+
+        assertThat(response.getConnectionId()).isEqualTo("00000000-0000-0000-0000-000000000102");
+        assertThat(response.getItemSubtype()).isEqualTo("REPORT");
+        assertThat(response.getSchedule()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("projectionToResponse maps projection fields")
+    void projectionToResponse_mapsProjectionFields() {
+        ArcGISIntegrationMapperImpl mapper = new ArcGISIntegrationMapperImpl();
+        setField(mapper, "integrationSchedulerMapper", new IntegrationSchedulerMapperImpl());
+
+        ArcGISIntegrationSummaryProjection projection = new ArcGISIntegrationSummaryProjection() {
+            @Override
+            public UUID getId() {
+                return UUID.fromString("00000000-0000-0000-0000-000000000103");
+            }
+
+            @Override
+            public String getName() {
+                return "ArcGIS";
+            }
+
+            @Override
+            public String getItemType() {
+                return "DOCUMENT";
+            }
+
+            @Override
+            public String getItemSubtype() {
+                return "REPORT";
+            }
+
+            @Override
+            public String getDynamicDocumentType() {
+                return "DYN";
+            }
+
+            @Override
+            public String getFrequencyPattern() {
+                return "DAILY";
+            }
+
+            @Override
+            public Integer getDailyExecutionInterval() {
+                return 24;
+            }
+
+            @Override
+            public LocalDate getExecutionDate() {
+                return LocalDate.of(2026, 4, 10);
+            }
+
+            @Override
+            public LocalTime getExecutionTime() {
+                return LocalTime.of(9, 15);
+            }
+
+            @Override
+            public String getDaySchedule() {
+                return "MONDAY";
+            }
+
+            @Override
+            public String getMonthSchedule() {
+                return "JANUARY";
+            }
+
+            @Override
+            public Boolean getIsExecuteOnMonthEnd() {
+                return false;
+            }
+
+            @Override
+            public String getCronExpression() {
+                return "0 15 9 * * ?";
+            }
+
+            @Override
+            public String getBusinessTimeZone() {
+                return "UTC";
+            }
+
+            @Override
+            public java.time.Instant getCreatedDate() {
+                return java.time.Instant.parse("2026-04-01T00:00:00Z");
+            }
+
+            @Override
+            public String getCreatedBy() {
+                return "user";
+            }
+
+            @Override
+            public java.time.Instant getLastModifiedDate() {
+                return java.time.Instant.parse("2026-04-02T00:00:00Z");
+            }
+
+            @Override
+            public String getLastModifiedBy() {
+                return "user2";
+            }
+
+            @Override
+            public Boolean getIsEnabled() {
+                return true;
+            }
+
+            @Override
+            public java.time.Instant getLastAttemptTimeUtc() {
+                return java.time.Instant.parse("2026-04-03T00:00:00Z");
+            }
+
+            @Override
+            public JobExecutionStatus getLastStatus() {
+                return JobExecutionStatus.SUCCESS;
+            }
+        };
+
+        ArcGISIntegrationSummaryResponse response = mapper.projectionToResponse(projection);
+
+        assertThat(response.getId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000103"));
+        assertThat(response.getFrequencyPattern()).isEqualTo("DAILY");
+        assertThat(response.getLastStatus()).isEqualTo(JobExecutionStatus.SUCCESS);
     }
 }

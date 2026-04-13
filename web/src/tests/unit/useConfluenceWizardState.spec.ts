@@ -70,6 +70,35 @@ describe('useConfluenceWizardState', () => {
     expect(state.formData.isExecuteOnMonthEnd).toBe(false);
   });
 
+  it('preserves the month-end flag and exposes schedule computed fields when provided', () => {
+    state.updateScheduleData({
+      executionDate: '2026-04-01',
+      executionTime: '11:45',
+      frequencyPattern: 'MONTHLY',
+      dailyFrequency: '24',
+      selectedDays: ['MON'],
+      selectedMonths: [1, 4],
+      cronExpression: '0 45 11 1 * ?',
+      isExecuteOnMonthEnd: true,
+      businessTimeZone: 'UTC',
+      timeCalculationMode: 'FIXED_DAY_BOUNDARY',
+    });
+
+    expect(state.formData.isExecuteOnMonthEnd).toBe(true);
+    expect(state.scheduleData.value).toEqual({
+      executionDate: '2026-04-01',
+      executionTime: '11:45',
+      frequencyPattern: 'MONTHLY',
+      dailyFrequency: '24',
+      selectedDays: ['MON'],
+      selectedMonths: [1, 4],
+      isExecuteOnMonthEnd: true,
+      cronExpression: '0 45 11 1 * ?',
+      businessTimeZone: 'UTC',
+      timeCalculationMode: 'FIXED_DAY_BOUNDARY',
+    });
+  });
+
   it('updates page config and reflects computed data', () => {
     state.updatePageConfigData({
       confluenceSpaceKey: 'SPACE',
@@ -104,6 +133,32 @@ describe('useConfluenceWizardState', () => {
     expect(state.genericConnectionData.value.baseUrl).toBe('https://acme.atlassian.net/wiki');
   });
 
+  it('falls back empty credentials and exposes computed connection data', () => {
+    state.handleConnectionDataUpdate({
+      connectionMethod: 'existing',
+      baseUrl: '',
+      credentialType: 'BASIC_AUTH',
+      username: undefined as any,
+      password: undefined as any,
+      connectionName: 'Existing Connection',
+      connected: false,
+      existingConnectionId: 'existing-7',
+      createdConnectionId: undefined,
+    });
+
+    expect(state.genericConnectionData.value).toEqual({
+      connectionMethod: 'existing',
+      baseUrl: '',
+      credentialType: 'BASIC_AUTH',
+      username: '',
+      password: '',
+      connectionName: 'Existing Connection',
+      connected: true,
+      existingConnectionId: 'existing-7',
+      createdConnectionId: undefined,
+    });
+  });
+
   it('computes active connection id for existing and created methods', () => {
     state.formData.connectionMethod = 'existing';
     state.formData.existingConnectionId = 'existing-1';
@@ -112,6 +167,38 @@ describe('useConfluenceWizardState', () => {
     state.formData.connectionMethod = 'new';
     state.formData.createdConnectionId = 'created-1';
     expect(state.activeConnectionId.value).toBe('created-1');
+  });
+
+  it('returns null when no active connection id is available', () => {
+    state.formData.connectionMethod = 'existing';
+    state.formData.existingConnectionId = '';
+    expect(state.activeConnectionId.value).toBeNull();
+
+    state.formData.connectionMethod = 'new';
+    state.formData.createdConnectionId = '';
+    expect(state.activeConnectionId.value).toBeNull();
+  });
+
+  it('exposes unified integration computed fields after updates', () => {
+    state.updateUnifiedIntegrationStepData({
+      name: 'Name',
+      description: 'Description',
+      itemType: 'DOCUMENT',
+      subType: 'DOCUMENT_DRAFT_DYNAMIC',
+      subTypeLabel: 'Draft Dynamic',
+      dynamicDocument: 'Case Report',
+      dynamicDocumentLabel: 'Case Report Label',
+    });
+
+    expect(state.unifiedIntegrationStepData.value).toEqual({
+      name: 'Name',
+      description: 'Description',
+      itemType: 'DOCUMENT',
+      subType: 'DOCUMENT_DRAFT_DYNAMIC',
+      subTypeLabel: 'Draft Dynamic',
+      dynamicDocument: 'Case Report',
+      dynamicDocumentLabel: 'Case Report Label',
+    });
   });
 
   it('updates step validation and fully resets wizard state', () => {

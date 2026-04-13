@@ -1,0 +1,55 @@
+# ============================================================
+# Common .dockerignore — applies to all service builds
+# Build context is the project root (.)
+# ============================================================
+
+# Build outputs
+**/target/
+web/dist/
+web/coverage/
+web/*.lcov
+
+# Dependencies
+web/node_modules/
+
+# IDE
+.vscode/
+.idea/
+**/*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+web/npm-debug.log*
+
+# Env files
+.env
+.env.*
+
+# Maven wrapper JAR (downloaded during build)
+api/.mvn/wrapper/maven-wrapper.jar
+
+# Checkstyle output (generated)
+**/checkstyle-cachefile
+**/checkstyle-result.xml
+**/checkstyle-checker.xml
+
+# Web config files not needed in Docker build
+web/vitest.config.ts
+web/coverage.config.js
+web/eslint.config.js
+web/scripts/
+
+# E2E tests — never needed in Docker builds
+e2e/
+
+# Build scripts — not needed inside images
+scripts/
+docker/

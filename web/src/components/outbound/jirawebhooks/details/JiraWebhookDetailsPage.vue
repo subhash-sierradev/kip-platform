@@ -44,7 +44,6 @@ import {
   JiraIntegrationService,
   type JiraProjectResponse,
   type JiraSprintResponse,
-  type JiraUserResponse,
 } from '@/api/services/JiraIntegrationService';
 
 // Common components
@@ -72,8 +71,6 @@ const webhookId = computed(() => route.params.id as string);
 const webhookData = ref<JiraWebhookDetail | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
-const users = ref<{ accountId: string; displayName: string }[]>([]);
-const usersLoading = ref(false);
 const sprints = ref<{ value: string; label: string }[]>([]);
 const sprintsLoading = ref(false);
 
@@ -93,12 +90,13 @@ const fetchWebhookDetails = async () => {
     error.value = null;
   } catch (err: any) {
     console.error('Error fetching webhook details:', err);
-    if (err.message.includes('403')) {
+    const errorMessage = typeof err?.message === 'string' ? err.message : '';
+    if (errorMessage.includes('403')) {
       error.value = 'Access denied. You may not have permission to view this webhook.';
-    } else if (err.message.includes('404')) {
+    } else if (errorMessage.includes('404')) {
       error.value = 'Webhook not found. It may have been deleted or the ID is incorrect.';
     } else {
-      error.value = err.message || 'Failed to load webhook details. Please try again.';
+      error.value = errorMessage || 'Failed to load webhook details. Please try again.';
     }
   } finally {
     loading.value = false;
@@ -164,8 +162,6 @@ const mappingExtraProps = computed<Record<string, unknown>>(() => {
   const current = tabs.value[activeTab.value];
   if (current?.id === 'mapping') {
     return {
-      users: users.value,
-      usersLoading: usersLoading.value,
       sprints: sprints.value,
       sprintsLoading: sprintsLoading.value,
     };
@@ -226,38 +222,27 @@ async function resolveProjectKey(
   }
 }
 
-async function loadUsersForMapping(): Promise<void> {
-  usersLoading.value = true;
-  users.value = [];
-  try {
-    const connectionId = webhookData.value?.connectionId;
-    if (!connectionId) return;
-    const labelOrValue = extractProjectLabelOrValue();
-    if (!labelOrValue) return;
-    const projectKey = await resolveProjectKey(connectionId, labelOrValue);
-    if (!projectKey) return;
-    try {
-      const userList: JiraUserResponse[] =
-        await JiraIntegrationService.getProjectUsersByConnectionId(connectionId, projectKey);
-      users.value = userList.map(u => ({ accountId: u.accountId, displayName: u.displayName }));
-    } catch {
-      users.value = [];
-    }
-  } finally {
-    usersLoading.value = false;
-  }
+async function resolveMappingProjectContext(): Promise<{
+  connectionId: string;
+  projectKey: string;
+} | null> {
+  const connectionId = webhookData.value?.connectionId;
+  if (!connectionId) return null;
+  const labelOrValue = extractProjectLabelOrValue();
+  if (!labelOrValue) return null;
+  const projectKey = await resolveProjectKey(connectionId, labelOrValue);
+  if (!projectKey) return null;
+
+  return {
+    connectionId,
+    projectKey,
+  };
 }
 
-async function loadSprintsForMapping(): Promise<void> {
+async function loadSprintsForMapping(connectionId: string, projectKey: string): Promise<void> {
   sprintsLoading.value = true;
   sprints.value = [];
   try {
-    const connectionId = webhookData.value?.connectionId;
-    if (!connectionId) return;
-    const labelOrValue = extractProjectLabelOrValue();
-    if (!labelOrValue) return;
-    const projectKey = await resolveProjectKey(connectionId, labelOrValue);
-    if (!projectKey) return;
     try {
       const sprintList: JiraSprintResponse[] =
         await JiraIntegrationService.getSprintsByConnectionId(connectionId, {
@@ -278,15 +263,26 @@ async function loadSprintsForMapping(): Promise<void> {
   }
 }
 
-// Derive and load users for the JiraFieldMappingTab
+async function loadMappingTabDependencies(): Promise<void> {
+  const context = await resolveMappingProjectContext();
+
+  if (!context) {
+    sprints.value = [];
+    sprintsLoading.value = false;
+    return;
+  }
+
+  await loadSprintsForMapping(context.connectionId, context.projectKey);
+}
+
+// Derive and load sprint labels for the JiraFieldMappingTab
 watch(
   () => ({
     connectionId: webhookData.value?.connectionId,
     jiraFieldMappings: webhookData.value?.jiraFieldMappings,
   }),
   () => {
-    void loadUsersForMapping();
-    void loadSprintsForMapping();
+    void loadMappingTabDependencies();
   },
   { immediate: true, deep: true }
 );

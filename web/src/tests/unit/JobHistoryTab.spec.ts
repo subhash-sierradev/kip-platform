@@ -349,4 +349,120 @@ describe('JobHistoryTab', () => {
     expect(modal.attributes('data-type')).toBe('all');
     expect(modal.attributes('data-count')).toBe('1');
   });
+
+  it('shows "-" for all count columns when job status is RUNNING', async () => {
+    historyRef.value = [
+      {
+        id: 'job-running-1',
+        status: 'RUNNING',
+        startedAt: '2024-01-01T00:00:00Z',
+        completedAt: null,
+        windowStart: '2024-01-01T00:00:00Z',
+        windowEnd: '2024-01-01T00:01:00Z',
+        triggeredByUser: 'alice',
+        addedRecords: 0,
+        updatedRecords: 0,
+        failedRecords: 0,
+        totalRecords: 0,
+      },
+    ];
+
+    const wrapper = mount(JobHistoryTab, {
+      global: {
+        stubs: {
+          GenericDataGrid: GenericDataGridStub,
+          StatusChipForDataTable: true,
+          Tooltip: true,
+          ErrorPanel: true,
+          JobExecutionMetadataModal: true,
+        },
+      },
+    });
+
+    const allBadges = wrapper.findAll('.count-badge');
+    // All 4 count badges (added, updated, failed, total) should show "-"
+    const dashBadges = allBadges.filter(b => b.text() === '-');
+    expect(dashBadges).toHaveLength(4);
+
+    // No clickable badges should exist for a RUNNING job
+    expect(wrapper.findAll('.count-badge.clickable')).toHaveLength(0);
+  });
+
+  it('shows zero for all count columns when job status is ABORTED', async () => {
+    historyRef.value = [
+      {
+        id: 'job-aborted-1',
+        status: 'ABORTED',
+        startedAt: '2024-01-01T00:00:00Z',
+        completedAt: null,
+        windowStart: '2024-01-01T00:00:00Z',
+        windowEnd: '2024-01-01T00:01:00Z',
+        triggeredByUser: 'alice',
+        addedRecords: 0,
+        updatedRecords: 0,
+        failedRecords: 0,
+        totalRecords: 0,
+      },
+    ];
+
+    const wrapper = mount(JobHistoryTab, {
+      global: {
+        stubs: {
+          GenericDataGrid: GenericDataGridStub,
+          StatusChipForDataTable: true,
+          Tooltip: true,
+          ErrorPanel: true,
+          JobExecutionMetadataModal: true,
+        },
+      },
+    });
+
+    const allBadges = wrapper.findAll('.count-badge');
+    const zeroBadges = allBadges.filter(b => b.text() === '0');
+    expect(zeroBadges).toHaveLength(4);
+
+    expect(wrapper.findAll('.count-badge.clickable')).toHaveLength(0);
+  });
+
+  it('shows actual values for all count columns when job status is SUCCESS', async () => {
+    historyRef.value = [
+      {
+        id: 'job-success-1',
+        status: 'SUCCESS',
+        startedAt: '2024-01-01T00:00:00Z',
+        completedAt: '2024-01-01T00:05:00Z',
+        windowStart: '2024-01-01T00:00:00Z',
+        windowEnd: '2024-01-01T00:01:00Z',
+        triggeredByUser: 'alice',
+        addedRecords: 10,
+        updatedRecords: 5,
+        failedRecords: 0,
+        totalRecords: 15,
+        addedRecordsMetadata: [],
+        updatedRecordsMetadata: [],
+        totalRecordsMetadata: [],
+      },
+    ];
+
+    const wrapper = mount(JobHistoryTab, {
+      global: {
+        stubs: {
+          GenericDataGrid: GenericDataGridStub,
+          StatusChipForDataTable: true,
+          Tooltip: true,
+          ErrorPanel: true,
+          JobExecutionMetadataModal: true,
+        },
+      },
+    });
+
+    // No "-" dashes should appear for completed jobs
+    const dashBadges = wrapper.findAll('.count-badge').filter(b => b.text() === '-');
+    expect(dashBadges).toHaveLength(0);
+
+    // Clickable badges for added (10) and updated (5) and total (15)
+    expect(wrapper.find('.count-badge.clickable.success').text()).toBe('10');
+    expect(wrapper.find('.count-badge.clickable.info').text()).toBe('5');
+    expect(wrapper.find('.count-badge.clickable.total').text()).toBe('15');
+  });
 });

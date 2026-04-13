@@ -29,6 +29,7 @@ interface UseJiraWebhookSubmitOptions {
   projects: Ref<JiraProject[]>;
   issueTypes: Ref<JiraIssueType[]>;
   users: Ref<JiraUser[]>;
+  selectedParentLabel: Ref<string>;
   isCreating: Ref<boolean>;
   showSuccess: Ref<boolean>;
   createdWebhook: Ref<WebhookCreationResponse | null>;
@@ -95,7 +96,8 @@ const buildFieldMappings = (options: UseJiraWebhookSubmitOptions) =>
     options.mappingData.value,
     options.projects.value,
     options.issueTypes.value,
-    options.users.value
+    options.users.value,
+    options.selectedParentLabel.value
   );
 
 const ensureValidMappings = (

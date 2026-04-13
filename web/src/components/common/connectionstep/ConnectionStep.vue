@@ -5,7 +5,7 @@
       <div class="cs-section">
         <div class="cs-section-title">Connection Method</div>
         <div class="cs-simple-radio-group">
-          <label class="cs-simple-radio-item">
+          <label v-if="canCreateNewConnection" class="cs-simple-radio-item">
             <input
               type="radio"
               class="cs-radio"
@@ -59,7 +59,6 @@
         :credential-types="credentialTypes"
         :current-credential-fields="currentCredentialFields"
         :use-two-col-credential-grid="useTwoColCredentialGrid"
-        :is-credential-field-full-width="isCredentialFieldFullWidth"
         :can-test-connection="canTestConnection"
         :is-testing="isTesting"
         :tested="tested"
@@ -77,6 +76,7 @@
 <script setup lang="ts">
 import { reactive, computed, watch, onMounted } from 'vue';
 import { useCredentialTypes } from '@/composables/useCredentialTypes';
+import { useAuth } from '@/composables/useAuth';
 import { useExistingConnections } from '@/composables/useExistingConnections';
 import { useConnectionTest } from '@/composables/useConnectionTest';
 import { useConnectionValidation } from '@/composables/useConnectionValidation';
@@ -99,6 +99,7 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+const { userInfo } = useAuth();
 
 /**
  * Emits
@@ -113,6 +114,10 @@ const emit = defineEmits<{
  * Local reactive state
  */
 const localData = reactive<ConnectionStepData>({ ...props.modelValue });
+const canCreateNewConnection = computed(() => {
+  const roles = userInfo.value.roles ?? [];
+  return roles.includes('tenant_admin') || roles.includes('app_admin');
+});
 
 /**
  * Composables
@@ -170,11 +175,6 @@ const useTwoColCredentialGrid = computed((): boolean => {
   const keys = new Set(currentCredentialFields.value.map(f => f.key));
   return keys.has('clientId') && keys.has('clientSecret');
 });
-
-const isCredentialFieldFullWidth = (field: CredentialField): boolean => {
-  // In OAuth2 layout, keep these on their own row
-  return field.key === 'tokenUrl' || field.key === 'scope';
-};
 
 /**
  * Watchers
@@ -236,6 +236,18 @@ watch(
     Object.assign(localData, newValue);
   },
   { deep: true }
+);
+
+watch(
+  canCreateNewConnection,
+  allowed => {
+    if (allowed || localData.connectionMethod !== 'new') return;
+
+    localData.connectionMethod = 'existing';
+    localData.createdConnectionId = undefined;
+    resetTest();
+  },
+  { immediate: true }
 );
 
 /**

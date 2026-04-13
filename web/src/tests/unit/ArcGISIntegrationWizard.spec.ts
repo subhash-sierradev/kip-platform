@@ -77,12 +77,26 @@ const hoisted = vi.hoisted(() => ({
   createIntegrationFromWizardMock: vi.fn().mockResolvedValue({}),
   updateIntegrationFromWizardMock: vi.fn().mockResolvedValue({}),
   getArcGISIntegrationByIdMock: vi.fn(),
+  getFieldMappingsMock: vi.fn(),
   getAllArcGISNormalizedNamesMock: vi.fn().mockResolvedValue([]),
   loadAllNamesMock: vi.fn().mockResolvedValue(undefined),
   validateBeforeSubmitMock: vi.fn().mockResolvedValue(false),
+  showErrorMock: vi.fn(),
   isDuplicateNameRef: { value: false },
   originalNameRef: { value: '' },
   allNormalizedNamesRef: { value: [] },
+  ensureEmptyMappingSlotMock: vi.fn((mappings: unknown[]) => [
+    ...(Array.isArray(mappings) ? mappings : []),
+    {
+      id: 'ensured-slot',
+      sourceField: '',
+      targetField: '',
+      transformationType: '',
+      isMandatory: false,
+      displayOrder: 1,
+    },
+  ]),
+  transformFieldMappingsForEditMock: vi.fn((mappings: unknown[]) => mappings),
   wizardState: null as unknown as WizardState,
 }));
 
@@ -129,7 +143,7 @@ hoisted.wizardState = createWizardState();
 // Mock composables and services
 vi.mock('@/store/toast', () => ({
   useToastStore: () => ({
-    showError: vi.fn(),
+    showError: hoisted.showErrorMock,
     showSuccess: vi.fn(),
   }),
 }));
@@ -146,8 +160,14 @@ vi.mock('@/composables/useArcGISIntegrationActions', () => ({
 vi.mock('@/api/services/ArcGISIntegrationService', () => ({
   ArcGISIntegrationService: {
     getArcGISIntegrationById: hoisted.getArcGISIntegrationByIdMock,
+    getFieldMappings: hoisted.getFieldMappingsMock,
     getAllArcGISNormalizedNames: hoisted.getAllArcGISNormalizedNamesMock,
   },
+}));
+
+vi.mock('@/utils/fieldMappingHelpers', () => ({
+  ensureEmptyMappingSlot: hoisted.ensureEmptyMappingSlotMock,
+  transformFieldMappingsForEdit: hoisted.transformFieldMappingsForEditMock,
 }));
 
 vi.mock('@/composables/useIntegrationNameValidation', () => ({
@@ -178,6 +198,8 @@ describe('ArcGISIntegrationWizard', () => {
     hoisted.originalNameRef.value = '';
     hoisted.allNormalizedNamesRef.value = [];
     hoisted.validateBeforeSubmitMock.mockResolvedValue(false);
+    hoisted.showErrorMock.mockReset();
+    hoisted.getFieldMappingsMock.mockResolvedValue([]);
   });
 
   describe('Component Rendering', () => {
@@ -501,6 +523,301 @@ describe('ArcGISIntegrationWizard', () => {
 
       expect(wrapper.exists()).toBe(true);
     });
+
+    it('does not close the wizard when the overlay click originates from modal content', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: true,
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      (wrapper.vm as any).handleOverlayClick({ target: {}, currentTarget: {} });
+
+      expect(wrapper.emitted('close')).toBeFalsy();
+    });
+  });
+
+  describe('Watcher Behavior', () => {
+    it('ensures an empty field mapping slot when opening in create mode', async () => {
+      hoisted.wizardState = createWizardState({
+        formData: {
+          ...buildDefaultFormData(),
+          fieldMappings: [],
+        },
+      });
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: false,
+          mode: 'create',
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+
+      expect(hoisted.ensureEmptyMappingSlotMock).toHaveBeenCalledWith([]);
+      expect(hoisted.wizardState.formData.fieldMappings).toHaveLength(1);
+      expect(document.body.style.overflow).toBe('hidden');
+    });
+
+    it('loads names without prefilling integration details when opening in create mode', async () => {
+      hoisted.wizardState = createWizardState({
+        formData: {
+          ...buildDefaultFormData(),
+          fieldMappings: [],
+        },
+      });
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: false,
+          mode: 'create',
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+      expect(hoisted.getArcGISIntegrationByIdMock).not.toHaveBeenCalled();
+      expect(hoisted.loadAllNamesMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('prefills edit mode data and transforms field mappings when opening', async () => {
+      hoisted.getArcGISIntegrationByIdMock.mockResolvedValueOnce({
+        name: 'Existing ArcGIS Integration',
+        description: 'Existing description',
+        itemType: 'DOCUMENT',
+        itemSubtype: 'SUBTYPE',
+        itemSubtypeLabel: 'Subtype',
+        dynamicDocumentType: 'REPORT',
+        dynamicDocumentTypeLabel: 'Report',
+        schedule: {
+          executionTime: '03:00',
+          frequencyPattern: 'DAILY',
+          executionDate: null,
+          dailyExecutionInterval: 24,
+          daySchedule: [],
+          monthSchedule: [],
+          isExecuteOnMonthEnd: false,
+          cronExpression: undefined,
+        },
+        connectionId: 'connection-1',
+      });
+      hoisted.getFieldMappingsMock.mockResolvedValueOnce([
+        {
+          id: 'mapping-1',
+          sourceField: 'source',
+          targetField: 'target',
+          transformationType: '',
+          isMandatory: false,
+          displayOrder: 0,
+        },
+      ]);
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: false,
+          mode: 'edit',
+          integrationId: 'arcgis-1',
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+
+      expect(hoisted.getArcGISIntegrationByIdMock).toHaveBeenCalledWith('arcgis-1');
+      expect(hoisted.getFieldMappingsMock).toHaveBeenCalledWith('arcgis-1');
+      expect(hoisted.transformFieldMappingsForEditMock).toHaveBeenCalled();
+      expect(hoisted.originalNameRef.value).toBe('Existing ArcGIS Integration');
+      expect(hoisted.wizardState.stepValidation[3]).toBe(false);
+      expect(hoisted.loadAllNamesMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows an error toast when loading names fails on open', async () => {
+      hoisted.loadAllNamesMock.mockRejectedValueOnce(new Error('names failed'));
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: false,
+          mode: 'create',
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+      expect(hoisted.showErrorMock).toHaveBeenCalledWith('Failed to load integration names');
+    });
+
+    it('restores body overflow when the wizard closes', async () => {
+      document.body.style.overflow = 'hidden';
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          open: true,
+          mode: 'create',
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await wrapper.setProps({ open: false });
+      await flushPromises();
+
+      expect(document.body.style.overflow).toBe('');
+    });
+  });
+
+  describe('Control Flow', () => {
+    it('closes when the overlay itself is clicked', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      await (wrapper.vm as any).handleOverlayClick({ target: 'x', currentTarget: 'x' });
+
+      expect(hoisted.wizardState.resetFormData).toHaveBeenCalled();
+      expect(wrapper.emitted('close')).toBeTruthy();
+    });
+
+    it('decrements previousStep but never goes below the first step', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      (wrapper.vm as any).currentStep = 3;
+      (wrapper.vm as any).previousStep();
+      (wrapper.vm as any).previousStep();
+      (wrapper.vm as any).previousStep();
+
+      expect((wrapper.vm as any).currentStep).toBe(1);
+    });
+
+    it('opens the cancel dialog when showCancelConfirmation is called directly', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      (wrapper.vm as any).showCancelConfirmation();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('.jw-cancel-dialog').exists()).toBe(true);
+    });
+
+    it('closes from confirmCancel and resets the dialog state', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      (wrapper.vm as any).showCancelDialog = true;
+      (wrapper.vm as any).confirmCancel();
+
+      expect((wrapper.vm as any).showCancelDialog).toBe(false);
+      expect(wrapper.emitted('close')).toBeTruthy();
+    });
   });
 
   describe('Mode-Specific Behavior', () => {
@@ -741,6 +1058,122 @@ describe('ArcGISIntegrationWizard', () => {
         expect.any(Object)
       );
       expect(wrapper.emitted('integration-updated')).toHaveLength(1);
+    });
+
+    it('prevents create submit when validateBeforeSubmit reports a duplicate name', async () => {
+      hoisted.wizardState = createWizardState({
+        stepValidation: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
+        formData: {
+          ...buildDefaultFormData(),
+          name: 'Duplicate Name',
+        },
+      });
+      hoisted.validateBeforeSubmitMock.mockResolvedValueOnce(true);
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          mode: 'create',
+          open: true,
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const nextButton = wrapper.findAll('button').find(button => button.text().includes('Next'));
+        await nextButton?.trigger('click');
+        await wrapper.vm.$nextTick();
+      }
+
+      await wrapper.find('.jw-footer-right .jw-btn-primary').trigger('click');
+      await flushPromises();
+
+      expect(hoisted.createIntegrationFromWizardMock).not.toHaveBeenCalled();
+      expect(hoisted.showErrorMock).toHaveBeenCalledWith(
+        'An integration with this name already exists'
+      );
+    });
+
+    it('falls back to create submission when edit mode has no integration id', async () => {
+      hoisted.wizardState = createWizardState({
+        stepValidation: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
+      });
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          mode: 'edit',
+          open: true,
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const nextButton = wrapper.findAll('button').find(button => button.text().includes('Next'));
+        await nextButton?.trigger('click');
+        await wrapper.vm.$nextTick();
+      }
+
+      await wrapper.find('.jw-footer-right .jw-btn-primary').trigger('click');
+      await flushPromises();
+
+      expect(hoisted.createIntegrationFromWizardMock).toHaveBeenCalledTimes(1);
+      expect(hoisted.updateIntegrationFromWizardMock).not.toHaveBeenCalled();
+      expect(wrapper.emitted('integration-created')).toHaveLength(1);
+    });
+
+    it('shows a fallback submit error message when the thrown error has no message', async () => {
+      hoisted.wizardState = createWizardState({
+        stepValidation: { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true },
+      });
+      hoisted.createIntegrationFromWizardMock.mockRejectedValueOnce({});
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          ...defaultProps,
+          mode: 'create',
+          open: true,
+        },
+        global: {
+          stubs: {
+            FieldMappingStep: { template: '<div></div>' },
+            BasicDetailsStep: { template: '<div></div>' },
+            DocumentSelectionStep: { template: '<div></div>' },
+            ScheduleConfigurationStep: { template: '<div></div>' },
+            ConnectionStep: { template: '<div></div>' },
+            ReviewSummary: { template: '<div></div>' },
+          },
+        },
+      });
+
+      for (let i = 0; i < 4; i++) {
+        const nextButton = wrapper.findAll('button').find(button => button.text().includes('Next'));
+        await nextButton?.trigger('click');
+        await wrapper.vm.$nextTick();
+      }
+
+      await wrapper.find('.jw-footer-right .jw-btn-primary').trigger('click');
+      await flushPromises();
+
+      expect(hoisted.showErrorMock).toHaveBeenCalledWith('Operation failed');
     });
   });
 

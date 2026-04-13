@@ -1,5 +1,7 @@
 /* eslint-disable simple-import-sort/imports */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { defineComponent, nextTick, reactive } from 'vue';
+import { mount } from '@vue/test-utils';
 
 vi.mock('@/api', () => ({
   SettingsService: {
@@ -84,6 +86,19 @@ describe('useAuditLogs', () => {
     expect(logs.auditLogs.value).toEqual([]);
   });
 
+  it('fetchAuditLogs uses the default error message for non-Error failures', async () => {
+    (useAuthStore as any).mockReturnValue({
+      isAuthenticated: true,
+      hasRole: vi.fn().mockReturnValue(false),
+    });
+    (SettingsService.listAuditLogs as any).mockRejectedValue('boom');
+
+    const logs = useAuditLogs();
+    await logs.fetchAuditLogs();
+
+    expect(logs.error.value).toBe('Failed to fetch audit logs');
+  });
+
   it('fetchAuditLogsByTenant returns early when not app_admin', async () => {
     (useAuthStore as any).mockReturnValue({
       isAuthenticated: true,
@@ -131,6 +146,19 @@ describe('useAuditLogs', () => {
     await logs.fetchAuditLogsByTenant('tenant-1');
     expect(logs.loading.value).toBe(false);
     expect(logs.error.value).toBe('bad');
+  });
+
+  it('fetchAuditLogsByTenant uses the default error message for non-Error failures', async () => {
+    (useAuthStore as any).mockReturnValue({
+      isAuthenticated: true,
+      hasRole: vi.fn().mockImplementation((r: string) => r === 'app_admin'),
+    });
+    (SettingsService.listAuditLogsByTenant as any).mockRejectedValue('bad');
+
+    const logs = useAuditLogs();
+    await logs.fetchAuditLogsByTenant('tenant-1');
+
+    expect(logs.error.value).toBe('Failed to fetch audit logs');
   });
 
   it('filters: entityTypes, userIds, activities reflect dataset', async () => {
@@ -205,6 +233,25 @@ describe('useAuditLogs', () => {
     expect(out[2].displayName).toBe('Other details');
   });
 
+  it('filteredLogs falls back to entity type and entity id when details are missing', async () => {
+    (useAuthStore as any).mockReturnValue({
+      isAuthenticated: true,
+      hasRole: vi.fn().mockReturnValue(false),
+    });
+    (SettingsService.listAuditLogs as any).mockResolvedValue([
+      makeLog({
+        entityId: 'Z9',
+        entityType: EntityType.CACHE,
+        details: '',
+      }),
+    ]);
+
+    const logs = useAuditLogs();
+    await logs.fetchAuditLogs();
+
+    expect(logs.filteredLogs.value[0].displayName).toBe('CACHE [Z9]');
+  });
+
   it('filtering by selections and clearFilters resets them', async () => {
     (useAuthStore as any).mockReturnValue({
       isAuthenticated: true,
@@ -249,5 +296,32 @@ describe('useAuditLogs', () => {
     expect(logs.formatEntityType(EntityType.CACHE)).toBe(EntityType.CACHE);
     expect(logs.formatActivity(undefined)).toBe('');
     expect(logs.formatActivity('CREATE')).toBe('CREATE');
+  });
+
+  it('fetches logs on mount when authentication becomes available later', async () => {
+    const authStore = reactive({
+      isAuthenticated: false,
+      hasRole: vi.fn().mockReturnValue(false),
+    });
+    (useAuthStore as any).mockReturnValue(authStore);
+    (SettingsService.listAuditLogs as any).mockResolvedValue([
+      makeLog({ entityId: 'late-auth', action: 'LOGIN' }),
+    ]);
+
+    const Harness = defineComponent({
+      setup() {
+        return useAuditLogs();
+      },
+      template: '<div />',
+    });
+
+    mount(Harness);
+    expect(SettingsService.listAuditLogs).not.toHaveBeenCalled();
+
+    authStore.isAuthenticated = true;
+    await nextTick();
+    await Promise.resolve();
+
+    expect(SettingsService.listAuditLogs).toHaveBeenCalledTimes(1);
   });
 });

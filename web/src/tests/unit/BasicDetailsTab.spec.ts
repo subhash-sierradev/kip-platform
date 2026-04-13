@@ -1,7 +1,36 @@
 /* eslint-disable simple-import-sort/imports */
 import { mount } from '@vue/test-utils';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import BasicDetailsTab from '@/components/outbound/arcgisintegration/details/BasicDetailsTab.vue';
+
+const routerSpies = vi.hoisted(() => ({
+  back: vi.fn(),
+}));
+
+const toastSpies = vi.hoisted(() => ({
+  showInfo: vi.fn(),
+  showError: vi.fn(),
+}));
+
+const actionSpies = vi.hoisted(() => ({
+  deleteIntegration: vi.fn(async () => true),
+  toggleIntegrationStatus: vi.fn(async () => true),
+  triggerJobExecution: vi.fn().mockResolvedValue(undefined),
+}));
+
+const dialogSpies = vi.hoisted(() => ({
+  openDialog: vi.fn(),
+  closeDialog: vi.fn(),
+  confirmWithHandlers: vi.fn(),
+}));
+
+const kwDocSpies = vi.hoisted(() => ({
+  getDynamicDocuments: vi.fn(),
+}));
+
+vi.mock('vue-router', () => ({
+  useRouter: () => routerSpies,
+}));
 
 vi.mock('devextreme-vue', () => ({
   DxButton: { props: ['text'], template: '<button><slot />{{ text }}</button>' },
@@ -33,7 +62,7 @@ vi.mock('@/components/common/EntityManageActions.vue', () => ({
 
 vi.mock('@/composables/useArcGISIntegrationActions', () => ({
   useArcGISIntegrationActions: () => ({
-    deleteIntegration: vi.fn(async () => true),
+    deleteIntegration: actionSpies.deleteIntegration,
     cloneIntegration: vi.fn(async () => 'new-id'),
   }),
   useArcGISIntegrationEditor: () => ({
@@ -41,15 +70,33 @@ vi.mock('@/composables/useArcGISIntegrationActions', () => ({
     updateIntegrationFromWizard: vi.fn().mockResolvedValue(true),
   }),
   useArcGISIntegrationStatus: () => ({
-    toggleIntegrationStatus: vi.fn(async () => true),
+    toggleIntegrationStatus: actionSpies.toggleIntegrationStatus,
   }),
   useArcGISIntegrationTrigger: () => ({
-    triggerJobExecution: vi.fn().mockResolvedValue(undefined),
+    triggerJobExecution: actionSpies.triggerJobExecution,
   }),
 }));
 
 vi.mock('@/store/toast', () => ({
-  useToastStore: () => ({ showInfo: vi.fn(), showError: vi.fn() }),
+  useToastStore: () => toastSpies,
+}));
+
+vi.mock('@/composables/useConfirmationDialog', () => ({
+  useConfirmationDialog: () => ({
+    dialogOpen: false,
+    actionLoading: false,
+    pendingAction: null,
+    dialogTitle: '',
+    dialogDescription: '',
+    dialogConfirmLabel: '',
+    openDialog: dialogSpies.openDialog,
+    closeDialog: dialogSpies.closeDialog,
+    confirmWithHandlers: dialogSpies.confirmWithHandlers,
+  }),
+}));
+
+vi.mock('@/api/services/KwIntegrationService', () => ({
+  KwDocService: kwDocSpies,
 }));
 
 describe('BasicDetailsTab', () => {
@@ -66,6 +113,11 @@ describe('BasicDetailsTab', () => {
     dynamicDocumentTypeLabel: 'DynamicType',
     isEnabled: true,
   } as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    kwDocSpies.getDynamicDocuments.mockResolvedValue([]);
+  });
 
   it('renders integration info and configuration', () => {
     const wrapper = mount(BasicDetailsTab, {
@@ -119,5 +171,185 @@ describe('BasicDetailsTab', () => {
     });
     expect(wrapper.find('.empty-state').exists()).toBe(true);
     expect(wrapper.text()).toContain('No Integration Data Found');
+  });
+
+  it('uses resolved dynamic document title when backend label is missing', async () => {
+    kwDocSpies.getDynamicDocuments.mockResolvedValue([{ id: 'doc-22', title: 'Resolved Title' }]);
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: {
+        integrationData: {
+          ...integration,
+          dynamicDocumentType: 'doc-22',
+          dynamicDocumentTypeLabel: null,
+          itemSubtype: 'DOCUMENT_DRAFT_DYNAMIC',
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+    await Promise.resolve();
+
+    expect(kwDocSpies.getDynamicDocuments).toHaveBeenCalledWith(
+      'DOCUMENT',
+      'DOCUMENT_DRAFT_DYNAMIC'
+    );
+    expect(wrapper.text()).toContain('Resolved Title');
+  });
+
+  it('falls back to raw dynamic document type when lookup fails', async () => {
+    kwDocSpies.getDynamicDocuments.mockRejectedValue(new Error('lookup failed'));
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: {
+        integrationData: {
+          ...integration,
+          dynamicDocumentType: 'raw-doc-id',
+          dynamicDocumentTypeLabel: null,
+          itemSubtype: 'DOCUMENT_FINAL_DYNAMIC',
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await wrapper.vm.$nextTick();
+    await Promise.resolve();
+
+    expect(wrapper.text()).toContain('raw-doc-id');
+  });
+
+  it('does not resolve dynamic label for unsupported subtype', async () => {
+    mount(BasicDetailsTab, {
+      props: {
+        integrationData: {
+          ...integration,
+          dynamicDocumentType: 'raw-doc-id',
+          dynamicDocumentTypeLabel: null,
+          itemSubtype: 'STATIC_SUBTYPE',
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await Promise.resolve();
+    expect(kwDocSpies.getDynamicDocuments).not.toHaveBeenCalled();
+  });
+
+  it('opens the correct confirmation dialogs for run, toggle, and delete', async () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+    const vm = wrapper.vm as any;
+
+    vm.handleActionClick('run');
+    vm.handleActionClick('toggle');
+    vm.handleActionClick('delete');
+
+    expect(dialogSpies.openDialog).toHaveBeenNthCalledWith(1, 'runNow');
+    expect(dialogSpies.openDialog).toHaveBeenNthCalledWith(2, 'disable');
+    expect(dialogSpies.openDialog).toHaveBeenNthCalledWith(3, 'delete');
+  });
+
+  it('emits edit-requested when edit action is clicked', () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    (wrapper.vm as any).handleActionClick('edit');
+
+    expect(wrapper.emitted('edit-requested')).toBeTruthy();
+  });
+
+  it('calls trigger execution with integration id and name', async () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await (wrapper.vm as any).handleTriggerIntegration();
+
+    expect(actionSpies.triggerJobExecution).toHaveBeenCalledWith('abc', 'Roads Integration');
+  });
+
+  it('shows an error and returns false when toggling without an integration id', async () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: '', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(false);
+    expect(toastSpies.showError).toHaveBeenCalledWith('Integration id missing');
+  });
+
+  it('emits status-updated and updates local state when toggle succeeds', async () => {
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(false);
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(true);
+    expect(actionSpies.toggleIntegrationStatus).toHaveBeenCalledWith('abc', true);
+    expect(wrapper.emitted('status-updated')).toEqual([[false]]);
+    expect((wrapper.vm as any).manageActions.find((item: any) => item.id === 'toggle').label).toBe(
+      'Enable Integration'
+    );
+  });
+
+  it('returns false when toggle action returns null', async () => {
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(null as any);
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleToggleIntegration()).resolves.toBe(false);
+  });
+
+  it('shows an error and returns false when deleting without an integration id', async () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: '', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(false);
+    expect(toastSpies.showError).toHaveBeenCalledWith('Integration id missing');
+  });
+
+  it('navigates back after successful delete', async () => {
+    actionSpies.deleteIntegration.mockResolvedValueOnce(true);
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(true);
+    expect(routerSpies.back).toHaveBeenCalled();
+  });
+
+  it('does not navigate when delete returns false', async () => {
+    actionSpies.deleteIntegration.mockResolvedValueOnce(false);
+
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await expect((wrapper.vm as any).handleDeleteIntegration()).resolves.toBe(false);
+    expect(routerSpies.back).not.toHaveBeenCalled();
+  });
+
+  it('delegates confirm handling to the dialog handler map', async () => {
+    const wrapper = mount(BasicDetailsTab, {
+      props: { integrationData: integration, integrationId: 'abc', loading: false },
+    });
+
+    await (wrapper.vm as any).handleConfirm();
+
+    expect(dialogSpies.confirmWithHandlers).toHaveBeenCalledTimes(1);
+    const handlers = dialogSpies.confirmWithHandlers.mock.calls[0]?.[0];
+    expect(Object.keys(handlers)).toEqual(
+      expect.arrayContaining(['enable', 'disable', 'delete', 'runNow'])
+    );
   });
 });

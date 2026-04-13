@@ -48,6 +48,12 @@
     <!-- Allow star imports for test classes -->
     <suppress checks="AvoidStarImport" files=".*Test\.java"/>
 
+    <!-- Suppress limited checks for integration test classes (*IT.java) -->
+    <suppress checks="MissingJavadocType" files=".*IT\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*IT\.java"/>
+    <suppress checks="JavadocMethod" files=".*IT\.java"/>
+    <suppress checks="LineLength" files=".*IT\.java"/>
+
     <!-- Allow Throwable in test method signatures (needed for AOP tests calling ProceedingJoinPoint) -->
     <suppress checks="IllegalThrows" files=".*Test\.java"/>
 

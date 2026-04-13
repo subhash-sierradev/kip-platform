@@ -367,6 +367,241 @@ class KwGraphqlClientTest {
         assertThat(documents).isEmpty();
     }
 
+    @Test
+    void fetchMonitoringDocuments_withFormDefinitionId_filtersResults() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":["
+                + "{\"id\":\"doc-1\",\"dynamicFormDefinitionId\":\"match-123\",\"title\":\"Report 1\"},"
+                + "{\"id\":\"doc-2\",\"dynamicFormDefinitionId\":\"other-456\",\"title\":\"Report 2\"},"
+                + "{\"id\":\"doc-3\",\"dynamicFormDefinitionId\":\"match-123\",\"title\":\"Report 3\"}"
+                + "]}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        JsonNode result = client.fetchMonitoringDocuments("match-123", 1609459200, 1609545600, 0, 100);
+
+        assertThat(result.isArray()).isTrue();
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).path("id").asText()).isEqualTo("doc-1");
+        assertThat(result.get(1).path("id").asText()).isEqualTo("doc-3");
+    }
+
+    @Test
+    void fetchMonitoringDocuments_withoutFormDefinitionId_returnsAllResults() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":["
+                + "{\"id\":\"doc-1\",\"title\":\"Report 1\"},"
+                + "{\"id\":\"doc-2\",\"title\":\"Report 2\"}"
+                + "]}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        JsonNode result = client.fetchMonitoringDocuments(null, 1609459200, 1609545600, 0, 100);
+
+        assertThat(result.isArray()).isTrue();
+        assertThat(result).hasSize(2);
+    }
+
+    @Test
+    void fetchMonitoringDocuments_blankFormDefinitionId_returnsAllResults() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":[{\"id\":\"doc-1\"}]}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        JsonNode result = client.fetchMonitoringDocuments("  ", 1609459200, 1609545600, 0, 100);
+
+        assertThat(result.isArray()).isTrue();
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void fetchMonitoringDocuments_nonArrayResult_returnsAsIs() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"totalCount\":5,\"results\":[{\"id\":\"doc-1\"}]}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        JsonNode result = client.fetchMonitoringDocuments(null, 1609459200, 1609545600, 0, 100);
+
+        assertThat(result.isArray()).isTrue();
+        assertThat(result).hasSize(1); // normalizeSearchWithData extracts "results"
+    }
+
+    @Test
+    void fetchMonitoringDocuments_graphqlErrors_throwsIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"errors\":[{\"message\":\"Access denied\"}]}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.fetchMonitoringDocuments("form-123", 1609459200, 1609545600, 0, 100))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("KW GraphQL returned errors");
+    }
+
+    @Test
+    void fetchFormDefinition_success_returnsFormNode() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"dynamicFormDefinition\":{\"id\":\"form-123\",\"name\":\"Test Form\",\"versions\":[{\"versionNumber\":1}]}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        JsonNode result = client.fetchFormDefinition("form-123");
+
+        assertThat(result.path("id").asText()).isEqualTo("form-123");
+        assertThat(result.path("name").asText()).isEqualTo("Test Form");
+        assertThat(result.path("versions").isArray()).isTrue();
+    }
+
+    @Test
+    void fetchFormDefinition_graphqlErrors_throwsIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"errors\":[{\"message\":\"Form not found\"}]}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.fetchFormDefinition("missing-form"))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("KW GraphQL returned errors");
+    }
+
+    @Test
+    void getValidAccessToken_nullUsername_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> client.getValidAccessToken(null, "password"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Username cannot be null or empty");
+    }
+
+    @Test
+    void getValidAccessToken_nullPassword_throwsIllegalArgumentException() {
+        assertThatThrownBy(() -> client.getValidAccessToken("user", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Password cannot be null or empty");
+    }
+
+    @Test
+    void getValidAccessToken_httpException_throwsRuntimeException() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn(null);
+        when(kwHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
+                .thenThrow(new RuntimeException("Network error"));
+
+        assertThatThrownBy(() -> client.getValidAccessToken())
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to fetch OAuth2 token");
+    }
+
+    @Test
+    void getValidAccessToken_withScope_includesScopeInRequest() throws Exception {
+        KwProperties propertiesWithScope = properties();
+        propertiesWithScope.getAuth().setScope("read write");
+        client = new KwGraphqlClient(propertiesWithScope, tokenCache, kwDocumentMapper, kwHttpClient, new ObjectMapper());
+
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn(null);
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"access_token\":\"token\",\"expires_in\":3600}"));
+        mockHttpExecution(classicHttpResponse);
+
+        String token = client.getValidAccessToken();
+
+        assertThat(token).isEqualTo("token");
+        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
+        verify(kwHttpClient).execute(requestCaptor.capture(), any(HttpClientResponseHandler.class));
+        String requestBody = EntityUtils.toString(((HttpPost) requestCaptor.getValue()).getEntity());
+        assertThat(requestBody).contains("scope=read+write");
+    }
+
+    @Test
+    void getValidAccessToken_emptyScope_omitsScopeFromRequest() throws Exception {
+        KwProperties propertiesNoScope = properties();
+        propertiesNoScope.getAuth().setScope("");
+        client = new KwGraphqlClient(propertiesNoScope, tokenCache, kwDocumentMapper, kwHttpClient, new ObjectMapper());
+
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn(null);
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"access_token\":\"token\",\"expires_in\":3600}"));
+        mockHttpExecution(classicHttpResponse);
+
+        String token = client.getValidAccessToken();
+
+        assertThat(token).isEqualTo("token");
+        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
+        verify(kwHttpClient).execute(requestCaptor.capture(), any(HttpClientResponseHandler.class));
+        String requestBody = EntityUtils.toString(((HttpPost) requestCaptor.getValue()).getEntity());
+        assertThat(requestBody).doesNotContain("scope=");
+    }
+
+    @Test
+    void normalizeSearchWithData_nullNode_returnsMissingNode() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity("{\"data\":{}}"));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).isEmpty();
+    }
+
+    @Test
+    void queryDocumentsWithLocations_resultsContainer_normalizesAndMaps() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"results\":[{\"id\":\"doc-4\"}]}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+        when(kwDocumentMapper.convertToDocumentDtos(any()))
+                .thenReturn(List.of(new KwDocumentDto("doc-4", "Doc4", "DOCUMENT", 1L, 2L)));
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.getFirst().getId()).isEqualTo("doc-4");
+    }
+
+    @Test
+    void executeGraphQLQuery_runtimeExceptionDuringHandling_wrapsInIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(kwHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
+                .thenAnswer(invocation -> {
+                    HttpClientResponseHandler<?> handler = invocation.getArgument(1);
+                    throw new RuntimeException("Handler failed");
+                });
+
+        assertThatThrownBy(() -> client.executeGraphQLQuery(Map.of("query", "{ test }")))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("Failed to execute GraphQL query");
+    }
+
     private void mockHttpExecution(ClassicHttpResponse response) throws Exception {
         when(kwHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
                 .thenAnswer(invocation -> {

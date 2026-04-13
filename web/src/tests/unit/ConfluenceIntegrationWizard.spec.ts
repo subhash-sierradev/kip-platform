@@ -28,7 +28,6 @@ const hoisted = vi.hoisted(() => ({
   updateIntegrationFromWizardMock: vi.fn(),
   loadNormalizedNamesMock: vi.fn(),
   getConfluenceIntegrationByIdMock: vi.fn(),
-  convertUtcTimeToUserTimezoneMock: vi.fn((time: string) => time?.substring(0, 5) || '02:00'),
   isDuplicateNameRef: { value: false },
   allNormalizedNamesRef: { value: [] as string[] },
   wizardState: null as unknown as WizardStateMock,
@@ -164,9 +163,11 @@ vi.mock('@/api/services/ConfluenceIntegrationService', () => ({
   },
 }));
 
-vi.mock('@/utils/scheduleDisplayUtils', () => ({
-  convertUtcTimeToUserTimezone: hoisted.convertUtcTimeToUserTimezoneMock,
-}));
+// Mock getUserTimezone to UTC so date/time conversions in buildPrefillSchedule are deterministic
+vi.mock('@/utils/timezoneUtils', async () => {
+  const actual = await vi.importActual('@/utils/timezoneUtils');
+  return { ...actual, getUserTimezone: vi.fn(() => 'UTC') };
+});
 
 const IntegrationDetailsStepStub = {
   name: 'IntegrationDetailsStep',
@@ -338,6 +339,18 @@ describe('ConfluenceIntegrationWizard', () => {
     expect(hoisted.showErrorMock).toHaveBeenCalledWith('submit failed');
   });
 
+  it('shows the generic submit error message when the thrown value has no message', async () => {
+    hoisted.createIntegrationFromWizardMock.mockRejectedValueOnce({});
+
+    const wrapper = await createWrapper({ mode: 'create' });
+    await goToReviewStep(wrapper);
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.showErrorMock).toHaveBeenCalledWith('Operation failed');
+  });
+
   it('disables submit for duplicate names in create mode', async () => {
     hoisted.isDuplicateNameRef.value = true;
 
@@ -396,7 +409,23 @@ describe('ConfluenceIntegrationWizard', () => {
     expect(wrapper.emitted('close')).toBeTruthy();
   });
 
-  it('converts UTC executionTime to user timezone when prefilling for edit', async () => {
+  it('falls back to the create flow when edit mode is missing an integration id', async () => {
+    const wrapper = await createWrapper({ mode: 'edit' });
+    await goToReviewStep(wrapper);
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.createIntegrationFromWizardMock).toHaveBeenCalledWith(
+      hoisted.wizardState.formData,
+      'https://confluence.example.com'
+    );
+    expect(hoisted.updateIntegrationFromWizardMock).not.toHaveBeenCalled();
+    expect(wrapper.emitted('integration-created')).toBeTruthy();
+  });
+
+  it('converts UTC executionTime and executionDate to local timezone when prefilling for edit', async () => {
+    // With getUserTimezone mocked to 'UTC', local time === UTC time; date is also unchanged.
     hoisted.getConfluenceIntegrationByIdMock.mockResolvedValueOnce({
       name: 'Existing Name',
       description: 'Existing Description',
@@ -428,6 +457,307 @@ describe('ConfluenceIntegrationWizard', () => {
 
     await createWrapper({ mode: 'edit', integrationId: 'tz-test-id' });
 
-    expect(hoisted.convertUtcTimeToUserTimezoneMock).toHaveBeenCalledWith('20:30:00', '2025-06-15');
+    // UTC timezone: 20:30 UTC → 20:30 local; 2025-06-15 UTC → 2025-06-15 local
+    expect(hoisted.wizardState.formData.executionTime).toBe('20:30');
+    expect(hoisted.wizardState.formData.executionDate).toBe('2025-06-15');
+  });
+
+  it('converts UTC executionTime to local HH:mm when executionDate is null (end-of-month schedule)', async () => {
+    // getUserTimezone is mocked to 'UTC', so UTC 14:30:00 → local 14:30 (no offset).
+    // The key assertion is that executionTime is normalised to HH:mm and not left as the
+    // raw HH:mm:ss UTC string, which would show the wrong time for non-UTC users.
+    hoisted.getConfluenceIntegrationByIdMock.mockResolvedValueOnce({
+      name: 'Month End Integration',
+      description: '',
+      itemType: 'DOCUMENT',
+      itemSubtype: 'MONTHLY',
+      itemSubtypeLabel: 'Monthly',
+      dynamicDocumentType: '',
+      dynamicDocumentTypeLabel: '',
+      languageCodes: ['en'],
+      reportNameTemplate: 'Report - {date}',
+      includeTableOfContents: false,
+      confluenceSpaceKey: 'SPACE1',
+      confluenceSiteUrl: 'https://example.atlassian.net/wiki',
+      confluenceSpaceKeyFolderKey: '',
+      connectionId: 'conn-existing',
+      schedule: {
+        executionTime: '14:30:00',
+        frequencyPattern: 'MONTHLY',
+        executionDate: null,
+        dailyExecutionInterval: null,
+        daySchedule: [],
+        monthSchedule: [],
+        isExecuteOnMonthEnd: true,
+        cronExpression: undefined,
+        businessTimeZone: 'UTC',
+        timeCalculationMode: 'FIXED_DAY_BOUNDARY',
+      },
+    });
+
+    await createWrapper({ mode: 'edit', integrationId: 'month-end-test-id' });
+
+    expect(hoisted.wizardState.formData.executionDate).toBeNull();
+    expect(hoisted.wizardState.formData.executionTime).toBe('14:30');
+  });
+
+  it('does not emit created when create returns an empty id', async () => {
+    hoisted.createIntegrationFromWizardMock.mockResolvedValueOnce('');
+
+    const wrapper = await createWrapper({ mode: 'create' });
+    await goToReviewStep(wrapper);
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('integration-created')).toBeFalsy();
+    expect(wrapper.emitted('close')).toBeFalsy();
+  });
+
+  it('does not emit updated when edit returns false', async () => {
+    hoisted.updateIntegrationFromWizardMock.mockResolvedValueOnce(false);
+
+    const wrapper = await createWrapper({ mode: 'edit', integrationId: 'integration-123' });
+    await goToReviewStep(wrapper);
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('integration-updated')).toBeFalsy();
+    expect(wrapper.emitted('close')).toBeFalsy();
+  });
+
+  it('marks connection step invalid when prefilling edit mode without a connection id', async () => {
+    hoisted.getConfluenceIntegrationByIdMock.mockResolvedValueOnce({
+      name: 'Existing Name',
+      description: 'Existing Description',
+      itemType: 'DOCUMENT',
+      itemSubtype: 'DAILY',
+      itemSubtypeLabel: 'Daily',
+      dynamicDocumentType: '',
+      dynamicDocumentTypeLabel: '',
+      languageCodes: ['en'],
+      reportNameTemplate: 'Report - {date}',
+      includeTableOfContents: true,
+      confluenceSpaceKey: 'SPACE1',
+      confluenceSiteUrl: 'https://example.atlassian.net/wiki',
+      confluenceSpaceKeyFolderKey: '',
+      connectionId: '',
+      schedule: {
+        executionTime: '02:00',
+        frequencyPattern: 'DAILY',
+        executionDate: null,
+        dailyExecutionInterval: 24,
+        daySchedule: [],
+        monthSchedule: [],
+        isExecuteOnMonthEnd: false,
+        cronExpression: undefined,
+      },
+    });
+
+    await createWrapper({ mode: 'edit', integrationId: 'missing-connection' });
+
+    expect(hoisted.wizardState.stepValidation[3]).toBe(false);
+  });
+
+  it('does not advance when the current step is invalid', async () => {
+    hoisted.wizardState = createWizardState();
+    hoisted.wizardState.stepValidation[1] = false;
+
+    const wrapper = await createWrapper({ mode: 'create' });
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect((wrapper.vm as any).currentStep).toBe(1);
+  });
+
+  it('advances and goes back when step validity allows it', async () => {
+    const wrapper = await createWrapper({ mode: 'create' });
+
+    (wrapper.vm as any).nextStep();
+    expect((wrapper.vm as any).currentStep).toBe(2);
+
+    (wrapper.vm as any).previousStep();
+    (wrapper.vm as any).previousStep();
+    expect((wrapper.vm as any).currentStep).toBe(1);
+  });
+
+  it('does not close when overlay handler receives an inner-content click', async () => {
+    const wrapper = await createWrapper({ open: true });
+
+    (wrapper.vm as any).handleOverlayClick({ target: {}, currentTarget: {} });
+
+    expect(wrapper.emitted('close')).toBeFalsy();
+  });
+
+  it('closes and resets when overlay itself is clicked', async () => {
+    const wrapper = await createWrapper({ open: true });
+
+    (wrapper.vm as any).handleOverlayClick({ target: 'x', currentTarget: 'x' });
+
+    expect(hoisted.wizardState.resetFormData).toHaveBeenCalled();
+    expect(wrapper.emitted('close')).toBeTruthy();
+  });
+
+  it('opens the cancel dialog and keeps the wizard open when choosing no', async () => {
+    const wrapper = await createWrapper({ mode: 'create' });
+
+    (wrapper.vm as any).showCancelConfirmation();
+    await flushPromises();
+    expect((wrapper.vm as any).showCancelDialog).toBe(true);
+
+    const noButton = wrapper.findAll('button').find(btn => btn.text().includes('No, Go Back'));
+    expect(noButton).toBeDefined();
+    await noButton!.trigger('click');
+
+    expect((wrapper.vm as any).showCancelDialog).toBe(false);
+    expect(wrapper.emitted('close')).toBeFalsy();
+  });
+
+  it('uses schedule defaults when prefilling an integration without a schedule', async () => {
+    hoisted.getConfluenceIntegrationByIdMock.mockResolvedValueOnce({
+      name: 'Existing Name',
+      description: 'Existing Description',
+      itemType: 'DOCUMENT',
+      itemSubtype: 'DAILY',
+      itemSubtypeLabel: 'Daily',
+      dynamicDocumentType: '',
+      dynamicDocumentTypeLabel: '',
+      languageCodes: ['en'],
+      reportNameTemplate: 'Report - {date}',
+      includeTableOfContents: true,
+      confluenceSpaceKey: 'SPACE1',
+      confluenceSpaceKeyFolderKey: '',
+      connectionId: 'conn-existing',
+      schedule: undefined,
+    });
+
+    await createWrapper({ mode: 'edit', integrationId: 'no-schedule-id' });
+
+    expect(hoisted.wizardState.formData.executionTime).toBe('02:00');
+    expect(hoisted.wizardState.formData.frequencyPattern).toBe('DAILY');
+    expect(hoisted.wizardState.formData.dailyFrequency).toBe('24');
+  });
+
+  it('restores body overflow when the wizard closes', async () => {
+    document.body.style.overflow = 'hidden';
+
+    const wrapper = await createWrapper({ open: true });
+    await wrapper.setProps({ open: false });
+    await flushPromises();
+
+    expect(document.body.style.overflow).toBe('');
+  });
+
+  it('sets body overflow while the wizard is open and exposes the no-op connection success handler', async () => {
+    const wrapper = await createWrapper({ open: false });
+
+    await wrapper.setProps({ open: true });
+    await flushPromises();
+
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(() => (wrapper.vm as any).handleConnectionSuccess('connection-1')).not.toThrow();
+  });
+
+  it('does not submit when the review step is invalid', async () => {
+    const wrapper = await createWrapper({ mode: 'create' });
+    await goToReviewStep(wrapper);
+
+    hoisted.wizardState.stepValidation[5] = false;
+    await flushPromises();
+
+    await wrapper.find('button.jw-btn-primary').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.createIntegrationFromWizardMock).not.toHaveBeenCalled();
+    expect(wrapper.emitted('integration-created')).toBeFalsy();
+  });
+
+  it('does not advance past the final step', async () => {
+    const wrapper = await createWrapper({ mode: 'create' });
+    await goToReviewStep(wrapper);
+
+    expect((wrapper.vm as any).currentStep).toBe(5);
+
+    (wrapper.vm as any).nextStep();
+    await flushPromises();
+
+    expect((wrapper.vm as any).currentStep).toBe(5);
+  });
+
+  it('uses fallback prefill defaults for sparse clone details', async () => {
+    hoisted.getConfluenceIntegrationByIdMock.mockResolvedValueOnce({
+      name: 'Sparse Integration',
+      description: '',
+      itemType: '',
+      itemSubtype: '',
+      itemSubtypeLabel: '',
+      dynamicDocumentType: '',
+      dynamicDocumentTypeLabel: '',
+      languageCodes: undefined,
+      reportNameTemplate: '',
+      includeTableOfContents: undefined,
+      confluenceSpaceKey: '',
+      confluenceSpaceKeyFolderKey: '',
+      connectionId: '',
+      schedule: {
+        executionTime: '',
+        frequencyPattern: '',
+        executionDate: '',
+        dailyExecutionInterval: undefined,
+        daySchedule: undefined,
+        monthSchedule: undefined,
+        isExecuteOnMonthEnd: false,
+        cronExpression: '',
+        businessTimeZone: '',
+        timeCalculationMode: '',
+      },
+    });
+
+    await createWrapper({ mode: 'clone', integrationId: 'sparse-clone-id' });
+
+    expect(hoisted.wizardState.formData.name).toBe('Copy of Sparse Integration');
+    expect(hoisted.wizardState.formData.itemType).toBe('DOCUMENT');
+    expect(hoisted.wizardState.formData.subType).toBe('');
+    expect(hoisted.wizardState.formData.languageCodes).toEqual([]);
+    expect(hoisted.wizardState.formData.includeTableOfContents).toBe(true);
+    expect(hoisted.wizardState.formData.executionTime).toBe('02:00');
+    expect(hoisted.wizardState.formData.frequencyPattern).toBe('DAILY');
+    expect(hoisted.wizardState.formData.executionDate).toBe(null);
+    expect(hoisted.wizardState.formData.dailyFrequency).toBe('24');
+    expect(hoisted.wizardState.formData.selectedDays).toEqual([]);
+    expect(hoisted.wizardState.formData.selectedMonths).toEqual([]);
+    expect(hoisted.wizardState.formData.cronExpression).toBeUndefined();
+    expect(hoisted.wizardState.formData.businessTimeZone).toBe('UTC');
+    expect(hoisted.wizardState.formData.timeCalculationMode).toBe('FIXED_DAY_BOUNDARY');
+    expect(hoisted.wizardState.formData.confluenceSpaceKeyFolderKey).toBe('ROOT');
+    expect(hoisted.wizardState.formData.existingConnectionId).toBe('');
+    expect(hoisted.wizardState.stepValidation[3]).toBe(true);
+  });
+
+  it('shows the cloning label while clone submission is in flight', async () => {
+    let resolveCreate: ((value: string) => void) | undefined;
+    hoisted.createIntegrationFromWizardMock.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          resolveCreate = resolve;
+        })
+    );
+
+    const wrapper = await createWrapper({ mode: 'clone', integrationId: 'clone-in-flight' });
+    await goToReviewStep(wrapper);
+
+    const submitButton = wrapper.find('button.jw-btn-primary');
+    await submitButton.trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('button.jw-btn-primary').text()).toContain('Cloning...');
+    expect(wrapper.find('button.jw-btn-primary').attributes('disabled')).toBeDefined();
+
+    resolveCreate?.('cloned-id');
+    await flushPromises();
+
+    expect(wrapper.emitted('integration-created')).toBeTruthy();
   });
 });

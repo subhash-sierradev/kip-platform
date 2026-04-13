@@ -127,6 +127,27 @@ describe('NotificationsPage', () => {
     state.createEvent.mockResolvedValue(true);
   });
 
+  function gridStubWithEventSlots() {
+    return defineComponent({
+      name: 'GenericDataGrid',
+      props: ['data'],
+      setup(props, { slots }) {
+        return () =>
+          h(
+            'div',
+            { class: 'grid-slot-stub' },
+            (props.data as any[]).map(row =>
+              h('div', { class: 'grid-slot-row', key: row.id ?? row.eventKey }, [
+                slots.eventKeyTemplate?.({ data: row }),
+                slots.descriptionTemplate?.({ data: row }),
+                slots.notifyInitiatorTemplate?.({ data: row }),
+              ])
+            )
+          );
+      },
+    });
+  }
+
   function mountPage() {
     return mount(NotificationsPage, {
       global: {
@@ -169,6 +190,16 @@ describe('NotificationsPage', () => {
     expect(state.fetchPolicies).toHaveBeenCalledTimes(1);
   });
 
+  it('does not refetch rules or policies when switching to passive tabs', async () => {
+    const wrapper = mountPage();
+
+    await wrapper.find('.tab-btn-templates').trigger('click');
+    await wrapper.find('.tab-btn-events').trigger('click');
+
+    expect(state.fetchRules).toHaveBeenCalledTimes(1);
+    expect(state.fetchPolicies).not.toHaveBeenCalled();
+  });
+
   it('disables Add Rule when no available events and enables when available', async () => {
     state.events.value = [{ id: 'e1', eventKey: 'A' } as any];
     state.rules.value = [{ id: 'r1', eventId: 'e1' } as any];
@@ -182,6 +213,25 @@ describe('NotificationsPage', () => {
     state.rules.value = [];
     await wrapper.vm.$nextTick();
     expect(wrapper.find('.section-primary-btn').attributes('disabled')).toBeUndefined();
+  });
+
+  it('updates action button titles for exhausted and available recipient rules', async () => {
+    state.rules.value = [{ id: 'r1', eventId: 'e1' } as any];
+    state.policies.value = [{ id: 'p1', ruleId: 'r1' } as any];
+    const wrapper = mountPage();
+
+    await wrapper.find('.tab-btn-recipients').trigger('click');
+
+    const button = wrapper.find('.section-primary-btn');
+    expect(button.attributes('disabled')).toBeDefined();
+    expect(button.attributes('title')).toBe('All rules already have recipients configured');
+
+    state.policies.value = [];
+    await wrapper.vm.$nextTick();
+
+    expect(wrapper.find('.section-primary-btn').attributes('title')).toBe(
+      'Add recipients to a notification rule'
+    );
   });
 
   it('opens rule modal from rules tab and policy modal from recipients tab', async () => {
@@ -215,6 +265,19 @@ describe('NotificationsPage', () => {
     expect(state.fetchPolicies).toHaveBeenCalled();
   });
 
+  it('swallows reset confirmation errors without refetching data', async () => {
+    resetState.showConfirmDialog.value = true;
+    resetState.confirmReset.mockRejectedValueOnce(new Error('reset failed'));
+    const wrapper = mountPage();
+
+    await wrapper.find('.confirm-reset').trigger('click');
+    await Promise.resolve();
+
+    expect(resetState.confirmReset).toHaveBeenCalledTimes(1);
+    expect(state.fetchRules).toHaveBeenCalledTimes(1);
+    expect(state.fetchPolicies).not.toHaveBeenCalled();
+  });
+
   it('keeps modal open when createEvent fails and closes on success path', async () => {
     const wrapper = mountPage();
     const saveButton = wrapper.find('.emit-event-save');
@@ -228,5 +291,50 @@ describe('NotificationsPage', () => {
     await saveButton.trigger('click');
     await Promise.resolve();
     expect(state.createEvent).toHaveBeenCalledTimes(2);
+  });
+
+  it('renders notifyInitiator chips for both enabled and disabled event rows', () => {
+    state.events.value = [
+      { id: 'e1', eventKey: 'A', description: 'Enabled event', notifyInitiator: true } as any,
+      { id: 'e2', eventKey: 'B', description: 'Disabled event', notifyInitiator: false } as any,
+    ];
+
+    const wrapper = mount(NotificationsPage, {
+      global: {
+        stubs: {
+          TabNavigation: tabNavStub,
+          GenericDataGrid: gridStubWithEventSlots(),
+          StatusChipForDataTable: {
+            props: ['status', 'label'],
+            template: '<span class="status-chip-stub">{{ label }}|{{ status }}</span>',
+          },
+          NotificationEventModal: {
+            emits: ['save', 'close'],
+            template: '<div class="event-modal-stub" />',
+          },
+          NotificationsRulesTab: rulesTabStub,
+          NotificationsRecipientsTab: recipientsTabStub,
+          ConfirmationDialog: {
+            props: ['open'],
+            emits: ['cancel', 'confirm'],
+            template: '<div />',
+          },
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain('Yes|ACTIVE');
+    expect(wrapper.text()).toContain('No|INACTIVE');
+  });
+
+  it('shows the resetting label and disables the reset button while a reset is in progress', () => {
+    resetState.isResetting.value = true;
+
+    const wrapper = mountPage();
+    const button = wrapper.find('.tab-reset-btn');
+
+    expect(button.attributes('disabled')).toBeDefined();
+    expect(button.classes()).toContain('tab-reset-btn--loading');
+    expect(button.text()).toContain('Resetting…');
   });
 });

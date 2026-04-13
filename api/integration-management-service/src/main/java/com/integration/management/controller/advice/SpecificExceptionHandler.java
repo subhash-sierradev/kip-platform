@@ -31,6 +31,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +58,7 @@ public class SpecificExceptionHandler {
                                                      Object details) {
         String path = getRequestPath(request);
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(LocalDateTime.now(),
+                .body(new ErrorResponse(LocalDateTime.now(ZoneOffset.UTC),
                         status.value(),
                         status.getReasonPhrase(),
                         message,

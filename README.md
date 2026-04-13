@@ -91,8 +91,8 @@ KIP Backend automates data synchronization workflows:
 | Component            | Technology                                       |
 | -------------------- | ------------------------------------------------ |
 | **Language**         | Java 25, TypeScript 5.7.2                        |
-| **Frameworks**       | Spring Boot 4.0.4, Vue.js 3.5.25                 |
-| **Build Tools**      | Maven 3.6+, Vite 7.3.0                           |
+| **Frameworks**       | Spring Boot 4.0.5, Vue.js 3.5.25                 |
+| **Build Tools**      | Gradle 9.4.1, Vite 7.x                           |
 | **Database**         | PostgreSQL 42.7.7 with JPA/Hibernate 7.1.8.Final |
 | **Authentication**   | Keycloak 26.2.0                                  |
 | **UI Framework**     | DevExtreme 25.2.3                                |
@@ -103,7 +103,7 @@ KIP Backend automates data synchronization workflows:
 
 **Frontend:**
 
-- Vue.js 3.5.25, TypeScript 5.7.2, Vite 7.3.0
+- Vue.js 3.5.25, TypeScript 5.7.2, Vite 7.x
 - DevExtreme 25.2.3 UI components with responsive design
 - Pinia 3.0.4 state management with persistence
 - Vue Router 4.6.3, Keycloak 26.2.0 for authentication
@@ -112,8 +112,8 @@ KIP Backend automates data synchronization workflows:
 
 **Backend:**
 
-- Spring Boot 4.0.4, Java 25
-- Multi-module Maven: `integration-execution-contract`, `integration-management-service`, `integration-execution-service`
+- Spring Boot 4.0.5, Java 25
+- Multi-module Gradle: `integration-execution-contract`, `integration-management-service`, `integration-execution-service`
 - Azure Key Vault for secrets management
 - REST APIs, scheduling, data extraction, processing, publishing
 - Security with multi-tenant support
@@ -132,8 +132,10 @@ KIP Backend automates data synchronization workflows:
 
 ```
 kip-backend/
-├── api/                                      # Spring Boot 4.0.4 + Java 25 multi-module
-│   ├── pom.xml                               # Parent Maven configuration
+├── api/                                      # Spring Boot 4.0.5 + Java 25 multi-module
+│   ├── build.gradle.kts                      # Root Gradle build configuration
+│   ├── settings.gradle.kts                   # Module includes
+│   ├── gradle/libs.versions.toml             # Version catalog
 │   ├── integration-execution-contract/       # Shared DTOs (lightweight, no tests)
 │   ├── integration-management-service/       # Config API (8085, fat JAR)
 │   └── integration-execution-service/        # Processing Engine (8081, fat JAR)
@@ -164,21 +166,18 @@ kip-backend/
 ### Prerequisites
 
 - **Java 25** or higher
-- **Maven 3.6+**
 - **Node.js** (for frontend)
 - **PostgreSQL 18+**
 
-### Backend (Spring Boot 4.0.4)
+### Backend (Spring Boot 4.0.5)
 
 ```powershell
 cd api
-mvn clean install
+./gradlew clean build
 # Run management service
-cd integration-management-service
-mvn spring-boot:run
+./gradlew :integration-management-service:bootRun
 # Run execution service
-cd ../integration-execution-service
-mvn spring-boot:run
+./gradlew :integration-execution-service:bootRun
 ```
 
 ### Frontend (Vue.js 3.5.25 + Vite)
@@ -224,22 +223,20 @@ npm run sanity
 ```powershell
 # Build all modules
 cd api
-mvn clean install
+./gradlew clean build
 
 # Run tests with coverage (80% minimum)
-mvn test
-mvn jacoco:report
+./gradlew test
+./gradlew jacocoTestReport
 
 # Code quality checks
-mvn checkstyle:check
+./gradlew checkstyleMain checkstyleTest
 
 # Full verification
-mvn clean verify
+./gradlew clean check
 
-# Database Migration (Flyway - run from specific service)
-cd integration-management-service
-mvn flyway:migrate
-mvn --% -Dflyway.cleanDisabled=false flyway:clean flyway:migrate
+# Database Migration (Flyway - runs automatically via Spring Boot)
+# For standalone: ./gradlew flywayMigrate (requires Flyway plugin)
 ```
 
 ### Frontend Commands

@@ -181,7 +181,7 @@ public class ConfluenceIntegrationService {
             integration.setLastModifiedBy(userId);
             confluenceIntegrationRepository.save(integration);
 
-            notificationEventPublisher.publish(NotificationEvent.builder()
+            notificationEventPublisher.publishAfterCommit(NotificationEvent.builder()
                     .eventKey(newStatus
                             ? NotificationEventKey.CONFLUENCE_INTEGRATION_ENABLED.name()
                             : NotificationEventKey.CONFLUENCE_INTEGRATION_DISABLED.name())
@@ -211,6 +211,10 @@ public class ConfluenceIntegrationService {
         }
     }
 
+    @PublishNotification(
+            eventKey         = NotificationEventKey.CONFLUENCE_INTEGRATION_JOB_ADHOC_RUN,
+            metadataProvider = "confluenceNotificationMetadataProvider",
+            entityId         = "#integrationId")
     @Transactional
     public void triggerJobExecution(UUID integrationId, String tenantId, String userId) {
         log.info("Triggering manual job execution for Confluence integration: {} for tenant: {} by user: {}",

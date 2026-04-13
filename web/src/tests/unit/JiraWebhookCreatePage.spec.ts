@@ -16,7 +16,7 @@ vi.mock('@/store/toast', () => ({
 }));
 
 // Mock the JiraWebhookWizard component
-vi.mock('@/components/jirawebhooks/wizard/JiraWebhookWizard.vue', () => ({
+vi.mock('@/components/outbound/jirawebhooks/wizard/JiraWebhookWizard.vue', () => ({
   default: {
     name: 'JiraWebhookWizard',
     props: ['open'],

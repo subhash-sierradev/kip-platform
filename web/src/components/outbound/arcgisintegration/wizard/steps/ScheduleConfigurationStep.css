@@ -586,27 +586,3 @@ input[type='radio'] {
   font-size: 11px;
   color: #6b7280;
 }
-
-.sc-cron-sample-row {
-  grid-template-columns: 1fr;
-  justify-items: center;
-}
-
-.sc-cron-sample-field {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-
-.sc-cron-sample-field .sc-label {
-  width: 100%;
-  justify-content: center;
-}
-
-.sc-cron-sample-field img {
-  display: block;
-  margin-top: 8px;
-  max-width: 100%;
-  height: auto;
-}

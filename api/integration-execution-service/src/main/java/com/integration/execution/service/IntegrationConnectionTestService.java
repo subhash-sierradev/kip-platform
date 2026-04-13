@@ -183,8 +183,9 @@ public class IntegrationConnectionTestService {
             // Validate projects
             JsonNode values = projectsResponse.get("values");
             if (values == null || !values.isArray() || values.isEmpty()) {
-                return new ApiResponse(SC_INTERNAL_SERVER_ERROR, false,
-                        "Unable to connect - no projects found or accessible");
+                return new ApiResponse(HttpServletResponse.SC_FORBIDDEN, false,
+                    "Jira credentials are valid, but no projects are accessible. "
+                        + "Ensure the account has Jira product access and Browse Projects permission.");
             }
 
             return new ApiResponse(SC_OK, true,

@@ -1,7 +1,12 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ConfirmationDialog from '@/components/common/ConfirmationDialog.vue';
+
+afterEach(() => {
+  document.body.innerHTML = '';
+  vi.useRealTimers();
+});
 
 describe('ConfirmationDialog', () => {
   it('renders dialog with correct title and description', () => {
@@ -14,9 +19,13 @@ describe('ConfirmationDialog', () => {
         cancelLabel: 'Cancel',
         loading: false,
       },
+      attachTo: document.body,
     });
 
     expect(wrapper.exists()).toBe(true);
+    expect(document.body.textContent).toContain('Test Title');
+    expect(document.body.textContent).toContain('Test description');
+    wrapper.unmount();
   });
 
   it('shows loading state when loading prop is true', () => {
@@ -26,9 +35,14 @@ describe('ConfirmationDialog', () => {
         title: 'Test Title',
         loading: true,
       },
+      attachTo: document.body,
     });
 
     expect(wrapper.exists()).toBe(true);
+    expect(document.querySelector('.loader')).not.toBeNull();
+    expect((document.querySelectorAll('button')[0] as HTMLButtonElement).disabled).toBe(true);
+    expect((document.querySelectorAll('button')[1] as HTMLButtonElement).disabled).toBe(true);
+    wrapper.unmount();
   });
 
   it('emits confirm event when confirm button is clicked', async () => {
@@ -261,6 +275,8 @@ describe('ConfirmationDialog', () => {
     // Check that the component uses slot (by checking computed property)
     const vm = wrapper.vm as any;
     expect(vm.useSlot).toBe(true);
+    expect(document.body.textContent).toContain('Custom slot content');
+    expect(document.querySelector('.confirm-description')).toBeNull();
     wrapper.unmount();
   });
 
@@ -416,6 +432,44 @@ describe('ConfirmationDialog', () => {
     const vm = wrapper.vm as any;
     expect(vm.finalConfirmColor).toBe('info');
     expect(vm.colorClass).toBe('btn-info');
+    wrapper.unmount();
+  });
+
+  it('uses the type defaults when title, description, and confirm label are omitted', () => {
+    const wrapper = mount(ConfirmationDialog, {
+      props: {
+        open: true,
+        type: 'delete',
+      },
+      attachTo: document.body,
+    });
+
+    const vm = wrapper.vm as any;
+    expect(vm.finalTitle).toBe('Delete Confirmation');
+    expect(vm.finalDescription).toContain('Deleting this connection');
+    expect(vm.finalConfirmLabel).toBe('Delete');
+    expect(vm.colorClass).toBe('btn-error');
+    wrapper.unmount();
+  });
+
+  it('focuses the dialog card after opening when autoFocus is enabled', async () => {
+    vi.useFakeTimers();
+    const wrapper = mount(ConfirmationDialog, {
+      props: {
+        open: false,
+        title: 'Focus Me',
+        autoFocus: true,
+      },
+      attachTo: document.body,
+    });
+
+    await wrapper.setProps({ open: true });
+    vi.runAllTimers();
+    await wrapper.vm.$nextTick();
+
+    const card = document.querySelector('.confirm-card');
+    expect(card).not.toBeNull();
+
     wrapper.unmount();
   });
 });

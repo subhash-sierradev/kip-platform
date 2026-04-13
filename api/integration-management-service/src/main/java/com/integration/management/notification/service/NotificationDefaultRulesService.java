@@ -47,7 +47,7 @@ public class NotificationDefaultRulesService {
 
         // Fetch all enabled events for the assigned entity types
         List<NotificationEventCatalog> applicableEvents = eventCatalogRepository
-                .findByIsEnabledTrueAndEntityTypeIn(assignedEntityTypes);
+                .findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(assignedEntityTypes);
 
         if (applicableEvents.isEmpty()) {
             log.info("No applicable notification events found for tenant: {} with entity types: {}",
@@ -113,7 +113,12 @@ public class NotificationDefaultRulesService {
             types.add(NotificationEntityType.ARCGIS_INTEGRATION);
         }
 
-        if (hasJira || hasArcGIS) {
+        boolean hasConfluence = serviceTypeAuth.hasAccessToServiceType(ServiceType.CONFLUENCE);
+        if (hasConfluence) {
+            types.add(NotificationEntityType.CONFLUENCE_INTEGRATION);
+        }
+
+        if (hasJira || hasArcGIS || hasConfluence) {
             types.add(NotificationEntityType.INTEGRATION_CONNECTION);
         }
 

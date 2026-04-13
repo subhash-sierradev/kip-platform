@@ -63,10 +63,15 @@
     <!-- Verify Existing Connection Button -->
     <div class="cs-verification-row">
       <button
-        class="cs-btn cs-btn-outlined-primary"
+        class="cs-test-btn"
+        :class="{
+          'cs-test-btn-success': existingTested && existingTestSuccess,
+          'cs-test-btn-failed': existingTested && !existingTestSuccess,
+        }"
         :disabled="!existingConnectionId || isTestingExisting"
         @click="emit('verify-existing')"
       >
+        <span v-if="isTestingExisting" class="cs-loading-spinner"></span>
         {{ verifyButtonText }}
       </button>
 

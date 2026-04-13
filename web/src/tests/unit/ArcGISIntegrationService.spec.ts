@@ -84,6 +84,19 @@ describe('ArcGISIntegrationService', () => {
     );
   });
 
+  it('getFieldMappings hits /field-mappings', async () => {
+    (coreRequest as any).mockResolvedValueOnce([{ sourceField: 'a', targetField: 'b' }]);
+    const result = await ArcGISIntegrationService.getFieldMappings('idMappings');
+    expect(result).toEqual([{ sourceField: 'a', targetField: 'b' }]);
+    expect(coreRequest).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        method: 'GET',
+        url: '/integrations/arcgis/idMappings/field-mappings',
+      })
+    );
+  });
+
   it('triggerJobExecution posts to /trigger', async () => {
     (coreRequest as any).mockResolvedValueOnce(undefined);
     await ArcGISIntegrationService.triggerJobExecution('idTrigger');
@@ -215,5 +228,22 @@ describe('ArcGISIntegrationService', () => {
     const names = await ArcGISIntegrationService.getAllArcGISNormalizedNames();
     expect(names).toEqual(mockNames);
     expect(names).toHaveLength(4);
+  });
+
+  it('getIntegrationById falls back to the default message when an unknown error shape is thrown', async () => {
+    (coreRequest as any).mockRejectedValueOnce('unexpected-error');
+
+    await expect(ArcGISIntegrationService.getArcGISIntegrationById('odd-error')).rejects.toThrow(
+      'Failed to load integration details. Please try again.'
+    );
+  });
+
+  it('getIntegrationById falls back to the default message for numeric status errors without a message', async () => {
+    const errWithoutMessage = { status: 500 };
+    (coreRequest as any).mockRejectedValueOnce(errWithoutMessage);
+
+    await expect(ArcGISIntegrationService.getArcGISIntegrationById('no-message')).rejects.toThrow(
+      'Failed to load integration details. Please try again.'
+    );
   });
 });

@@ -737,6 +737,350 @@ class JiraFieldMappingResolverTest {
         assertThat(result).isEqualTo("Issue A, B");
     }
 
+    // -----------------------------------------------------------------------
+    // Additional branch-coverage tests for formatSpecialCustomField, convertToJiraFormat,
+    // isLegacySprintCustomField, convertToJiraUserFormat edge cases
+    // -----------------------------------------------------------------------
+
+    @Test
+    void processAllFieldMappings_reporterWithValidAccountId_returnsAccountIdMap() throws Exception {
+        JiraFieldMappingDto reporter = JiraFieldMappingDto.builder()
+                .jiraFieldId("reporter")
+                .jiraFieldName("Reporter")
+                .dataType(JiraDataType.STRING)
+                .template("{{issue.reporter}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree(
+                "{\"issue\":{\"reporter\":\"12345678901234567890\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(reporter), "wh-30", payload);
+        assertThat(result.get("reporter")).isEqualTo(Map.of("accountId", "12345678901234567890"));
+    }
+
+    @Test
+    void processAllFieldMappings_issueTypeNumericValue_convertsToIdFormat() throws Exception {
+        JiraFieldMappingDto issueType = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype")
+                .jiraFieldName("Issue Type")
+                .dataType(JiraDataType.STRING)
+                .template("{{issue.typeId}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"issue\":{\"typeId\":\"10001\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(issueType), "wh-31", payload);
+        assertThat(result.get("issuetype")).isEqualTo(Map.of("id", "10001"));
+    }
+
+    @Test
+    void processAllFieldMappings_priorityNameValue_convertsToNameFormat() throws Exception {
+        JiraFieldMappingDto priority = JiraFieldMappingDto.builder()
+                .jiraFieldId("priority")
+                .jiraFieldName("Priority")
+                .dataType(JiraDataType.STRING)
+                .template("{{issue.priority}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"issue\":{\"priority\":\"High\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(priority), "wh-32", payload);
+        assertThat(result.get("priority")).isEqualTo(Map.of("name", "High"));
+    }
+
+    @Test
+    void processAllFieldMappings_projectKeyValue_convertsToKeyFormat() throws Exception {
+        JiraFieldMappingDto project = JiraFieldMappingDto.builder()
+                .jiraFieldId("project")
+                .jiraFieldName("Project")
+                .dataType(JiraDataType.STRING)
+                .template("{{project.key}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"project\":{\"key\":\"MYPRJ\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(project), "wh-33", payload);
+        assertThat(result.get("project")).isEqualTo(Map.of("key", "MYPRJ"));
+    }
+
+    @Test
+    void convertToDataType_emailUrlDateTypes_returnStringAsIs() {
+        assertThat(resolver.convertToDataType("user@example.com", JiraDataType.EMAIL, "email", "wh-34"))
+                .isEqualTo("user@example.com");
+        assertThat(resolver.convertToDataType("https://example.com", JiraDataType.URL, "url", "wh-34"))
+                .isEqualTo("https://example.com");
+        assertThat(resolver.convertToDataType("2026-01-01", JiraDataType.DATE, "date", "wh-34"))
+                .isEqualTo("2026-01-01");
+    }
+
+    @Test
+    void convertToDataType_nullValue_returnsNull() {
+        assertThat(resolver.convertToDataType(null, JiraDataType.STRING, "f", "wh-35")).isNull();
+    }
+
+    @Test
+    void isLegacySprintCustomField_nullFieldIdOrName_returnsFalse() throws Exception {
+        JiraFieldMappingDto nullId = JiraFieldMappingDto.builder()
+                .jiraFieldId(null)
+                .jiraFieldName("Sprint")
+                .dataType(JiraDataType.STRING)
+                .template("{{sprint.id}}")
+                .build();
+
+        JiraFieldMappingDto nullName = JiraFieldMappingDto.builder()
+                .jiraFieldId("customfield_10001")
+                .jiraFieldName(null)
+                .dataType(JiraDataType.STRING)
+                .template("{{sprint.id}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"sprint\":{\"id\":\"42\"}}");
+
+        // These should NOT be detected as legacy sprint fields, so standard processing applies
+        Map<String, Object> result1 = resolver.processAllFieldMappings(List.of(nullId), "wh-36", payload);
+        // nullId has null jiraFieldId — it should still produce an entry
+        assertThat(result1).isNotNull();
+
+        Map<String, Object> result2 = resolver.processAllFieldMappings(List.of(nullName), "wh-36", payload);
+        assertThat(result2).containsKey("customfield_10001");
+    }
+
+    @Test
+    void isLegacySprintCustomField_nonCustomField_returnsFalse() throws Exception {
+        JiraFieldMappingDto nonCustom = JiraFieldMappingDto.builder()
+                .jiraFieldId("sprint")
+                .jiraFieldName("Sprint")
+                .dataType(JiraDataType.STRING)
+                .template("{{sprint.id}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"sprint\":{\"id\":\"42\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(nonCustom), "wh-37", payload);
+        // "sprint" is not a customfield_, so standard switch-default applies (value returned as-is)
+        assertThat(result.get("sprint")).isEqualTo("42");
+    }
+
+    @Test
+    void convertToJiraSprintFormat_mapWithId_returnsMapDirectly() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraSprintFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{Map.of("id", 123), "wh-38"});
+        assertThat(result).isEqualTo(Map.of("id", 123));
+    }
+
+    @Test
+    void convertToJiraSprintFormat_listWithSingleNumeric_returnsNumericValue() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraSprintFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{List.of("456"), "wh-39"});
+        assertThat(result).isEqualTo(456L);
+    }
+
+    @Test
+    void convertToJiraTeamFormat_mapWithId_returnsMapDirectly() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraTeamFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{Map.of("id", "T-1"), "wh-40"});
+        assertThat(result).isEqualTo(Map.of("id", "T-1"));
+    }
+
+    @Test
+    void convertToJiraTeamFormat_stringValue_convertsToMapFormat() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraTeamFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{"team-42", "wh-41"});
+        assertThat(result).isEqualTo(Map.of("id", "team-42"));
+    }
+
+    @Test
+    void convertToJiraUserFormat_valueWithColon_convertsToAccountId() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraUserFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{"accountId:abc123def456xyz7890123", "wh-42"});
+        assertThat(result).isEqualTo(Map.of("accountId", "accountId:abc123def456xyz7890123"));
+    }
+
+    @Test
+    void convertToJiraProjectFormat_numericValue_convertsToIdFormat() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraProjectFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{"10001", "wh-43"});
+        assertThat(result).isEqualTo(Map.of("id", "10001"));
+    }
+
+    @Test
+    void convertToJiraProjectFormat_nullValue_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraProjectFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{null, "wh-44"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void convertToJiraIssueTypeFormat_nullValue_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraIssueTypeFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{null, "wh-45"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void convertToJiraPriorityFormat_nullValue_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraPriorityFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{null, "wh-46"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void convertToJiraDescriptionFormat_nullValue_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraDescriptionFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{null, "wh-47"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void formatSpecialCustomFieldIfAny_emptyMetadata_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "formatSpecialCustomFieldIfAny",
+                new Class[]{Object.class, Map.class, String.class},
+                new Object[]{"val", Map.of(), "wh-48"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void formatSpecialCustomFieldIfAny_nullMetadata_returnsNull() throws Exception {
+        Object result = invokePrivate(
+                "formatSpecialCustomFieldIfAny",
+                new Class[]{Object.class, Map.class, String.class},
+                new Object[]{"val", null, "wh-49"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void formatSpecialCustomFieldIfAny_metadataAllKeysNull_returnsNull() throws Exception {
+        java.util.HashMap<String, Object> metadata = new java.util.HashMap<>();
+        metadata.put("fieldType", null);
+        metadata.put("schemaType", null);
+        metadata.put("type", null);
+        Object result = invokePrivate(
+                "formatSpecialCustomFieldIfAny",
+                new Class[]{Object.class, Map.class, String.class},
+                new Object[]{"val", metadata, "wh-50"});
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void formatSpecialCustomFieldIfAny_schemaTypeWithAtlassianTeam_convertsToTeamFormat() throws Exception {
+        Object result = invokePrivate(
+                "formatSpecialCustomFieldIfAny",
+                new Class[]{Object.class, Map.class, String.class},
+                new Object[]{"team-99", Map.of("schemaType", "com.atlassian-team"), "wh-51"});
+        assertThat(result).isEqualTo(Map.of("id", "team-99"));
+    }
+
+    @Test
+    void formatSpecialCustomFieldIfAny_typeWithSprint_convertsToSprintFormat() throws Exception {
+        Object result = invokePrivate(
+                "formatSpecialCustomFieldIfAny",
+                new Class[]{Object.class, Map.class, String.class},
+                new Object[]{"200", Map.of("type", "sprint"), "wh-52"});
+        assertThat(result).isEqualTo(200L);
+    }
+
+    @Test
+    void processFieldMapping_nonRequiredNullTemplateNoDefault_returnsNull() {
+        JiraFieldMappingDto mapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("summary")
+                .jiraFieldName("Summary")
+                .dataType(JiraDataType.STRING)
+                .template(null)
+                .defaultValue(null)
+                .required(false)
+                .build();
+
+        Object result = resolver.processFieldMapping(mapping, objectMapper.createObjectNode(), "wh-53");
+        assertThat(result).isNull();
+    }
+
+    @Test
+    void processAllFieldMappings_legacySprintFieldName_triggersSprintFormatting() throws Exception {
+        JiraFieldMappingDto legacySprint = JiraFieldMappingDto.builder()
+                .jiraFieldId("customfield_10020")
+                .jiraFieldName("Sprint")
+                .dataType(JiraDataType.STRING)
+                .template("{{sprint.id}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"sprint\":{\"id\":\"300\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(legacySprint), "wh-54", payload);
+        // Legacy sprint detection: customfield_ + name="Sprint" => convertToJiraSprintFormat
+        assertThat(result.get("customfield_10020")).isEqualTo(300L);
+    }
+
+    @Test
+    void processAllFieldMappings_defaultFieldNotInSpecialSwitch_returnsValueAsIs() throws Exception {
+        JiraFieldMappingDto customField = JiraFieldMappingDto.builder()
+                .jiraFieldId("customfield_generic")
+                .jiraFieldName("Generic")
+                .dataType(JiraDataType.STRING)
+                .template("{{data.value}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"data\":{\"value\":\"plain-text\"}}");
+
+        Map<String, Object> result = resolver.processAllFieldMappings(List.of(customField), "wh-55", payload);
+        assertThat(result.get("customfield_generic")).isEqualTo("plain-text");
+    }
+
+    @Test
+    void convertToJiraSprintFormat_listWithNonNumericFirst_returnsObjectForm() throws Exception {
+        Object result = invokePrivate(
+                "convertToJiraSprintFormat",
+                new Class[]{Object.class, String.class},
+                new Object[]{List.of("abc-sprint"), "wh-56"});
+        assertThat(result).isEqualTo(Map.of("id", "abc-sprint"));
+    }
+
+    @Test
+    void processAllFieldMappings_fieldMappingThrowsException_skipsField() throws Exception {
+        JiraFieldMappingDto failingField = JiraFieldMappingDto.builder()
+                .jiraFieldId("summary")
+                .jiraFieldName("Summary")
+                .dataType(JiraDataType.STRING)
+                .template("{{missing.path}}")
+                .required(true)
+                .build();
+
+        JiraFieldMappingDto successField = JiraFieldMappingDto.builder()
+                .jiraFieldId("description")
+                .jiraFieldName("Description")
+                .dataType(JiraDataType.STRING)
+                .template("{{issue.desc}}")
+                .build();
+
+        JsonNode payload = objectMapper.readTree("{\"issue\":{\"desc\":\"hello\"}}");
+
+        // The failing field should be skipped, but the successful one should still be processed
+        Map<String, Object> result = resolver.processAllFieldMappings(
+                List.of(failingField, successField), "wh-57", payload);
+        assertThat(result).containsKey("description");
+        assertThat(result).doesNotContainKey("summary");
+    }
+
     private Object invokePrivate(final String methodName, final Class<?>[] parameterTypes, final Object[] args)
             throws Exception {
         Method method = JiraFieldMappingResolver.class.getDeclaredMethod(methodName, parameterTypes);

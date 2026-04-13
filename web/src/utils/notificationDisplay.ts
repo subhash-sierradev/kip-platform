@@ -1,3 +1,4 @@
+import { ROUTES } from '@/router/routes';
 import type { AppNotification } from '@/types/notification';
 
 export type ReadFilter = 'all' | 'unread' | 'read';
@@ -176,6 +177,11 @@ export function getNotificationCreatedBy(notification: AppNotification): string 
   const candidates = [
     metadata?.createdBy,
     metadata?.createdByUser,
+    metadata?.triggeredBy,
+    metadata?.updatedBy,
+    metadata?.deletedBy,
+    metadata?.enabledBy,
+    metadata?.disabledBy,
     metadata?.actor,
     metadata?.user,
   ];
@@ -197,18 +203,76 @@ export function getPrimaryAction(notification: AppNotification): NotificationAct
     normalizeMetadataValue(metadata.ctaLabel) ||
     normalizeMetadataValue(metadata.buttonText);
 
-  const target =
+  const explicitTarget =
     normalizeMetadataValue(metadata.actionUrl) ||
     normalizeMetadataValue(metadata.url) ||
     normalizeMetadataValue(metadata.targetUrl) ||
     normalizeMetadataValue(metadata.route);
 
-  if (!label || !target) return null;
+  if (label && explicitTarget) {
+    return { label, target: explicitTarget, external: /^https?:\/\//i.test(explicitTarget) };
+  }
 
-  const isExternal = /^https?:\/\//i.test(target);
+  // Derive route from semantic metadata fields so the frontend owns all paths
+  const derived = deriveActionFromMetadata(metadata, notification.type);
+  if (!derived) return null;
+
+  // Allow an explicit label override even when the target is derived
   return {
-    label,
-    target,
-    external: isExternal,
+    label: label || derived.label,
+    target: derived.target,
+    external: false,
   };
+}
+
+function isValidUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function resolveConnectionAction(
+  metadata: Record<string, unknown>
+): { target: string; label: string } | null {
+  const connectionId = normalizeMetadataValue(metadata.connectionId);
+  if (!connectionId) return null;
+
+  const serviceType = normalizeMetadataValue(metadata.serviceType).toUpperCase();
+  if (serviceType === 'ARCGIS') {
+    return { target: ROUTES.arcgisConnection, label: 'Open ArcGIS Connection' };
+  }
+  if (serviceType === 'JIRA') {
+    return { target: ROUTES.jiraConnection, label: 'Open Jira Connection' };
+  }
+  if (serviceType === 'CONFLUENCE') {
+    return { target: ROUTES.confluenceConnection, label: 'Open Confluence Connection' };
+  }
+  return null;
+}
+
+function deriveActionFromMetadata(
+  metadata: Record<string, unknown>,
+  eventType: string | undefined
+): { target: string; label: string } | null {
+  // Deleted entities no longer exist — no navigation link
+  if (eventType?.endsWith('_DELETED')) return null;
+
+  const integrationId = normalizeMetadataValue(metadata.integrationId);
+  if (integrationId && isValidUuid(integrationId)) {
+    const isConfluence = eventType?.startsWith('CONFLUENCE_') ?? false;
+    return isConfluence
+      ? {
+          target: ROUTES.confluenceIntegrationDetails(integrationId),
+          label: 'Open Confluence Integration',
+        }
+      : {
+          target: ROUTES.arcgisIntegrationDetails(integrationId),
+          label: 'Open ArcGIS Integration',
+        };
+  }
+
+  const webhookId = normalizeMetadataValue(metadata.webhookId);
+  if (webhookId) {
+    return { target: ROUTES.jiraWebhookDetails(webhookId), label: 'Open Jira Webhook' };
+  }
+
+  return resolveConnectionAction(metadata);
 }

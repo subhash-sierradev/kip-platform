@@ -1,10 +1,13 @@
 /* eslint-disable simple-import-sort/imports */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  convertLocalDateTimeToUtc,
   convertUserTimezoneToUtc,
+  convertUtcDateTimeToLocal,
   formatTimezoneInfo,
   getCommonTimezones,
   getCurrentTimeInTimezone,
+  getLocalDateString,
   getTimezoneAbbreviation,
   getTimezoneDisplayName,
   getUserTimezone,
@@ -29,6 +32,17 @@ describe('timezoneUtils', () => {
       expect(getUserTimezone()).toBe('America/New_York');
     });
 
+    it('normalizes Asia/Calcutta to Asia/Kolkata', () => {
+      vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+        () =>
+          ({
+            resolvedOptions: () => ({ timeZone: 'Asia/Calcutta' }),
+          }) as any
+      );
+
+      expect(getUserTimezone()).toBe('Asia/Kolkata');
+    });
+
     it('falls back to Asia/Kolkata when detection fails', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       vi.spyOn(Intl, 'DateTimeFormat').mockImplementation((): any => {
@@ -45,6 +59,14 @@ describe('timezoneUtils', () => {
       expect(typeof result).toBe('string');
       expect(result.length).toBeGreaterThan(0);
     });
+
+    it('falls back to the timezone when formatToParts fails', () => {
+      vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+        throw new Error('bad formatter');
+      });
+
+      expect(getTimezoneDisplayName('UTC')).toBe('UTC');
+    });
   });
 
   describe('getTimezoneAbbreviation', () => {
@@ -53,6 +75,14 @@ describe('timezoneUtils', () => {
       expect(typeof abbr).toBe('string');
       expect(abbr.length).toBeGreaterThan(0);
     });
+
+    it('falls back to the timezone when abbreviation formatting fails', () => {
+      vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(() => {
+        throw new Error('bad formatter');
+      });
+
+      expect(getTimezoneAbbreviation('UTC')).toBe('UTC');
+    });
   });
 
   describe('formatTimezoneInfo', () => {
@@ -60,6 +90,18 @@ describe('timezoneUtils', () => {
       const info = formatTimezoneInfo('UTC');
       expect(info.startsWith('UTC (')).toBe(true);
       expect(info.length).toBeGreaterThan(5);
+    });
+
+    it('uses the detected user timezone when none is provided', () => {
+      vi.spyOn(Intl, 'DateTimeFormat').mockImplementation(
+        () =>
+          ({
+            resolvedOptions: () => ({ timeZone: 'UTC' }),
+            formatToParts: () => [{ type: 'timeZoneName', value: 'UTC' }],
+          }) as any
+      );
+
+      expect(formatTimezoneInfo()).toBe('UTC (UTC)');
     });
   });
 
@@ -181,6 +223,178 @@ describe('timezoneUtils', () => {
       // 14:25:45 IST = 08:55:45 UTC
       const result = convertUserTimezoneToUtc('14:25:45', '2026-01-15', 'Asia/Kolkata');
       expect(result).toBe('08:55:45');
+    });
+
+    it('DST spring-forward: 01:30 CST on Mar 8 2026 converts correctly', () => {
+      // America/Chicago springs forward at 02:00 CST → 03:00 CDT on Mar 8 2026.
+      // 01:30 is still in CST (UTC-6): 01:30 + 6h = 07:30 UTC.
+      // A noon-based proxy samples CDT (UTC-5) and would produce 06:30 UTC — off by 1h.
+      const result = convertUserTimezoneToUtc('01:30:00', '2026-03-08', 'America/Chicago');
+      expect(result).toBe('07:30:00');
+    });
+  });
+
+  describe('getLocalDateString', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('returns a YYYY-MM-DD formatted string', () => {
+      const result = getLocalDateString();
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it('returns the local calendar date, not the UTC date', () => {
+      // 2026-04-13T00:30:00Z = Apr 12 in America/Chicago (CDT, UTC-5)
+      // toISOString().split('T')[0] would wrongly return '2026-04-13' (UTC date)
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-04-13T00:30:00Z'));
+
+      const result = getLocalDateString('America/Chicago');
+      expect(result).toBe('2026-04-12');
+    });
+
+    it('falls back to UTC date string when timezone is invalid', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-15T00:00:00Z'));
+
+      // Luxon returns an invalid DateTime for unrecognised zones; toISODate() returns null.
+      // The fallback must be a valid YYYY-MM-DD string, not ''.
+      const result = getLocalDateString('Not/A-Zone');
+      expect(result).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+  });
+
+  describe('convertLocalDateTimeToUtc', () => {
+    it('KIP-422: CDT 8PM Apr 12 converts to Apr 13 01:00 UTC (midnight crossing)', () => {
+      // This is the reported bug: CDT user picks April 12 8:00 PM
+      // CDT is UTC-5: 20:00 CDT + 5h = 01:00 UTC next day
+      const result = convertLocalDateTimeToUtc('2026-04-12', '20:00:00', 'America/Chicago');
+      expect(result.utcDate).toBe('2026-04-13');
+      expect(result.utcTime).toBe('01:00:00');
+    });
+
+    it('IST morning — same-day conversion, no midnight crossing', () => {
+      // IST is UTC+5:30: 12:00 IST = 06:30 UTC, same calendar day
+      const result = convertLocalDateTimeToUtc('2026-01-15', '12:00:00', 'Asia/Kolkata');
+      expect(result.utcDate).toBe('2026-01-15');
+      expect(result.utcTime).toBe('06:30:00');
+    });
+
+    it('IST early morning — crosses to previous UTC day', () => {
+      // 02:00 IST = 20:30 UTC on the PREVIOUS day
+      const result = convertLocalDateTimeToUtc('2026-01-15', '02:00:00', 'Asia/Kolkata');
+      expect(result.utcDate).toBe('2026-01-14');
+      expect(result.utcTime).toBe('20:30:00');
+    });
+
+    it('UTC timezone — no conversion, date and time are unchanged', () => {
+      const result = convertLocalDateTimeToUtc('2026-06-01', '09:00:00', 'UTC');
+      expect(result.utcDate).toBe('2026-06-01');
+      expect(result.utcTime).toBe('09:00:00');
+    });
+
+    it('PST 6PM Jan 15 — crosses to next UTC day (Jan 16)', () => {
+      // PST is UTC-8: 18:00 PST + 8h = 02:00 UTC next day
+      const result = convertLocalDateTimeToUtc('2026-01-15', '18:00:00', 'America/Los_Angeles');
+      expect(result.utcDate).toBe('2026-01-16');
+      expect(result.utcTime).toBe('02:00:00');
+    });
+
+    it('JST 09:00 — same-day conversion', () => {
+      // JST is UTC+9: 09:00 JST = 00:00 UTC, same day
+      const result = convertLocalDateTimeToUtc('2026-01-15', '09:00:00', 'Asia/Tokyo');
+      expect(result.utcDate).toBe('2026-01-15');
+      expect(result.utcTime).toBe('00:00:00');
+    });
+
+    it('returns HH:mm:ss format for both utcDate and utcTime', () => {
+      const result = convertLocalDateTimeToUtc('2026-03-01', '14:05:07', 'UTC');
+      expect(result.utcDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(result.utcTime).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    });
+
+    it('handles HH:mm format (no seconds)', () => {
+      const result = convertLocalDateTimeToUtc('2026-06-01', '09:00', 'UTC');
+      expect(result.utcDate).toBe('2026-06-01');
+      expect(result.utcTime).toBe('09:00:00');
+    });
+
+    it('falls back to input values on error', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = convertLocalDateTimeToUtc('invalid-date', 'bad-time', 'UTC');
+      // Should not throw; returns fallback
+      expect(typeof result.utcDate).toBe('string');
+      expect(typeof result.utcTime).toBe('string');
+      errorSpy.mockRestore();
+    });
+
+    it('DST spring-forward: 01:30 CST on Mar 8 2026 converts correctly (two-pass correction)', () => {
+      // America/Chicago springs forward on Mar 8 2026 at 02:00 CST → 03:00 CDT.
+      // 01:30 is still in CST (UTC-6), so expected UTC = 01:30 + 6h = 07:30 UTC.
+      // A noon-based proxy would sample CDT (UTC-5) and give 06:30 UTC — off by one hour.
+      const result = convertLocalDateTimeToUtc('2026-03-08', '01:30:00', 'America/Chicago');
+      expect(result.utcDate).toBe('2026-03-08');
+      expect(result.utcTime).toBe('07:30:00');
+    });
+
+    it('DST fall-back: 01:30 America/Chicago on Nov 1 2026 uses standard time offset', () => {
+      // America/Chicago falls back on Nov 1 2026 at 02:00 CDT → 01:00 CST.
+      // 01:30 occurs twice; by convention we use the first occurrence (CDT = UTC-5).
+      // Two-pass correction stabilises on UTC-5: 01:30 + 5h = 06:30 UTC.
+      const result = convertLocalDateTimeToUtc('2026-11-01', '01:30:00', 'America/Chicago');
+      expect(result.utcDate).toBe('2026-11-01');
+      expect(result.utcTime).toBe('06:30:00');
+    });
+  });
+
+  describe('convertUtcDateTimeToLocal', () => {
+    it('UTC 12:00 Jan 15 → same date/time in UTC timezone', () => {
+      const result = convertUtcDateTimeToLocal('2026-01-15', '12:00:00', 'UTC');
+      expect(result.localDate).toBe('2026-01-15');
+      expect(result.localTime).toBe('12:00');
+    });
+
+    it('UTC 12:00 → IST 17:30 same day (UTC+5:30)', () => {
+      const result = convertUtcDateTimeToLocal('2026-01-15', '12:00:00', 'Asia/Kolkata');
+      expect(result.localDate).toBe('2026-01-15');
+      expect(result.localTime).toBe('17:30');
+    });
+
+    it('UTC 20:30 → IST 02:00 next day (midnight crossing forward)', () => {
+      // 20:30 UTC + 5:30 = 02:00 IST on the next calendar day
+      const result = convertUtcDateTimeToLocal('2026-01-14', '20:30:00', 'Asia/Kolkata');
+      expect(result.localDate).toBe('2026-01-15');
+      expect(result.localTime).toBe('02:00');
+    });
+
+    it('UTC 01:00 → EDT 21:00 previous day (UTC-4 in DST)', () => {
+      // 01:00 UTC - 4h = 21:00 EDT on the previous calendar day
+      const result = convertUtcDateTimeToLocal('2026-04-13', '01:00:00', 'America/New_York');
+      expect(result.localDate).toBe('2026-04-12');
+      expect(result.localTime).toBe('21:00');
+    });
+
+    it('both fields absent — falls back to utcDate/utcTime slice', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const result = convertUtcDateTimeToLocal('bad-date', 'bad-time', 'UTC');
+      expect(typeof result.localDate).toBe('string');
+      expect(typeof result.localTime).toBe('string');
+      errorSpy.mockRestore();
+    });
+
+    it('handles HH:mm format input (no seconds)', () => {
+      const result = convertUtcDateTimeToLocal('2026-06-01', '09:00', 'UTC');
+      expect(result.localDate).toBe('2026-06-01');
+      expect(result.localTime).toBe('09:00');
+    });
+
+    it('DST: UTC 08:00 Mar 8 2026 → CDT 03:00 (post spring-forward)', () => {
+      // America/Chicago springs forward on Mar 8 2026 at 08:00 UTC (02:00 CST → 03:00 CDT).
+      // UTC 08:00 = 03:00 CDT (UTC-5 post-transition)
+      const result = convertUtcDateTimeToLocal('2026-03-08', '08:00:00', 'America/Chicago');
+      expect(result.localDate).toBe('2026-03-08');
+      expect(result.localTime).toBe('03:00');
     });
   });
 });
