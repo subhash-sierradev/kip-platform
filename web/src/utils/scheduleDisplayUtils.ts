@@ -1,5 +1,5 @@
 import { parseDatePreservingDateOnly } from './dateUtils';
-import { getUserTimezone } from './timezoneUtils';
+import { convertUtcDateTimeToLocal, getUserTimezone } from './timezoneUtils';
 
 export const MONTH_LABELS = [
   'January',
@@ -24,25 +24,9 @@ export const MONTH_LABELS = [
  */
 export function convertUtcTimeToUserTimezone(utcTimeStr: string, executionDate?: string): string {
   try {
-    const [hhStr, mmStr] = utcTimeStr.split(':');
-    const hours = parseInt(hhStr || '0', 10);
-    const minutes = parseInt(mmStr || '0', 10);
     const dateStr = executionDate || new Date().toISOString().split('T')[0];
-
-    // Create UTC instant
-    const [yyyy, mm, dd] = dateStr.split('-').map(Number);
-    const utcInstant = new Date(Date.UTC(yyyy, mm - 1, dd, hours, minutes, 0));
-
-    // Format to user's timezone
-    const userTz = getUserTimezone();
-    const formattedTime = new Intl.DateTimeFormat('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: userTz,
-    }).format(utcInstant);
-
-    return formattedTime; // Returns HH:mm format
+    const { localTime } = convertUtcDateTimeToLocal(dateStr, utcTimeStr, getUserTimezone());
+    return localTime;
   } catch (error) {
     console.error('convertUtcTimeToUserTimezone: Error converting time:', utcTimeStr, error);
     return utcTimeStr; // Fallback to original if conversion fails
@@ -123,4 +107,38 @@ export function formatSelectedDaysDisplay(raw: unknown): string {
   const unique = Array.from(new Set(normalized));
   unique.sort((a, b) => WEEKDAY_ABBR_ORDER.indexOf(a) - WEEKDAY_ABBR_ORDER.indexOf(b));
   return unique.join(', ');
+}
+
+// Formats a UTC date+time pair as a localised date string (e.g. "Fri, Dec 19, 2025").
+// Both inputs must be UTC. Timezone is always the browser's local timezone.
+export function formatScheduleExecutionDate(
+  dateString: string | null | undefined,
+  timeString: string | null | undefined
+): string {
+  if (!dateString || !timeString) {
+    return 'N/A';
+  }
+
+  try {
+    // Validate that dateString is a real calendar date before building the UTC instant.
+    // Date.UTC silently rolls invalid dates (e.g. Feb 31 becomes a March date), so we
+    // reject those up-front instead of formatting a silently wrong result.
+    if (!parseDatePreservingDateOnly(dateString)) {
+      return 'Invalid Date';
+    }
+
+    // Delegate the UTC→local conversion to timezoneUtils — single responsibility.
+    const { localDate } = convertUtcDateTimeToLocal(dateString, timeString, getUserTimezone());
+
+    // Format the resolved local calendar date for display.
+    return formatDateOnlyDisplay(
+      localDate,
+      { weekday: 'short', year: 'numeric', month: 'short', day: '2-digit' },
+      'N/A',
+      'Invalid Date'
+    );
+  } catch (error) {
+    console.error('formatScheduleExecutionDate error:', error);
+    return 'Invalid Date';
+  }
 }

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { nextTick } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
+const setHoverExpandedMock = vi.fn();
+
 import SideNav from '@/components/layout/SideNav.vue';
 
 // Mock auth store with flexible role handling
@@ -18,6 +20,12 @@ vi.mock('@/store/auth', () => ({
       ].includes(role),
     currentUser: { userName: 'jane doe', tenantId: 'AcmeCorp' },
     logout: vi.fn(),
+  }),
+}));
+
+vi.mock('@/store/sidebar', () => ({
+  useSidebarStore: () => ({
+    setHoverExpanded: setHoverExpandedMock,
   }),
 }));
 
@@ -40,6 +48,21 @@ const router = createRouter({
 });
 
 beforeEach(async () => {
+  setHoverExpandedMock.mockReset();
+  Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1280 });
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
   router.push('/');
   await router.isReady();
 });
@@ -150,6 +173,8 @@ describe('SideNav.vue', () => {
     await sidebar.trigger('mouseleave');
     expect(wrapper.find('.kaseware-sidebar').classes()).toContain('collapsed');
     expect(wrapper.find('.submenu-flyout-admin').exists()).toBe(false);
+    expect(setHoverExpandedMock).toHaveBeenNthCalledWith(1, true);
+    expect(setHoverExpandedMock).toHaveBeenNthCalledWith(2, false);
   });
 
   it('navigates to all admin submenu items', async () => {
@@ -446,5 +471,333 @@ describe('SideNav.vue', () => {
 
     // Admin submenu should be closed
     expect(wrapper.find('.submenu-flyout-admin').exists()).toBe(false);
+  });
+
+  it('shows footer branding only when the sidebar is expanded', async () => {
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div class="app-version-stub" />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    expect(wrapper.find('.sidebar-footer').exists()).toBe(true);
+    expect(wrapper.find('.app-version-stub').exists()).toBe(true);
+
+    await wrapper.setProps({ collapsed: true });
+    await nextTick();
+
+    expect(wrapper.find('.sidebar-footer').exists()).toBe(false);
+    expect(wrapper.find('.app-version-stub').exists()).toBe(false);
+  });
+
+  it('updates mobile detection on resize and skips hover expansion on coarse pointer devices', async () => {
+    const wrapper = mount(SideNav, {
+      props: { collapsed: true },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    window.dispatchEvent(new Event('resize'));
+    await nextTick();
+    await wrapper.find('.kaseware-sidebar').trigger('mouseenter');
+
+    expect(wrapper.find('.kaseware-sidebar').classes()).toContain('collapsed');
+    expect(setHoverExpandedMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the sidebar collapsed on mouseleave when it was not hover-expanded first', async () => {
+    const wrapper = mount(SideNav, {
+      props: { collapsed: true },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    await wrapper.find('.kaseware-sidebar').trigger('mouseleave');
+
+    expect(wrapper.find('.kaseware-sidebar').classes()).toContain('collapsed');
+    expect(setHoverExpandedMock).not.toHaveBeenCalled();
+  });
+
+  it('collapses the temporary hover expansion after a submenu navigation', async () => {
+    const pushSpy = vi.spyOn(router, 'push').mockResolvedValue(undefined as never);
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: true },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    const sidebar = wrapper.find('.kaseware-sidebar');
+    await sidebar.trigger('mouseenter');
+    await wrapper.find('[data-menu-key="outbound"]').trigger('click');
+    expect(wrapper.find('.submenu-flyout-outbound').exists()).toBe(true);
+
+    const firstOutboundItem = wrapper.find('.submenu-flyout-outbound .submenu-item');
+    await firstOutboundItem.trigger('click');
+    await nextTick();
+
+    expect(pushSpy).toHaveBeenCalled();
+    expect(wrapper.find('.kaseware-sidebar').classes()).toContain('collapsed');
+    expect(wrapper.find('.submenu-flyout-outbound').exists()).toBe(false);
+  });
+
+  it('repositions open flyouts on resize and scroll events', async () => {
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+      attachTo: document.body,
+    });
+
+    const outbound = wrapper.find('[data-menu-key="outbound"]');
+    let rect = { top: 20, right: 140 };
+    Object.defineProperty(outbound.element, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        top: rect.top,
+        right: rect.right,
+        left: 50,
+        height: 36,
+        width: 90,
+        bottom: rect.top + 36,
+      }),
+    });
+
+    window.dispatchEvent(new Event('resize'));
+    await nextTick();
+
+    await outbound.trigger('click');
+    await nextTick();
+
+    const flyout = wrapper.find('.submenu-flyout-outbound');
+    expect(flyout.exists()).toBe(true);
+    expect(flyout.attributes('style')).toContain('left:');
+
+    rect = { top: 95, right: 260 };
+    window.dispatchEvent(new Event('scroll'));
+    await nextTick();
+    expect(flyout.exists()).toBe(true);
+    expect(flyout.attributes('style')).toContain('top:');
+  });
+
+  it('clamps tooltip coordinates when there is no room on the right or bottom edge', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 320 });
+    Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: 90 });
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: {
+            props: ['visible', 'x', 'y', 'title'],
+            template:
+              '<div v-if="visible" class="tooltip-stub" :data-x="x" :data-y="y">{{ title }}</div>',
+          },
+        },
+      },
+      attachTo: document.body,
+    });
+
+    const inbound = wrapper.find('[data-menu-key="inbound"]');
+    Object.defineProperty(inbound.element, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({
+        top: 70,
+        right: 310,
+        left: 5,
+        height: 36,
+        width: 80,
+        bottom: 106,
+      }),
+    });
+
+    await inbound.trigger('mouseenter');
+    vi.advanceTimersByTime(1000);
+    await nextTick();
+
+    const tooltip = wrapper.find('.tooltip-stub');
+    expect(tooltip.exists()).toBe(true);
+    expect(tooltip.attributes('data-x')).toBe('12');
+    expect(tooltip.attributes('data-y')).toBe('12');
+    vi.useRealTimers();
+  });
+
+  it('does not show a tooltip when the hovered menu item is detached before the delay completes', async () => {
+    vi.useFakeTimers();
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: {
+            props: ['visible'],
+            template: '<div v-if="visible" class="tooltip-stub">Tooltip</div>',
+          },
+        },
+      },
+      attachTo: document.body,
+    });
+
+    const inbound = wrapper.find('[data-menu-key="inbound"]');
+    await inbound.trigger('mouseenter');
+    inbound.element.remove();
+
+    vi.advanceTimersByTime(1100);
+    await nextTick();
+
+    expect(wrapper.find('.tooltip-stub').exists()).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('ignores unknown menu keys when scheduling tooltips', async () => {
+    vi.useFakeTimers();
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: {
+            props: ['visible'],
+            template: '<div v-if="visible" class="tooltip-stub">Tooltip</div>',
+          },
+        },
+      },
+    });
+
+    (wrapper.vm as any).onMenuMouseEnter('missing-menu', {
+      currentTarget: wrapper.find('.kaseware-sidebar').element,
+    });
+    vi.advanceTimersByTime(1100);
+    await nextTick();
+
+    expect(wrapper.find('.tooltip-stub').exists()).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it('does not expand on mouseenter when the sidebar is already expanded', async () => {
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    await wrapper.find('.kaseware-sidebar').trigger('mouseenter');
+
+    expect(wrapper.find('.kaseware-sidebar').classes()).not.toContain('collapsed');
+    expect(setHoverExpandedMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps hover-expanded state untouched when mouse leaves on mobile', async () => {
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 500 });
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: true },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    window.dispatchEvent(new Event('resize'));
+    await nextTick();
+    await wrapper.find('.kaseware-sidebar').trigger('mouseleave');
+
+    expect(wrapper.find('.kaseware-sidebar').classes()).toContain('collapsed');
+    expect(setHoverExpandedMock).not.toHaveBeenCalled();
+  });
+
+  it('opens and clears the nested inbound submenu state during navigation', async () => {
+    const pushSpy = vi.spyOn(router, 'push').mockResolvedValue(undefined as never);
+
+    const wrapper = mount(SideNav, {
+      props: { collapsed: false },
+      global: {
+        plugins: [router],
+        stubs: {
+          AppVersion: { template: '<div />' },
+          CommonTooltip: { template: '<div />' },
+        },
+      },
+    });
+
+    const inbound = wrapper.find('[data-menu-key="inbound"]');
+    await inbound.trigger('click');
+
+    const integrationsItem = wrapper.find('.submenu-flyout-inbound .submenu-item');
+    await integrationsItem.trigger('mouseenter');
+    expect(integrationsItem.classes()).toContain('open-nested');
+
+    await integrationsItem.trigger('click');
+    await nextTick();
+
+    expect(pushSpy).toHaveBeenCalledWith('/inbound/integrations');
+    expect(wrapper.find('.submenu-flyout-inbound').exists()).toBe(false);
   });
 });

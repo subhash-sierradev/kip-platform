@@ -1,7 +1,7 @@
 /* eslint-disable simple-import-sort/imports */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
-import { reactive } from 'vue';
+import { nextTick, reactive } from 'vue';
 import * as notificationDisplay from '@/utils/notificationDisplay';
 
 const { markAsRead, markAllAsRead, deleteNotification, deleteAllNotifications, push } = vi.hoisted(
@@ -100,6 +100,10 @@ describe('NotificationsAllPage', () => {
       success: 0,
       warning: 0,
     };
+    markAsRead.mockResolvedValue(undefined);
+    markAllAsRead.mockResolvedValue(undefined);
+    deleteNotification.mockResolvedValue(undefined);
+    deleteAllNotifications.mockResolvedValue(undefined);
   });
 
   it('shows empty state and triggers initial fetch when not loaded', async () => {
@@ -123,6 +127,17 @@ describe('NotificationsAllPage', () => {
 
     expect(storeState.markReadLocal).toHaveBeenCalledWith(['n1']);
     expect(markAsRead).toHaveBeenCalledWith(['n1']);
+  });
+
+  it('renders the unread indicator only for unread notifications', async () => {
+    storeState.filteredNotifications = [
+      createNotification({ id: 'n1', isRead: false }),
+      createNotification({ id: 'n2', isRead: true }),
+    ] as any;
+    storeState.tabCounts.all = 2;
+
+    const wrapper = mount(NotificationsAllPage);
+    expect(wrapper.findAll('.unread-indicator')).toHaveLength(1);
   });
 
   it('marks all unread and supports load-more interaction', async () => {
@@ -313,6 +328,35 @@ describe('NotificationsAllPage', () => {
     wrapper.unmount();
   });
 
+  it('selects the first notification on ArrowDown when nothing is selected yet', async () => {
+    storeState.filteredNotifications = [
+      createNotification({ id: 'n1', isRead: true, title: 'First' }),
+      createNotification({ id: 'n2', isRead: true, title: 'Second' }),
+    ] as any;
+    storeState.tabCounts.all = 2;
+
+    const wrapper = mount(NotificationsAllPage, { attachTo: document.body });
+    const listPanel = wrapper.find('.notifications-list-panel');
+
+    await listPanel.trigger('keydown', { key: 'ArrowDown', preventDefault: vi.fn() });
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe('n1');
+    wrapper.unmount();
+  });
+
+  it('ignores arrow-key navigation when there are no filtered notifications', async () => {
+    const wrapper = mount(NotificationsAllPage);
+    await nextTick();
+
+    await (wrapper.vm as any).handleListKeydown({
+      key: 'ArrowDown',
+      preventDefault: vi.fn(),
+    });
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe(null);
+  });
+
   it('still calls server mark-all when unread count indicates unread notifications', async () => {
     storeState.filteredNotifications = [
       createNotification({ id: 'n1', isRead: true }),
@@ -329,6 +373,74 @@ describe('NotificationsAllPage', () => {
     await markAllButton!.trigger('click');
 
     expect(storeState.markAllReadLocal).toHaveBeenCalled();
+  });
+
+  it('does not call mark-all when unread count is zero', async () => {
+    const wrapper = mount(NotificationsAllPage);
+
+    await (wrapper.vm as any).handleMarkAllRead();
+
+    expect(storeState.markAllReadLocal).not.toHaveBeenCalled();
+    expect(markAllAsRead).not.toHaveBeenCalled();
+  });
+
+  it('does not call delete-all when the active tab count is zero', async () => {
+    const wrapper = mount(NotificationsAllPage);
+
+    await (wrapper.vm as any).handleDeleteAll();
+
+    expect(storeState.removeAllNotificationsLocal).not.toHaveBeenCalled();
+    expect(deleteAllNotifications).not.toHaveBeenCalled();
+  });
+
+  it('renders the unread badge and disables load-more while filtered loading is active', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: false })] as any;
+    storeState.filteredHasMore = true;
+    storeState.filteredLoadingMore = true;
+    storeState.tabCounts.unread = 1;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    expect(wrapper.text()).toContain('Unread');
+    expect(wrapper.find('.filter-tab-badge').text()).toBe('1');
+
+    const loadMoreButton = wrapper
+      .findAll('.dx-button')
+      .find(button => button.text().includes('Load more'));
+
+    expect(loadMoreButton?.attributes('disabled')).toBeDefined();
+  });
+
+  it('returns early from markNotificationsAsRead when all provided ids are empty', async () => {
+    const wrapper = mount(NotificationsAllPage);
+
+    await (wrapper.vm as any).markNotificationsAsRead(['', '']);
+
+    expect(storeState.markReadLocal).not.toHaveBeenCalled();
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
+  it('does not re-fetch when clicking the already active filter tab', async () => {
+    const wrapper = mount(NotificationsAllPage);
+    vi.clearAllMocks();
+
+    await (wrapper.vm as any).handleFilterTabChange('all');
+
+    expect(storeState.fetchTabNotifications).not.toHaveBeenCalled();
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
+  it('switches tabs, clears selection, and fetches the new tab', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    vi.clearAllMocks();
+
+    await (wrapper.vm as any).handleFilterTabChange('success');
+
+    expect(storeState.fetchTabNotifications).toHaveBeenCalledWith('success');
+    expect((wrapper.vm as any).selectedNotificationId).toBe(null);
   });
 
   describe('unread tab deferred mark-as-read behavior', () => {
@@ -430,6 +542,21 @@ describe('NotificationsAllPage', () => {
     openSpy.mockRestore();
   });
 
+  it('does nothing when no primary action is available', async () => {
+    const getPrimaryActionSpy = vi
+      .spyOn(notificationDisplay, 'getPrimaryAction')
+      .mockReturnValue(null);
+
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    await (wrapper.vm as any).handlePrimaryAction();
+
+    expect(push).not.toHaveBeenCalled();
+    getPrimaryActionSpy.mockRestore();
+  });
+
   it('routes to internal primary action target', async () => {
     const getPrimaryActionSpy = vi
       .spyOn(notificationDisplay, 'getPrimaryAction')
@@ -464,5 +591,180 @@ describe('NotificationsAllPage', () => {
 
     expect(messageText).toContain('Completed at ');
     expect(messageText).not.toContain('2026-03-05T09:52:44.922361300Z');
+  });
+
+  it('falls back to Just now when relative time formatting returns an empty string', () => {
+    const relativeSpy = vi.spyOn(notificationDisplay, 'formatRelativeTime').mockReturnValue('');
+
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    expect(wrapper.text()).toContain('Just now');
+
+    relativeSpy.mockRestore();
+  });
+
+  it('renders structured parsed messages in the details panel', () => {
+    const parseSpy = vi.spyOn(notificationDisplay, 'parseNotificationMessage').mockReturnValue({
+      type: 'structured',
+      summary: '2 records failed',
+      items: [
+        { index: 1, doc: 'DOC-1', location: 'LOC-1', reason: 'First reason' },
+        { index: 2, doc: 'DOC-2', location: 'LOC-2', reason: 'Second reason' },
+      ],
+    } as any);
+
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+
+    expect(wrapper.find('.details-message-structured').exists()).toBe(true);
+    expect(wrapper.text()).toContain('2 records failed');
+    expect(wrapper.text()).toContain('First reason');
+    expect(wrapper.text()).toContain('Second reason');
+
+    parseSpy.mockRestore();
+  });
+
+  it('marks the selected unread notification as read when the page unmounts', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: false })] as any;
+    storeState.tabCounts.unread = 1;
+    storeState.unreadCount = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    await (wrapper.vm as any).handleFilterTabChange('unread');
+    await nextTick();
+    (wrapper.vm as any).selectedNotificationId = 'n1';
+    vi.clearAllMocks();
+
+    wrapper.unmount();
+    await Promise.resolve();
+
+    expect(storeState.markReadLocal).toHaveBeenCalledWith(['n1']);
+    expect(markAsRead).toHaveBeenCalledWith(['n1']);
+  });
+
+  it('supports resizing the split view within min and max bounds', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage, { attachTo: document.body });
+    await nextTick();
+
+    const container = wrapper.find('.notifications-content').element as HTMLElement;
+    Object.defineProperty(container, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => ({ left: 100, width: 1000 }),
+    });
+
+    const handle = wrapper.find('.notifications-resize-handle');
+    await handle.trigger('mousedown', { clientX: 450, preventDefault: vi.fn() });
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 150 }));
+    await nextTick();
+    expect((wrapper.find('.notifications-list-panel').element as HTMLElement).style.width).toBe(
+      '320px'
+    );
+
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 900 }));
+    await nextTick();
+    expect((wrapper.find('.notifications-list-panel').element as HTMLElement).style.width).toBe(
+      '580px'
+    );
+
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    wrapper.unmount();
+  });
+
+  it('ignores resize movement when not actively resizing', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    const initialWidth = (wrapper.vm as any).listPanelStyle.width;
+
+    (wrapper.vm as any).resizePanels({ clientX: 999 } as MouseEvent);
+
+    expect((wrapper.vm as any).listPanelStyle.width).toBe(initialWidth);
+  });
+
+  it('does not call mark-as-read again when selecting an already-read notification', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    vi.clearAllMocks();
+
+    await wrapper.find('.notification-card').trigger('click');
+    await nextTick();
+
+    expect(storeState.markReadLocal).not.toHaveBeenCalled();
+    expect(markAsRead).not.toHaveBeenCalled();
+  });
+
+  it('clears the selected notification when the filtered list becomes empty', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    await nextTick();
+
+    (wrapper.vm as any).selectedNotificationId = 'n1';
+
+    storeState.filteredNotifications = [] as any;
+    storeState.tabCounts.all = 0;
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe(null);
+    expect(wrapper.find('.notifications-empty').exists()).toBe(true);
+  });
+
+  it('shows the detail empty state when the selected notification id no longer exists', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    await nextTick();
+
+    (wrapper.vm as any).selectedNotificationId = 'missing-id';
+    await nextTick();
+
+    expect(wrapper.find('.details-empty').exists()).toBe(true);
+  });
+
+  it('clears the selection immediately when deleting the currently selected notification', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    await nextTick();
+
+    await wrapper.find('.notification-card').trigger('click');
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe('n1');
+
+    await (wrapper.vm as any).handleDelete('n1');
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe(null);
+    expect(storeState.removeNotificationLocal).toHaveBeenCalledWith('n1');
+    expect(deleteNotification).toHaveBeenCalledWith('n1');
+  });
+
+  it('ignores non-arrow key presses in the notification list', async () => {
+    storeState.filteredNotifications = [createNotification({ id: 'n1', isRead: true })] as any;
+    storeState.tabCounts.all = 1;
+
+    const wrapper = mount(NotificationsAllPage);
+    const listPanel = wrapper.find('.notifications-list-panel');
+    (wrapper.vm as any).selectedNotificationId = 'n1';
+    const selectedBefore = (wrapper.vm as any).selectedNotificationId;
+
+    await listPanel.trigger('keydown', { key: 'Enter', preventDefault: vi.fn() });
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedNotificationId).toBe(selectedBefore);
+    expect(storeState.markReadLocal).not.toHaveBeenCalled();
   });
 });

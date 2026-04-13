@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ref } from 'vue';
 
 import { FieldTransformationType } from '@/api/models/FieldTransformationType';
 import {
@@ -8,20 +9,33 @@ import {
 } from '@/components/outbound/arcgisintegration/utils/fieldMappingConstants';
 import FieldMappingStep from '@/components/outbound/arcgisintegration/wizard/steps/FieldMappingStep.vue';
 
-// Mock composables
+const hoisted = vi.hoisted(() => ({
+  sourceFields: null as any,
+  sourceFieldsLoading: null as any,
+  sourceFieldsError: null as any,
+  loadSourceFieldsMock: vi.fn(),
+  arcgisFields: null as any,
+  loadArcgisFieldsMock: vi.fn(),
+}));
+
+hoisted.sourceFields = ref<any[]>([]);
+hoisted.sourceFieldsLoading = ref(false);
+hoisted.sourceFieldsError = ref<string | null>(null);
+hoisted.arcgisFields = ref<any[]>([]);
+
 vi.mock('@/composables/useSourceFields', () => ({
   useSourceFields: () => ({
-    fields: { value: [] },
-    loading: { value: false },
-    error: { value: null },
-    load: vi.fn(),
+    fields: hoisted.sourceFields,
+    loading: hoisted.sourceFieldsLoading,
+    error: hoisted.sourceFieldsError,
+    load: hoisted.loadSourceFieldsMock,
   }),
 }));
 
 vi.mock('@/composables/useArcgisFeatures', () => ({
   useArcgisFeatures: () => ({
-    fields: { value: [] },
-    load: vi.fn(),
+    fields: hoisted.arcgisFields,
+    load: hoisted.loadArcgisFieldsMock,
   }),
 }));
 
@@ -31,20 +45,40 @@ describe('FieldMappingStep', () => {
     connectionId: 'test-connection-id',
   };
 
+  const mountStep = (overrides: Record<string, unknown> = {}) =>
+    mount(FieldMappingStep, {
+      props: {
+        ...defaultProps,
+        ...overrides,
+      },
+      global: {
+        stubs: {
+          i: { template: '<span></span>' },
+        },
+      },
+    });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    hoisted.sourceFields.value = [
+      { id: 'source-0', fieldName: DEFAULT_SOURCE_FIELD, fieldType: 'TEXT' },
+      { id: 'source-1', fieldName: 'name', fieldType: 'TEXT' },
+      { id: 'source-2', fieldName: 'status', fieldType: 'TEXT' },
+      { id: 'source-3', fieldName: 'priority', fieldType: 'TEXT' },
+    ];
+    hoisted.sourceFieldsLoading.value = false;
+    hoisted.sourceFieldsError.value = null;
+    hoisted.arcgisFields.value = [
+      { name: DEFAULT_TARGET_FIELD, nullable: false },
+      { name: 'Email Id', nullable: true },
+      { name: 'Status', nullable: true },
+      { name: 'Priority', nullable: false },
+    ];
   });
 
   describe('Rendering', () => {
     it('renders component successfully', () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: defaultProps,
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
+      const wrapper = mountStep();
 
       expect(wrapper.exists()).toBe(true);
       expect(wrapper.find('.fm-root').exists()).toBe(true);
@@ -52,14 +86,7 @@ describe('FieldMappingStep', () => {
     });
 
     it('displays table headers', () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: defaultProps,
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
+      const wrapper = mountStep();
 
       expect(wrapper.text()).toContain('Document Field');
       expect(wrapper.text()).toContain('Transformation');
@@ -68,322 +95,250 @@ describe('FieldMappingStep', () => {
     });
   });
 
-  describe('CREATE Mode - Empty Slot Addition', () => {
-    it('adds empty row in CREATE mode with only default mapping', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          ...defaultProps,
-          mode: 'create',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+  describe('Mode-specific initialization', () => {
+    it('adds empty row in create mode with only default mapping', async () => {
+      const wrapper = mountStep({ mode: 'create' });
       await flushPromises();
 
-      // Should have default mapping + empty row (2 total)
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(2);
-
-      // First row should be default mapping
-      expect(rows[0].find('select').exists()).toBe(true);
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(2);
     });
 
-    it('does not add empty row if already has multiple mappings', async () => {
-      const modelValue = {
-        fieldMappings: [
-          {
-            id: 'default',
-            sourceField: DEFAULT_SOURCE_FIELD,
-            targetField: DEFAULT_TARGET_FIELD,
-            transformationType: FieldTransformationType.PASSTHROUGH,
-            isMandatory: true,
-            displayOrder: 0,
-            isDefault: true,
-          },
-          {
-            id: 'mapping-1',
-            sourceField: 'field1',
-            targetField: 'target1',
-            transformationType: FieldTransformationType.PASSTHROUGH,
-            isMandatory: false,
-            displayOrder: 1,
-          },
-        ],
-      };
-
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue,
-          connectionId: 'test-connection-id',
-          mode: 'create',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
+    it('does not add empty row if create mode already has multiple mappings', async () => {
+      const wrapper = mountStep({
+        mode: 'create',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: true,
+              displayOrder: 0,
+              isDefault: true,
+            },
+            {
+              id: 'mapping-1',
+              sourceField: 'field1',
+              targetField: 'Email Id',
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: false,
+              displayOrder: 1,
+            },
+          ],
         },
       });
-
       await flushPromises();
 
-      // Should have exactly 2 rows (no extra empty row)
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(2);
-    });
-  });
-
-  describe('EDIT Mode - No Empty Slot', () => {
-    it('does NOT add empty row in EDIT mode with only default mapping', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          ...defaultProps,
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
-      await flushPromises();
-
-      // Should have only default mapping (1 row)
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(1);
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(2);
     });
 
-    it('preserves exact mapping structure in EDIT mode', async () => {
-      const modelValue = {
-        fieldMappings: [
-          {
-            id: 'default',
-            sourceField: DEFAULT_SOURCE_FIELD,
-            targetField: DEFAULT_TARGET_FIELD,
-            transformationType: FieldTransformationType.PASSTHROUGH,
-            isMandatory: true,
-            displayOrder: 0,
-            isDefault: true,
-          },
-          {
-            id: 'mapping-1',
-            sourceField: 'field1',
-            targetField: 'target1',
-            transformationType: FieldTransformationType.UPPERCASE,
-            isMandatory: false,
-            displayOrder: 1,
-          },
-        ],
-      };
-
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue,
-          connectionId: 'test-connection-id',
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+    it('does not add empty row in edit mode with only default mapping', async () => {
+      const wrapper = mountStep({ mode: 'edit' });
       await flushPromises();
 
-      // Should have exactly 2 rows, no extra empty rows
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(1);
+    });
+
+    it('preserves exact mapping structure in clone mode', async () => {
+      const wrapper = mountStep({
+        mode: 'clone',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: true,
+              displayOrder: 0,
+              isDefault: true,
+            },
+            {
+              id: 'mapping-1',
+              sourceField: 'field1',
+              targetField: 'target1',
+              transformationType: FieldTransformationType.LOWERCASE,
+              isMandatory: true,
+              displayOrder: 1,
+            },
+            {
+              id: 'mapping-2',
+              sourceField: 'field2',
+              targetField: 'target2',
+              transformationType: FieldTransformationType.TRIM,
+              isMandatory: false,
+              displayOrder: 2,
+            },
+          ],
+        },
+      });
+      await flushPromises();
+
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(3);
+    });
+
+    it('moves an existing default mapping to the first row and normalizes missing values', async () => {
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'mapping-1',
+              sourceField: 'status',
+              targetField: 'Status',
+              transformationType: '',
+              isMandatory: null,
+              displayOrder: null,
+            },
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.UPPERCASE,
+              isMandatory: false,
+              displayOrder: 99,
+              isDefault: true,
+            },
+          ],
+        },
+      });
+      await flushPromises();
+
       const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(2);
+      expect(rows).toHaveLength(2);
+
+      const firstRowSelects = rows[0].findAll('select');
+      const secondRowSelects = rows[1].findAll('select');
+
+      expect((firstRowSelects[0].element as HTMLSelectElement).value).toBe(DEFAULT_SOURCE_FIELD);
+      expect((firstRowSelects[1].element as HTMLSelectElement).value).toBe(
+        FieldTransformationType.PASSTHROUGH
+      );
+      expect((firstRowSelects[2].element as HTMLSelectElement).value).toBe(DEFAULT_TARGET_FIELD);
+
+      expect((secondRowSelects[0].element as HTMLSelectElement).value).toBe('status');
+      expect((secondRowSelects[1].element as HTMLSelectElement).value).toBe(
+        FieldTransformationType.PASSTHROUGH
+      );
     });
   });
 
-  describe('CLONE Mode - No Empty Slot', () => {
-    it('does NOT add empty row in CLONE mode with only default mapping', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          ...defaultProps,
-          mode: 'clone',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
-      await flushPromises();
-
-      // Should have only default mapping (1 row)
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(1);
-    });
-
-    it('preserves exact mapping structure in CLONE mode', async () => {
-      const modelValue = {
-        fieldMappings: [
-          {
-            id: 'default',
-            sourceField: DEFAULT_SOURCE_FIELD,
-            targetField: DEFAULT_TARGET_FIELD,
-            transformationType: FieldTransformationType.PASSTHROUGH,
-            isMandatory: true,
-            displayOrder: 0,
-            isDefault: true,
-          },
-          {
-            id: 'mapping-1',
-            sourceField: 'field1',
-            targetField: 'target1',
-            transformationType: FieldTransformationType.LOWERCASE,
-            isMandatory: true,
-            displayOrder: 1,
-          },
-          {
-            id: 'mapping-2',
-            sourceField: 'field2',
-            targetField: 'target2',
-            transformationType: FieldTransformationType.TRIM,
-            isMandatory: false,
-            displayOrder: 2,
-          },
-        ],
-      };
-
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue,
-          connectionId: 'test-connection-id',
-          mode: 'clone',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
-      await flushPromises();
-
-      // Should have exactly 3 rows (exact replica, no empty row added)
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(3);
-    });
-  });
-
-  describe('Default Mapping Behavior', () => {
+  describe('Default mapping behavior', () => {
     it('ensures default mapping exists and is first', async () => {
-      const modelValue = {
-        fieldMappings: [],
-      };
-
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue,
-          connectionId: 'test-connection-id',
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: { fieldMappings: [] },
       });
-
       await flushPromises();
 
-      // Should have created default mapping
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBeGreaterThanOrEqual(1);
+      expect(wrapper.findAll('.fm-mapping-row').length).toBeGreaterThanOrEqual(1);
     });
 
     it('disables editing of default mapping', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: defaultProps,
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+      const wrapper = mountStep();
       await flushPromises();
 
-      // First select should be disabled (default mapping source field)
-      const firstSelect = wrapper.find('.fm-source-field select');
-      expect(firstSelect.attributes('disabled')).toBeDefined();
+      expect(wrapper.find('.fm-source-field select').attributes('disabled')).toBeDefined();
     });
   });
 
-  describe('Validation', () => {
+  describe('Validation and loading', () => {
     it('emits validation-change event on mount', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          ...defaultProps,
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+      const wrapper = mountStep({ mode: 'edit' });
       await flushPromises();
 
-      // Should emit validation-change event
       expect(wrapper.emitted('validation-change')).toBeTruthy();
     });
 
     it('invalid when mappings are incomplete', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue: {
-            fieldMappings: [
-              {
-                id: 'empty',
-                sourceField: '',
-                targetField: '',
-                transformationType: '',
-                isMandatory: false,
-                displayOrder: 0,
-              },
-            ],
-          },
-          connectionId: 'test-connection-id',
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'empty',
+              sourceField: '',
+              targetField: '',
+              transformationType: '',
+              isMandatory: false,
+              displayOrder: 0,
+            },
+          ],
         },
       });
-
       await flushPromises();
 
-      const emitted = wrapper.emitted('validation-change');
-      expect(emitted).toBeTruthy();
-      // Last emitted should indicate invalid state
-      const lastValidation = emitted?.[emitted.length - 1];
-      expect(lastValidation?.[0]).toBe(false);
+      expect((wrapper.emitted('validation-change') ?? []).at(-1)?.[0]).toBe(false);
+    });
+
+    it('emits invalid when duplicate source and target mappings are present', async () => {
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: true,
+              displayOrder: 0,
+              isDefault: true,
+            },
+            {
+              id: 'mapping-1',
+              sourceField: 'name',
+              targetField: 'Email Id',
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: false,
+              displayOrder: 1,
+            },
+            {
+              id: 'mapping-2',
+              sourceField: 'name',
+              targetField: 'Email Id',
+              transformationType: FieldTransformationType.UPPERCASE,
+              isMandatory: false,
+              displayOrder: 2,
+            },
+          ],
+        },
+      });
+      await flushPromises();
+
+      expect((wrapper.emitted('validation-change') ?? []).at(-1)).toEqual([false]);
+    });
+
+    it('loads source fields and ArcGIS fields on mount when a connection id is provided', async () => {
+      mountStep();
+      await flushPromises();
+
+      expect(hoisted.loadSourceFieldsMock).toHaveBeenCalledTimes(1);
+      expect(hoisted.loadArcgisFieldsMock).toHaveBeenCalledWith('test-connection-id');
+    });
+
+    it('skips ArcGIS field loading when connection id is not provided', async () => {
+      mountStep({ connectionId: null });
+      await flushPromises();
+
+      expect(hoisted.loadSourceFieldsMock).toHaveBeenCalledTimes(1);
+      expect(hoisted.loadArcgisFieldsMock).not.toHaveBeenCalled();
+    });
+
+    it('surfaces source field loading errors in the UI', async () => {
+      hoisted.sourceFieldsError.value = 'network down';
+      const wrapper = mountStep();
+      await flushPromises();
+
+      expect(wrapper.text()).toContain('Failed to load source fields:');
+      expect(wrapper.text()).toContain('network down');
     });
   });
 
-  describe('Field Mapping Operations', () => {
+  describe('Field mapping operations', () => {
     it('handles model value updates via prop', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: defaultProps,
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+      const wrapper = mountStep();
       const newModelValue = {
         fieldMappings: [
           {
@@ -400,10 +355,9 @@ describe('FieldMappingStep', () => {
       await wrapper.setProps({ modelValue: newModelValue });
       await flushPromises();
 
-      const emitted = wrapper.emitted('update:modelValue');
-      expect(emitted).toBeTruthy();
-
-      const lastUpdate = (emitted?.[emitted.length - 1]?.[0] ?? { fieldMappings: [] }) as {
+      const lastUpdate = ((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0] ?? {
+        fieldMappings: [],
+      }) as {
         fieldMappings: Array<{
           sourceField?: string;
           targetField?: string;
@@ -421,19 +375,8 @@ describe('FieldMappingStep', () => {
       );
     });
 
-    it('normalizes transformation type to PASSTHROUGH by default', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: {
-          modelValue: { fieldMappings: [] },
-          connectionId: 'test-connection-id',
-          mode: 'edit',
-        },
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
+    it('normalizes transformation type to passthrough by default', async () => {
+      const wrapper = mountStep({ mode: 'edit' });
 
       await wrapper.setProps({
         modelValue: {
@@ -442,7 +385,7 @@ describe('FieldMappingStep', () => {
               id: 'mapping-1',
               sourceField: 'field1',
               targetField: 'target1',
-              transformationType: '', // empty
+              transformationType: '',
               isMandatory: false,
               displayOrder: 0,
             },
@@ -451,10 +394,9 @@ describe('FieldMappingStep', () => {
       });
       await flushPromises();
 
-      const emitted = wrapper.emitted('update:modelValue');
-      expect(emitted).toBeTruthy();
-
-      const lastUpdate = (emitted?.[emitted.length - 1]?.[0] ?? { fieldMappings: [] }) as {
+      const lastUpdate = ((wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0] ?? {
+        fieldMappings: [],
+      }) as {
         fieldMappings: Array<{
           sourceField?: string;
           targetField?: string;
@@ -467,41 +409,102 @@ describe('FieldMappingStep', () => {
 
       expect(normalizedMapping?.transformationType).toBe(FieldTransformationType.PASSTHROUGH);
     });
+
+    it('forces mandatory when a non-nullable target field is selected', async () => {
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: true,
+              displayOrder: 0,
+              isDefault: true,
+            },
+            {
+              id: 'mapping-1',
+              sourceField: 'name',
+              targetField: '',
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: false,
+              displayOrder: 1,
+            },
+          ],
+        },
+      });
+      await flushPromises();
+
+      const targetSelects = wrapper.findAll('.fm-target-field select');
+      await targetSelects[1].setValue('Priority');
+      await flushPromises();
+
+      const mandatoryCheckboxes = wrapper.findAll('.fm-checkbox');
+      expect((mandatoryCheckboxes[1].element as HTMLInputElement).checked).toBe(true);
+      expect(mandatoryCheckboxes[1].attributes('disabled')).toBeDefined();
+    });
+
+    it('adds a row when the last mapping is complete and removes non-default rows', async () => {
+      const wrapper = mountStep({
+        mode: 'edit',
+        modelValue: {
+          fieldMappings: [
+            {
+              id: 'default',
+              sourceField: DEFAULT_SOURCE_FIELD,
+              targetField: DEFAULT_TARGET_FIELD,
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: true,
+              displayOrder: 0,
+              isDefault: true,
+            },
+            {
+              id: 'mapping-1',
+              sourceField: 'name',
+              targetField: 'Email Id',
+              transformationType: FieldTransformationType.PASSTHROUGH,
+              isMandatory: false,
+              displayOrder: 1,
+            },
+          ],
+        },
+      });
+      await flushPromises();
+
+      await wrapper.find('.fm-btn-add').trigger('click');
+      await flushPromises();
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(3);
+
+      await wrapper.find('.fm-btn-remove').trigger('click');
+      await flushPromises();
+
+      const latest = (wrapper.emitted('update:modelValue') ?? []).at(-1)?.[0] as {
+        fieldMappings: Array<Record<string, unknown>>;
+      };
+      expect(latest.fieldMappings).toHaveLength(2);
+      expect(latest.fieldMappings[0]).toMatchObject({
+        sourceField: DEFAULT_SOURCE_FIELD,
+        targetField: DEFAULT_TARGET_FIELD,
+      });
+      expect(latest.fieldMappings[1]).toMatchObject({ displayOrder: 1 });
+    });
   });
 
-  describe('Props Validation', () => {
-    it('accepts all valid mode props', async () => {
+  describe('Props validation', () => {
+    it('accepts all valid mode props', () => {
       for (const mode of ['create', 'edit', 'clone']) {
-        const wrapper = mount(FieldMappingStep, {
-          props: {
-            ...defaultProps,
-            mode: mode as 'create' | 'edit' | 'clone',
-          },
-          global: {
-            stubs: {
-              i: { template: '<span></span>' },
-            },
-          },
-        });
-
+        const wrapper = mountStep({ mode: mode as 'create' | 'edit' | 'clone' });
         expect(wrapper.exists()).toBe(true);
       }
     });
 
     it('defaults mode to create when not provided', async () => {
-      const wrapper = mount(FieldMappingStep, {
-        props: defaultProps,
-        global: {
-          stubs: {
-            i: { template: '<span></span>' },
-          },
-        },
-      });
-
+      const wrapper = mountStep();
       await flushPromises();
 
-      const rows = wrapper.findAll('.fm-mapping-row');
-      expect(rows.length).toBe(2);
+      expect(wrapper.findAll('.fm-mapping-row')).toHaveLength(2);
     });
   });
 });

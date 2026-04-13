@@ -6,7 +6,6 @@
       </div>
       <div v-else-if="error" class="error-wrap">{{ error }}</div>
       <div v-else>
-        <!-- Global tooltip for service actions -->
         <Tooltip
           :visible="actionTipVisible"
           :x="actionTipX"
@@ -24,6 +23,19 @@
           :enable-clear-filters="true"
           @option-changed="onGridOptionsChanged"
         >
+          <template #toolbarActions>
+            <div class="action-wrapper toolbar-action-wrapper">
+              <DxButton
+                class="add-connection-button"
+                icon="plus"
+                styling-mode="text"
+                type="default"
+                hint="Add Connection"
+                :element-attr="{ 'aria-label': 'Add Connection' }"
+                @click="openCreateDialog"
+              />
+            </div>
+          </template>
           <template #statusCell="{ data }">
             <StatusChipForDataTable
               :status="data.lastConnectionStatus || 'UNKNOWN'"
@@ -33,7 +45,6 @@
           <template #dateCell="{ data }">
             {{ formatMetadataDate(data.lastConnectionTest) }}
           </template>
-
           <template #actionsCell="{ data }">
             <div class="actions-cell">
               <div
@@ -68,7 +79,6 @@
                   </svg>
                 </DxButton>
               </div>
-
               <div
                 class="action-wrapper"
                 @mouseenter="e => onActionEnter('Update Secret', e, true)"
@@ -84,8 +94,6 @@
                   @click="openSecretDialog(data)"
                 />
               </div>
-
-              <!-- Delete Button with tooltip -->
               <div
                 class="action-wrapper"
                 @mouseenter="e => onActionEnter('Delete Connection', e, true)"
@@ -114,7 +122,6 @@
       @cancel="closeDialog"
       @confirm="handleConfirm"
     />
-
     <AppModal
       :open="secretDialogOpen"
       title="Update Secret"
@@ -142,7 +149,6 @@
           </button>
         </div>
       </div>
-
       <template #footer>
         <div class="secret-actions">
           <DxButton
@@ -187,12 +193,11 @@
           </div>
         </div>
       </template>
-
       <div class="dependents-dialog">
         <div class="dependents-grid">
           <div class="dependents-metadata-content">
             <DxDataGrid
-              :data-source="dependentsGridItems"
+              :data-source="dependentsResponse?.integrations ?? []"
               :show-borders="true"
               :row-alternation-enabled="true"
               :allow-column-resizing="true"
@@ -222,7 +227,6 @@
           </div>
         </div>
       </div>
-
       <template #footer>
         <div class="dependents-actions">
           <DxButton
@@ -236,27 +240,34 @@
         </div>
       </template>
     </AppModal>
+    <AddConnectionDialog
+      :open="createDialogOpen"
+      :service-type="props.serviceType"
+      :submit-connection="createConnection"
+      @update:open="createDialogOpen = $event"
+      @created="handleCreateConnectionCreated"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-/* eslint max-lines: ["error", { "max": 550 }] */
-
 import { ref, onMounted, computed, watch } from 'vue';
 import DxButton from 'devextreme-vue/button';
 import DxLoadIndicator from 'devextreme-vue/load-indicator';
 import { Eye, EyeOff } from 'lucide-vue-next';
+import AddConnectionDialog from './AddConnectionDialog.vue';
+import { getConfirmDialogDescription, getDependentsNameCaption } from './serviceConnectionPageText';
 import Tooltip from '@/components/common/Tooltip.vue';
 import { useServiceConnectionsAdmin } from '@/composables/useServiceConnectionsAdmin';
 import ConfirmationDialog from '@/components/common/ConfirmationDialog.vue';
 import StatusChipForDataTable from '@/components/common/StatusChipForDataTable.vue';
 import { formatMetadataDate } from '@/utils/dateUtils';
 import GenericDataGrid from '@/components/common/GenericDataGrid.vue';
-import { ServiceType, ServiceTypeMetadata } from '@/api/models/enums';
+import { ServiceType } from '@/api/models/enums';
 import AppModal from '@/components/common/AppModal.vue';
 import { DxDataGrid, DxColumn, DxPaging, DxScrolling } from 'devextreme-vue/data-grid';
 import { IntegrationConnectionService } from '@/api/services/IntegrationConnectionService';
-import type { ConnectionDependentItemResponse, ConnectionDependentsResponse } from '@/api/models';
+import type { ConnectionDependentsResponse } from '@/api/models';
 import { useToastStore } from '@/store/toast';
 import { ApiError } from '@/api/core/ApiError';
 
@@ -264,8 +275,6 @@ const gridRef = ref();
 const rowLoading = ref<{ [key: string]: boolean }>({});
 
 const toast = useToastStore();
-
-// Props
 interface Props {
   serviceType: ServiceType;
 }
@@ -282,77 +291,53 @@ const {
   testConnection,
   deleteConnection,
   rotateSecret,
+  createConnection,
   fetchConnections,
 } = useServiceConnectionsAdmin(props.serviceType);
 
 onMounted(() => {
-  fetchConnections();
+  void fetchConnections();
 });
+const createDialogOpen = ref(false);
 
 const dialogOpen = ref(false);
 const pendingAction = ref<'test' | 'delete' | null>(null);
 const pendingConnection = ref<any>(null);
+const confirmDialogDescription = computed(() =>
+  getConfirmDialogDescription(pendingAction.value, props.serviceType)
+);
 
-const serviceLabel = computed(() => {
-  return ServiceTypeMetadata[props.serviceType]?.displayName ?? props.serviceType;
-});
-const confirmDialogDescription = computed(() => {
-  if (pendingAction.value === 'delete')
-    return `Are you sure you want to delete this connection? This action is permanent and cannot be undone.`;
-  if (pendingAction.value === 'test')
-    return `This will test the ${serviceLabel.value} connection using the selected credentials to verify connectivity. Do you want to continue?`;
-  return '';
-});
+function isRowLoading(id?: string) {
+  return !!(id && rowLoading.value[id]);
+}
 
-// Loading state for the dialog derived from rowLoading of the pending connection
-const dialogLoading = computed<boolean>(() => {
-  const id = pendingConnection.value?.id;
-  return id ? !!rowLoading.value[id] : false;
-});
+const dialogLoading = computed<boolean>(() => isRowLoading(pendingConnection.value?.id));
 
 const secretDialogOpen = ref(false);
-const secretValue = ref('');
-const secretVisible = ref(false);
+const secretValue = ref(''),
+  secretVisible = ref(false);
 const secretConnection = ref<any>(null);
-const secretDialogLabel = computed(() => {
-  return props.serviceType === ServiceType.ARCGIS
+const secretDialogLabel = computed(() =>
+  props.serviceType === ServiceType.ARCGIS
     ? 'New OAuth client secret'
-    : 'New password / client secret';
-});
-const secretDialogLoading = computed<boolean>(() => {
-  const id = secretConnection.value?.id;
-  return id ? !!rowLoading.value[id] : false;
-});
+    : 'New password / client secret'
+);
+const secretDialogLoading = computed<boolean>(() => isRowLoading(secretConnection.value?.id));
 
 const dependentsDialogOpen = ref(false);
 const dependentsResponse = ref<ConnectionDependentsResponse | null>(null);
+const dependentsNameCaption = computed(() =>
+  getDependentsNameCaption(dependentsResponse.value?.serviceType)
+);
 
-const dependentsGridItems = computed<ConnectionDependentItemResponse[]>(() => {
-  return dependentsResponse.value?.integrations ?? [];
-});
-
-// Name column caption varies by service type
-const dependentsNameCaption = computed(() => {
-  if (!dependentsResponse.value?.serviceType) return 'Integration Name';
-
-  if (dependentsResponse.value.serviceType === ServiceType.ARCGIS) {
-    return 'ArcGIS Integration Name';
-  }
-  if (dependentsResponse.value.serviceType === ServiceType.CONFLUENCE) {
-    return 'Confluence Integration Name';
-  }
-  return 'Jira Webhook Name';
-});
-
-// Tooltip state for actions
 const actionTipVisible = ref(false);
-const actionTipX = ref(0);
-const actionTipY = ref(0);
+const actionTipX = ref(0),
+  actionTipY = ref(0);
 const actionTipId = 'service-actions-tooltip';
 const actionTipText = ref('');
 const actionTipLeft = ref(false);
-const LEFT_OFFSET = 220; // px, approximate tooltip width for left-side placement
-const CURSOR_OFFSET = 12; // px gap from cursor
+const LEFT_OFFSET = 220,
+  CURSOR_OFFSET = 12;
 function onActionEnter(text: string, e: MouseEvent, placeLeft = false) {
   actionTipText.value = text;
   actionTipVisible.value = true;
@@ -457,6 +442,13 @@ async function confirmSecretUpdate() {
 
 function refreshGrid() {
   gridRef.value?.instance?.refresh(true);
+}
+function openCreateDialog() {
+  createDialogOpen.value = true;
+}
+
+function handleCreateConnectionCreated() {
+  refreshGrid();
 }
 
 async function handleTestAction(id: string) {

@@ -223,6 +223,7 @@ describe('JiraWebhookDashboardHelper', () => {
         viewMode: 'list',
         currentPage: 3,
         pageSize: 12,
+        persistPageSize: true,
       });
       expect(q.search).toBe('alpha');
       expect(q.sort).toBe('name');
@@ -241,6 +242,19 @@ describe('JiraWebhookDashboardHelper', () => {
         includeScroll: true,
       });
       expect(q.scroll).toBeDefined();
+    });
+
+    it('omits page size when using the responsive default', () => {
+      const q = buildStateQuery({
+        search: '',
+        sortBy: 'createdDate',
+        viewMode: 'grid',
+        currentPage: 1,
+        pageSize: 12,
+        persistPageSize: false,
+      });
+
+      expect(q).toEqual({ sort: 'createdDate', view: 'grid' });
     });
   });
 });

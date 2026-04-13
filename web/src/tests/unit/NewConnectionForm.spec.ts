@@ -48,7 +48,6 @@ describe('NewConnectionForm', () => {
         credentialTypes,
         currentCredentialFields: fields,
         useTwoColCredentialGrid: false,
-        isCredentialFieldFullWidth: () => false,
         canTestConnection: true,
         isTesting: false,
         tested: false,

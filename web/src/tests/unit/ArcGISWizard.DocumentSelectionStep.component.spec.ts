@@ -143,4 +143,131 @@ describe('ArcGIS Wizard DocumentSelectionStep.vue', () => {
 
     expect(hoisted.getDynamicDocumentsMock).toHaveBeenCalledTimes(2);
   });
+
+  it('normalizes legacy dynamic document titles to ids on mount', async () => {
+    const wrapper = mount(DocumentSelectionStep, {
+      props: {
+        modelValue: {
+          ...createModel(),
+          subType: 'DOCUMENT_FINAL_DYNAMIC',
+          dynamicDocument: 'Doc Two',
+        },
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    const modelEvents = wrapper.emitted('update:modelValue') ?? [];
+    expect(modelEvents.at(-1)?.[0]).toMatchObject({
+      dynamicDocument: 'doc-2',
+      dynamicDocumentLabel: 'Doc Two',
+    });
+  });
+
+  it('preserves selection by label when switching between dynamic subtypes', async () => {
+    hoisted.getDynamicDocumentsMock
+      .mockResolvedValueOnce([{ id: 'doc-1', title: 'Shared Title', tags: [] }])
+      .mockResolvedValueOnce([{ id: 'doc-9', title: 'Shared Title', tags: [] }]);
+
+    const wrapper = mount(DocumentSelectionStep, {
+      props: {
+        modelValue: {
+          ...createModel(),
+          subType: 'DOCUMENT_FINAL_DYNAMIC',
+          dynamicDocument: 'doc-1',
+          dynamicDocumentLabel: 'Shared Title',
+        },
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    const selects = wrapper.findAll('select.ds-input');
+    await selects[1].setValue('DOCUMENT_DRAFT_DYNAMIC');
+    await nextTick();
+    await flushPromises();
+
+    const modelEvents = wrapper.emitted('update:modelValue') ?? [];
+    expect(modelEvents.at(-1)?.[0]).toMatchObject({
+      dynamicDocument: 'doc-9',
+      dynamicDocumentLabel: 'Shared Title',
+    });
+  });
+
+  it('clears invalid dynamic document selections when fetched docs do not contain them', async () => {
+    hoisted.getDynamicDocumentsMock.mockResolvedValueOnce([
+      { id: 'doc-3', title: 'Other', tags: [] },
+    ]);
+
+    const wrapper = mount(DocumentSelectionStep, {
+      props: {
+        modelValue: {
+          ...createModel(),
+          subType: 'DOCUMENT_FINAL_DYNAMIC',
+          dynamicDocument: 'missing-id',
+          dynamicDocumentLabel: 'Missing Label',
+        },
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    const modelEvents = wrapper.emitted('update:modelValue') ?? [];
+    expect(modelEvents.at(-1)?.[0]).toMatchObject({
+      dynamicDocument: '',
+      dynamicDocumentLabel: '',
+    });
+    const validationEvents = wrapper.emitted('validation-change') ?? [];
+    expect(validationEvents.at(-1)).toEqual([false]);
+  });
+
+  it('stays invalid when a dynamic subtype returns no documents', async () => {
+    hoisted.getDynamicDocumentsMock.mockResolvedValueOnce([]);
+
+    const wrapper = mount(DocumentSelectionStep, {
+      props: {
+        modelValue: createModel(),
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    const selects = wrapper.findAll('select.ds-input');
+    await selects[1].setValue('DOCUMENT_FINAL_DYNAMIC');
+    await nextTick();
+    await flushPromises();
+
+    const validationEvents = wrapper.emitted('validation-change') ?? [];
+    expect(validationEvents.at(-1)).toEqual([false]);
+  });
+
+  it('syncs incoming modelValue prop changes from the parent', async () => {
+    const wrapper = mount(DocumentSelectionStep, {
+      props: {
+        modelValue: createModel(),
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    await wrapper.setProps({
+      modelValue: {
+        ...createModel(),
+        subType: 'DOCUMENT_PDF',
+        subTypeLabel: 'PDF',
+      },
+    });
+    await nextTick();
+
+    const modelEvents = wrapper.emitted('update:modelValue') ?? [];
+    expect(modelEvents.at(-1)?.[0]).toMatchObject({
+      subType: 'DOCUMENT_PDF',
+      subTypeLabel: 'PDF',
+    });
+  });
 });

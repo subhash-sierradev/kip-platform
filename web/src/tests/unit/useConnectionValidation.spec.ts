@@ -496,4 +496,145 @@ describe('useConnectionValidation', () => {
       expect(getMissingFields.value).toEqual([]);
     });
   });
+
+  describe('canTestConnection — strategy not found', () => {
+    it('should return false when no strategy exists for the given credential type', () => {
+      const connectionData = ref<ConnectionStepData>({
+        connectionMethod: 'new',
+        connected: false,
+        connectionName: 'Test',
+        existingConnectionId: '',
+        baseUrl: 'https://test.com',
+        credentialType: 'UNKNOWN_CRED_TYPE_XYZ',
+        username: 'user',
+        password: 'pass',
+        clientId: '',
+        clientSecret: '',
+        tokenUrl: '',
+        scope: '',
+      });
+
+      const { canTestConnection } = useConnectionValidation({
+        connectionData,
+        credentialTypes: ref(createBasicAuthFields()),
+        testSuccess: ref(false),
+        existingTestSuccess: ref(false),
+        serviceType: 'JIRA',
+      });
+
+      expect(canTestConnection.value).toBe(false);
+    });
+  });
+
+  describe('getValidationMessage — additional branches', () => {
+    it('should return "Please verify the selected connection" when existing connection selected but not verified', () => {
+      const connectionData = ref<ConnectionStepData>({
+        connectionMethod: 'existing',
+        connected: false,
+        connectionName: '',
+        existingConnectionId: 'conn-123',
+        baseUrl: '',
+        credentialType: '',
+        username: '',
+        password: '',
+        clientId: '',
+        clientSecret: '',
+        tokenUrl: '',
+        scope: '',
+      });
+
+      const { getValidationMessage } = useConnectionValidation({
+        connectionData,
+        credentialTypes: ref([]),
+        testSuccess: ref(false),
+        existingTestSuccess: ref(false),
+        serviceType: 'JIRA',
+      });
+
+      expect(getValidationMessage()).toBe('Please verify the selected connection');
+    });
+
+    it('should return empty string when existing connection is selected and verified', () => {
+      const connectionData = ref<ConnectionStepData>({
+        connectionMethod: 'existing',
+        connected: false,
+        connectionName: '',
+        existingConnectionId: 'conn-123',
+        baseUrl: '',
+        credentialType: '',
+        username: '',
+        password: '',
+        clientId: '',
+        clientSecret: '',
+        tokenUrl: '',
+        scope: '',
+      });
+
+      const { getValidationMessage } = useConnectionValidation({
+        connectionData,
+        credentialTypes: ref([]),
+        testSuccess: ref(false),
+        existingTestSuccess: ref(true),
+        serviceType: 'JIRA',
+      });
+
+      expect(getValidationMessage()).toBe('');
+    });
+
+    it('should return "Invalid credential type" message when strategy not found for new connection', () => {
+      const connectionData = ref<ConnectionStepData>({
+        connectionMethod: 'new',
+        connected: false,
+        connectionName: 'Test',
+        existingConnectionId: '',
+        baseUrl: 'https://test.com',
+        credentialType: 'NONEXISTENT_TYPE',
+        username: '',
+        password: '',
+        clientId: '',
+        clientSecret: '',
+        tokenUrl: '',
+        scope: '',
+      });
+
+      const { getValidationMessage } = useConnectionValidation({
+        connectionData,
+        credentialTypes: ref([]),
+        testSuccess: ref(false),
+        existingTestSuccess: ref(false),
+        serviceType: 'JIRA',
+      });
+
+      expect(getValidationMessage()).toBe('Invalid credential type: NONEXISTENT_TYPE');
+    });
+  });
+
+  describe('getRequiredFields — credential type not found', () => {
+    it('should return empty array when credential type is not in credentialTypes list', () => {
+      const connectionData = ref<ConnectionStepData>({
+        connectionMethod: 'new',
+        connected: false,
+        connectionName: 'Test',
+        existingConnectionId: '',
+        baseUrl: 'https://test.com',
+        credentialType: 'MISSING_TYPE',
+        username: '',
+        password: '',
+        clientId: '',
+        clientSecret: '',
+        tokenUrl: '',
+        scope: '',
+      });
+
+      const { getRequiredFields } = useConnectionValidation({
+        connectionData,
+        credentialTypes: ref([]),
+        testSuccess: ref(false),
+        existingTestSuccess: ref(false),
+        serviceType: 'JIRA',
+      });
+
+      expect(getRequiredFields.value).toEqual([]);
+    });
+  });
 });

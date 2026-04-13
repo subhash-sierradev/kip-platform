@@ -62,4 +62,57 @@ describe('AppModal', () => {
 
     wrapper.unmount();
   });
+
+  it('does not close on Escape when closeOnEsc is disabled', async () => {
+    const wrapper = mount(AppModal, {
+      props: { open: true, title: 'Esc', closeOnEsc: false },
+    });
+
+    await nextTick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await nextTick();
+
+    expect(wrapper.emitted('update:open')).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it('renders lg and fixed-height classes plus footer slot content', async () => {
+    const wrapper = mount(AppModal, {
+      props: { open: true, title: 'Large', size: 'lg', fixedHeight: true },
+      slots: {
+        default: '<div>Body</div>',
+        footer: '<button class="footer-action">Save</button>',
+      },
+    });
+
+    await nextTick();
+
+    const card = document.body.querySelector('[data-testid="kw-modal-card"]');
+    const footer = document.body.querySelector('.kw-modal__footer');
+
+    expect(card?.classList.contains('kw-modal--lg')).toBe(true);
+    expect(card?.classList.contains('kw-modal--fixed-height')).toBe(true);
+    expect(footer?.textContent).toContain('Save');
+
+    wrapper.unmount();
+  });
+
+  it('does not close on backdrop clicks when overlay closing is disabled', async () => {
+    const wrapper = mount(AppModal, {
+      props: { open: true, title: 'Sticky', closeOnOverlayClick: false },
+      slots: { default: '<div>Body</div>' },
+    });
+
+    await nextTick();
+
+    const backdrop = document.body.querySelector(
+      '[data-testid="kw-modal-backdrop"]'
+    ) as HTMLElement | null;
+    backdrop?.click();
+    await nextTick();
+
+    expect(wrapper.emitted('update:open')).toBeFalsy();
+    wrapper.unmount();
+  });
 });

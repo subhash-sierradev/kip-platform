@@ -31,10 +31,10 @@
 ### Backend Quality Requirements (MANDATORY)
 
 ```powershell
-# These commands MUST pass before code completion
-./mvnw checkstyle:check     # Checkstyle compliance - NO EXCEPTIONS
-./mvnw test                 # All tests pass - NO EXCEPTIONS
-./mvnw jacoco:report        # 80% minimum coverage - NO EXCEPTIONS
+# These commands MUST pass before code completion (run from api/)
+./gradlew checkstyleMain checkstyleTest   # Checkstyle compliance - NO EXCEPTIONS
+./gradlew test                            # All tests pass - NO EXCEPTIONS
+./gradlew jacocoTestReport                # 80% minimum coverage - NO EXCEPTIONS
 ```
 
 ### Frontend Quality Requirements (MANDATORY)
@@ -56,7 +56,7 @@ npm run test:coverage       # 80% minimum coverage - NO EXCEPTIONS
 
 ## Project Overview
 
-Enterprise-grade multi-tenant data integration platform with automated scheduling, monitoring, and modular architecture. Built with Spring Boot 4.0.4 backend and Vue.js 3.5.25 + TypeScript frontend.
+Enterprise-grade multi-tenant data integration platform with automated scheduling, monitoring, and modular architecture. Built with Spring Boot 4.0.5 backend and Vue.js 3.5.25 + TypeScript frontend.
 
 **Core Features**:
 
@@ -70,8 +70,8 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 
 **Active Components** (focus areas):
 
-- **kip-backend**: Multi-module Maven project (integration-execution-contract, integration-management-service, integration-execution-service)
-- **web**: Vue.js 3.5.25 + Vite 7.3.0 + DevExtreme 25.2.3 + Pinia 3.0.4
+- **kip-backend**: Multi-module Gradle project (integration-execution-contract, integration-management-service, integration-execution-service)
+- **web**: Vue.js 3.5.25 + Vite 7.x + DevExtreme 25.2.3 + Pinia 3.0.4
 
 **Temporary Components** (ignore - will be removed):
 
@@ -97,12 +97,12 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 
 ## Architecture & Data Flow
 
-### Backend (Spring Boot 4.0.4 + Java 25)
+### Backend (Spring Boot 4.0.5 + Java 25)
 
 - **Entry Points**:
   - Management Service: `IntegrationManagementServiceApplication.java` in `integration-management-service/`
   - Execution Service: `IntegrationExecutionServiceApplication.java` in `integration-execution-service/`
-- **Multi-Module Structure**: Parent POM manages `integration-execution-contract`, `integration-management-service`, `integration-execution-service`
+- **Multi-Module Structure**: Gradle multi-project build manages `integration-execution-contract`, `integration-management-service`, `integration-execution-service`
 - **Data Flow**: Controllers → Services (IMS) → Quartz Jobs (IMS) → Feign → Processors/Publishers (IES)
 - **Async Messaging**: RabbitMQ (Spring AMQP) — `integration.notification.exchange` (TopicExchange) for notification events; `integration.arcgis.exchange` and `integration.jira.exchange` (DirectExchange) for job commands/results
 - **Notification Flow**: `@PublishNotification` AOP → `NotificationEventPublisher` → RabbitMQ → `NotificationListener` → `NotificationDispatchService` → `SseEmitterRegistry` → browser SSE
@@ -118,33 +118,33 @@ Enterprise-grade multi-tenant data integration platform with automated schedulin
 - **State Management**: Pinia 3.0.4 with persistent stores
 - **UI Framework**: DevExtreme 25.2.3 with responsive components
 - **API Layer**: Auto-generated OpenAPI client with service composables
-- **Build Tool**: Vite 7.3.0 with TypeScript, ESLint 9.17.0
+- **Build Tool**: Vite 7.x with TypeScript, ESLint 9.17.0
 - **Authentication**: Keycloak 26.2.0 with token-based multi-tenant support
 - **Testing**: Vitest 4.0.9 with Vue Testing Library 8.1.0, 80% coverage target
 
 ## Developer Workflows
 
-### Backend Commands (Maven)
+### Backend Commands (Gradle)
 
 ```powershell
-# Build all modules
-./mvnw clean install
+# Build all modules (run from api/)
+./gradlew clean build
 
 # Run management service (port 8085)
-./mvnw spring-boot:run -pl integration-management-service
+./gradlew :integration-management-service:bootRun
 
 # Run execution service (port 8081)
-./mvnw spring-boot:run -pl integration-execution-service
+./gradlew :integration-execution-service:bootRun
 
 # Run tests with coverage (80% minimum threshold)
-./mvnw test
-./mvnw jacoco:report
+./gradlew test
+./gradlew jacocoTestReport
 
 # Code quality checks
-./mvnw checkstyle:check
+./gradlew checkstyleMain checkstyleTest
 
 # Full verification (tests + coverage + quality)
-./mvnw clean verify
+./gradlew clean check
 ```
 
 ### Frontend Commands (npm)
@@ -218,7 +218,8 @@ Key principles:
 
 **See `api/.github/instructions/copilot-instructions.md` for complete backend structure.**
 
-- `api/pom.xml` - Parent Maven configuration
+- `api/build.gradle.kts` - Root Gradle build configuration
+- `api/gradle/libs.versions.toml` - Version catalog
 - `api/integration-management-service/` - REST API service (port 8085)
 - `api/integration-execution-service/` - Processing engine (port 8081)
 - `api/integration-execution-contract/` - Shared DTOs and contracts

@@ -12,6 +12,7 @@ const {
   mockTestConnection,
   mockDeleteConnection,
   mockRotateSecret,
+  mockCreateConnection,
   mockFetchConnections,
 } = vi.hoisted(() => ({
   mockGetDependents: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockTestConnection: vi.fn(),
   mockDeleteConnection: vi.fn(),
   mockRotateSecret: vi.fn(),
+  mockCreateConnection: vi.fn(),
   mockFetchConnections: vi.fn(),
 }));
 
@@ -45,6 +47,7 @@ vi.mock('@/composables/useServiceConnectionsAdmin', () => ({
     testConnection: mockTestConnection,
     deleteConnection: mockDeleteConnection,
     rotateSecret: mockRotateSecret,
+    createConnection: mockCreateConnection,
     fetchConnections: mockFetchConnections,
   }),
 }));
@@ -83,6 +86,11 @@ const GenericDataGridStub = defineComponent({
           class: 'emit-page-size',
           onClick: () => emit('option-changed', { fullName: 'paging.pageSize', value: 25 }),
         }),
+        h(
+          'div',
+          { class: 'toolbar-actions-stub' },
+          slots.toolbarActions ? slots.toolbarActions() : []
+        ),
         ...(props.data as any[]).flatMap((row: any) => [
           h(
             'div',
@@ -111,12 +119,19 @@ const ConfirmationDialogStub = {
     '<div v-if="open"><span class="dialog-desc">{{ description }}</span><button class="confirm-btn" @click="$emit(\'confirm\')">confirm</button><button class="cancel-btn" @click="$emit(\'cancel\')">cancel</button></div>',
 };
 
+const AddConnectionDialogStub = {
+  props: ['open'],
+  emits: ['update:open', 'created'],
+  template:
+    '<div v-if="open" class="add-connection-dialog-stub"><button class="complete-create-dialog" @click="$emit(\'created\'); $emit(\'update:open\', false)">complete</button><button class="close-create-dialog" @click="$emit(\'update:open\', false)">close</button></div>',
+};
+
 vi.mock('devextreme-vue/button', () => ({
   default: {
     emits: ['click'],
-    props: ['elementAttr'],
+    props: ['elementAttr', 'text'],
     template:
-      '<button type="button" v-bind="elementAttr" @click="$emit(\'click\')"><slot /></button>',
+      '<button type="button" v-bind="elementAttr" @click="$emit(\'click\')">{{ text }}<slot /></button>',
   },
 }));
 vi.mock('devextreme-vue/load-indicator', () => ({
@@ -134,6 +149,7 @@ vi.mock('lucide-vue-next', () => ({
 }));
 
 import ServiceConnectionPage from '@/components/common/ServiceConnectionPage.vue';
+import { ApiError } from '@/api/core/ApiError';
 import { ServiceType } from '@/api/models/enums';
 
 function mountPage(serviceType: ServiceType = ServiceType.JIRA) {
@@ -146,6 +162,7 @@ function mountPage(serviceType: ServiceType = ServiceType.JIRA) {
         ConfirmationDialog: ConfirmationDialogStub,
         StatusChipForDataTable: { template: '<span />' },
         AppModal: AppModalStub,
+        AddConnectionDialog: AddConnectionDialogStub,
       },
     },
   });
@@ -249,6 +266,72 @@ describe('ServiceConnectionPage', () => {
     await deleteBtn?.trigger('click');
 
     expect(mockToastError).toHaveBeenCalledWith('Failed to check connection dependents');
+  });
+
+  it('opens add dialog and closes it after create completes', async () => {
+    const wrapper = mountPage();
+
+    const addButton = wrapper
+      .findAll('button')
+      .find(b => b.attributes('aria-label') === 'Add Connection');
+    await addButton?.trigger('click');
+    expect((wrapper.vm as any).createDialogOpen).toBe(true);
+
+    await wrapper.find('.complete-create-dialog').trigger('click');
+    await nextTick();
+
+    expect((wrapper.vm as any).createDialogOpen).toBe(false);
+  });
+
+  it('shows unable to delete message when delete conflict has no dependent details', async () => {
+    mockGetDependents.mockResolvedValueOnce({ serviceType: ServiceType.JIRA, integrations: [] });
+    mockDeleteConnection.mockRejectedValueOnce(
+      new ApiError(
+        { method: 'DELETE', url: '/integrations/connections/c1' } as any,
+        {
+          url: '/integrations/connections/c1',
+          ok: false,
+          status: 409,
+          statusText: 'Conflict',
+          body: {},
+        } as any,
+        'Conflict'
+      )
+    );
+
+    const wrapper = mountPage();
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+
+    await deleteBtn?.trigger('click');
+    await wrapper.find('.confirm-btn').trigger('click');
+
+    expect(mockToastError).toHaveBeenCalledWith('Unable to delete connection');
+  });
+
+  it('exposes confluence dependent label and default label branches', async () => {
+    const wrapper = mountPage(ServiceType.CONFLUENCE);
+    let vm = wrapper.vm as any;
+    expect(vm.dependentsNameCaption).toBe('Integration Name');
+
+    mockGetDependents.mockResolvedValueOnce({
+      serviceType: ServiceType.CONFLUENCE,
+      integrations: [{ id: 'c1', name: 'Confluence', description: '', isEnabled: true }],
+    });
+
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+    await deleteBtn?.trigger('click');
+    await nextTick();
+
+    vm = wrapper.vm as any;
+    expect(vm.dependentsNameCaption).toBe('Confluence Integration Name');
+  });
+
+  it('uses service-specific secret dialog labels', () => {
+    const jiraWrapper = mountPage(ServiceType.JIRA);
+    const arcgisWrapper = mountPage(ServiceType.ARCGIS);
+
+    expect((jiraWrapper.vm as any).secretDialogLabel).toBe('New password / client secret');
+    expect((arcgisWrapper.vm as any).secretDialogLabel).toBe('New OAuth client secret');
   });
 
   describe('confirmDialogDescription', () => {

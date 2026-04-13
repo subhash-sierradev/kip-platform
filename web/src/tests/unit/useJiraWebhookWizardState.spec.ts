@@ -67,4 +67,53 @@ describe('useJiraWebhookWizardState', () => {
     expect(state.mappingData.value.selectedProject).toBe('');
     expect(state.mappingModeEdit.value).toBe(true);
   });
+
+  it('updates all setter-backed state fields and resets mapping metadata', () => {
+    const state = useJiraWebhookWizardState({});
+
+    state.setWebhookDescription('Description');
+    state.setVerifyHmac(true);
+    state.setHmacKey('secret');
+    state.setSampleCaptured(true);
+    state.setShowJsonInput(true);
+    state.setProjects([{ key: 'PROJ', name: 'Project' }] as any);
+    state.setIssueTypes([{ id: '100', name: 'Bug', subtask: false }] as any);
+    state.setUsers([{ accountId: 'u1', displayName: 'User' }] as any);
+    state.connectionId.value = 'conn-42';
+    state.updateMappingData({
+      selectedProject: 'PROJ',
+      selectedIssueType: '100',
+      selectedAssignee: 'u1',
+      summary: 'Summary',
+      descriptionFieldMapping: 'desc',
+      customFields: [
+        {
+          fieldPath: 'a',
+          jiraFieldId: 'b',
+          jiraFieldLabel: 'B',
+          jiraFieldType: 'text',
+          templatePath: 'x',
+        },
+      ],
+    } as any);
+
+    expect(state.webhookDescription.value).toBe('Description');
+    expect(state.verifyHmac.value).toBe(true);
+    expect(state.hmacKey.value).toBe('secret');
+    expect(state.sampleCaptured.value).toBe(true);
+    expect(state.showJsonInput.value).toBe(true);
+    expect(state.projects.value).toHaveLength(1);
+    expect(state.issueTypes.value).toHaveLength(1);
+    expect(state.users.value).toHaveLength(1);
+
+    state.resetMappingData();
+
+    expect(state.mappingData.value.selectedProject).toBe('');
+    expect(state.mappingData.value.customFields).toBeUndefined();
+    expect(state.projects.value).toEqual([]);
+    expect(state.issueTypes.value).toEqual([]);
+    expect(state.users.value).toEqual([]);
+    expect(state.lastResetConnectionId.value).toBe('conn-42');
+    expect(state.isMappingValid.value).toBe(false);
+  });
 });

@@ -33,7 +33,7 @@ describe('ExistingConnectionPanel', () => {
         existingTested: false,
         existingTestSuccess: false,
         existingTestMessage: '',
-        verifyButtonText: 'Verify',
+        verifyButtonText: 'Test Connection',
         getConnectionStatus,
         formatLastTested,
       },
@@ -57,13 +57,13 @@ describe('ExistingConnectionPanel', () => {
         existingTested: false,
         existingTestSuccess: false,
         existingTestMessage: '',
-        verifyButtonText: 'Verify',
+        verifyButtonText: 'Test Connection',
         getConnectionStatus,
         formatLastTested,
       },
     });
 
-    const button = wrapper.find('button.cs-btn-outlined-primary');
+    const button = wrapper.find('button.cs-test-btn');
     expect(button.attributes('disabled')).toBeDefined();
 
     await wrapper.setProps({ existingConnectionId: 'conn-1' });
@@ -82,13 +82,13 @@ describe('ExistingConnectionPanel', () => {
         existingTested: false,
         existingTestSuccess: false,
         existingTestMessage: '',
-        verifyButtonText: 'Verify',
+        verifyButtonText: 'Test Connection',
         getConnectionStatus,
         formatLastTested,
       },
     });
 
-    await wrapper.find('button.cs-btn-outlined-primary').trigger('click');
+    await wrapper.find('button.cs-test-btn').trigger('click');
 
     expect(wrapper.emitted('verify-existing')).toEqual([[]]);
   });

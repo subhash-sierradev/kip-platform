@@ -22,11 +22,11 @@
 /** @type {CoverageConfig} */
 const coverageConfig = {
   threshold: {
-    statements: 80,
-    branches: 80,
-    functions: 80,
-    lines: 80,
-  }
+    statements: 89,
+    branches: 83,
+    functions: 89,
+    lines: 90,
+  },
 };
 
 export default coverageConfig;

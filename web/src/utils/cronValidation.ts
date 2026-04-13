@@ -3,6 +3,8 @@
  * Provides client-side validation for cron expressions
  */
 
+import { isValidQuartzCronExpression } from '@/composables/cron/useCronOccurrences';
+
 /**
  * Validates a cron expression format
  * @param cronExpression - The cron expression to validate (format: "second minute hour day month dayOfWeek")
@@ -18,19 +20,16 @@ export function validateCronExpression(cronExpression: string): {
   }
 
   const parts = cronExpression.trim().split(/\s+/);
-  const [second, minute, hour, day, month, dayOfWeek] = parts;
-
-  const fieldValidation = validateCronFields(second, minute, hour, day, month, dayOfWeek);
-  if (!fieldValidation.isValid) {
-    return fieldValidation;
-  }
+  const [, , , day, , dayOfWeek] = parts;
 
   const dayValidation = validateDayFields(day, dayOfWeek);
   if (!dayValidation.isValid) {
     return dayValidation;
   }
 
-  return { isValid: true };
+  return isValidQuartzCronExpression(cronExpression)
+    ? { isValid: true }
+    : { isValid: false, error: 'Invalid cron expression' };
 }
 
 /**
@@ -53,120 +52,6 @@ function validateBasicFormat(cronExpression: string): { isValid: boolean; error?
 }
 
 /**
- * Day of week name mapping
- */
-const dayOfWeekMap: Record<string, number> = {
-  SUN: 1,
-  MON: 2,
-  TUE: 3,
-  WED: 4,
-  THU: 5,
-  FRI: 6,
-  SAT: 7,
-};
-
-/**
- * Validates individual cron fields
- */
-function validateCronFields(
-  second: string,
-  minute: string,
-  hour: string,
-  day: string,
-  month: string,
-  dayOfWeek: string
-): { isValid: boolean; error?: string } {
-  if (!isValidCronField(second, 0, 59, 'second')) {
-    return { isValid: false, error: 'Invalid second field (0-59)' };
-  }
-
-  if (!isValidCronField(minute, 0, 59, 'minute')) {
-    return { isValid: false, error: 'Invalid minute field (0-59)' };
-  }
-
-  if (!isValidCronField(hour, 0, 23, 'hour')) {
-    return { isValid: false, error: 'Invalid hour field (0-23)' };
-  }
-
-  if (!isValidCronField(day, 1, 31, 'day', true)) {
-    return { isValid: false, error: 'Invalid day field (1-31 or ?)' };
-  }
-
-  if (!isValidCronField(month, 1, 12, 'month')) {
-    return { isValid: false, error: 'Invalid month field (1-12)' };
-  }
-
-  if (!isValidDayOfWeekField(dayOfWeek)) {
-    return { isValid: false, error: 'Invalid day of week field (1-7 or ?)' };
-  }
-
-  return { isValid: true };
-}
-
-/**
- * Validates day of week field specifically (supports both numeric 1-7 and day names)
- */
-function isValidDayOfWeekField(field: string): boolean {
-  if (!field) return false;
-
-  if (field === '*' || field === '?') {
-    return true;
-  }
-
-  if (field.includes('-')) {
-    return validateDayOfWeekRange(field);
-  }
-
-  if (field.includes(',')) {
-    return validateDayOfWeekList(field);
-  }
-
-  if (field.includes('/')) {
-    return validateStep(field, 1, 7, 'dayOfWeek', true);
-  }
-
-  // Check if it's a single day name or number
-  const dayValue = convertDayOfWeekToNumber(field);
-  return dayValue !== null && dayValue >= 1 && dayValue <= 7;
-}
-
-/**
- * Converts day of week name to number (e.g., 'MON' -> 2)
- */
-function convertDayOfWeekToNumber(day: string): number | null {
-  if (dayOfWeekMap[day.toUpperCase()]) {
-    return dayOfWeekMap[day.toUpperCase()];
-  }
-
-  const num = parseInt(day, 10);
-  return !isNaN(num) && num >= 1 && num <= 7 ? num : null;
-}
-
-/**
- * Validates day of week range (e.g., 'MON-FRI' or '2-6')
- */
-function validateDayOfWeekRange(field: string): boolean {
-  const rangeParts = field.split('-');
-  if (rangeParts.length !== 2) return false;
-
-  const start = convertDayOfWeekToNumber(rangeParts[0]);
-  const end = convertDayOfWeekToNumber(rangeParts[1]);
-
-  return start !== null && end !== null && start <= end;
-}
-
-/**
- * Validates day of week list (e.g., 'MON,WED,FRI' or '1,3,5')
- */
-function validateDayOfWeekList(field: string): boolean {
-  const listParts = field.split(',');
-  return listParts.every(part => {
-    const dayValue = convertDayOfWeekToNumber(part.trim());
-    return dayValue !== null;
-  });
-}
-
-/**
  * Validates day and dayOfWeek field relationships
  */
 function validateDayFields(day: string, dayOfWeek: string): { isValid: boolean; error?: string } {
@@ -182,105 +67,6 @@ function validateDayFields(day: string, dayOfWeek: string): { isValid: boolean; 
   }
 
   return { isValid: true };
-}
-
-/**
- * Validates an individual cron field
- * @param field - The field value to validate
- * @param min - Minimum allowed value
- * @param max - Maximum allowed value
- * @param fieldName - Name of the field for error reporting
- * @param allowQuestion - Whether ? is allowed for this field
- * @returns boolean indicating if the field is valid
- */
-function isValidCronField(
-  field: string,
-  min: number,
-  max: number,
-  fieldName: string,
-  allowQuestion = false
-): boolean {
-  if (!field) return false;
-
-  if (isBasicCronSymbol(field, allowQuestion)) {
-    return true;
-  }
-
-  if (field.includes('-')) {
-    return validateRange(field, min, max);
-  }
-
-  if (field.includes(',')) {
-    return validateList(field, min, max);
-  }
-
-  if (field.includes('/')) {
-    return validateStep(field, min, max, fieldName, allowQuestion);
-  }
-
-  return validateSingleNumber(field, min, max);
-}
-
-/**
- * Checks for basic cron symbols
- */
-function isBasicCronSymbol(field: string, allowQuestion: boolean): boolean {
-  if (field === '*') return true;
-  if (allowQuestion && field === '?') return true;
-  return false;
-}
-
-/**
- * Validates range format (e.g., '1-5')
- */
-function validateRange(field: string, min: number, max: number): boolean {
-  const rangeParts = field.split('-');
-  if (rangeParts.length !== 2) return false;
-
-  const start = parseInt(rangeParts[0], 10);
-  const end = parseInt(rangeParts[1], 10);
-  return !isNaN(start) && !isNaN(end) && start >= min && end <= max && start <= end;
-}
-
-/**
- * Validates list format (e.g., '1,3,5')
- */
-function validateList(field: string, min: number, max: number): boolean {
-  const listParts = field.split(',');
-  return listParts.every(part => {
-    const num = parseInt(part.trim(), 10);
-    return !isNaN(num) && num >= min && num <= max;
-  });
-}
-
-/**
- * Validates step format (e.g., asterisk/5, 1-10/2)
- */
-function validateStep(
-  field: string,
-  min: number,
-  max: number,
-  fieldName: string,
-  allowQuestion: boolean
-): boolean {
-  const stepParts = field.split('/');
-  if (stepParts.length !== 2) return false;
-
-  const step = parseInt(stepParts[1], 10);
-  if (isNaN(step) || step <= 0) return false;
-
-  const base = stepParts[0];
-  if (base === '*') return true;
-
-  return isValidCronField(base, min, max, fieldName, allowQuestion);
-}
-
-/**
- * Validates single number
- */
-function validateSingleNumber(field: string, min: number, max: number): boolean {
-  const num = parseInt(field, 10);
-  return !isNaN(num) && num >= min && num <= max;
 }
 
 /**

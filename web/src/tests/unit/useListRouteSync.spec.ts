@@ -48,6 +48,7 @@ describe('useListRouteSync', () => {
     const currentPage = ref(1);
     const pageSize = ref(6);
     const totalPages = ref(10);
+    const manualPageSize = ref<number | null>(12);
 
     const { applyStateFromRoute, buildStateQuery } = useListRouteSync(
       {
@@ -57,7 +58,15 @@ describe('useListRouteSync', () => {
         validViewModes: ['grid', 'list'],
         totalPages,
       },
-      { search, sortBy, viewMode, currentPage, pageSize, pageSizeOptions: [6, 12, 24] }
+      {
+        search,
+        sortBy,
+        viewMode,
+        currentPage,
+        manualPageSize,
+        pageSize,
+        pageSizeOptions: [6, 12, 24],
+      }
     );
 
     applyStateFromRoute();
@@ -190,18 +199,71 @@ describe('useListRouteSync', () => {
     const viewMode = ref<DashboardViewMode>('list');
     const currentPage = ref(2);
     const pageSize = ref(12);
+    const manualPageSize = ref<number | null>(null);
     const totalPages = ref(4);
 
     const { buildStateQuery } = useListRouteSync(
       { router, route, validSortOptions: ['name'], validViewModes: ['grid', 'list'], totalPages },
-      { search, sortBy, viewMode, currentPage, pageSize, pageSizeOptions: [6, 12, 24] }
+      {
+        search,
+        sortBy,
+        viewMode,
+        currentPage,
+        manualPageSize,
+        pageSize,
+        pageSizeOptions: [6, 12, 24],
+      }
     );
 
     Object.defineProperty(window, 'scrollY', { value: 200, configurable: true });
     const qWithScroll = buildStateQuery(true);
     expect(qWithScroll).toMatchObject({ scroll: 200 });
+    expect(qWithScroll).not.toHaveProperty('size');
 
     const qNoScroll = buildStateQuery(false);
     expect(qNoScroll).not.toHaveProperty('scroll');
+  });
+
+  it('does not restore or persist page size when route persistence is disabled', () => {
+    const router = createRouterMock();
+    const route = createRouteMock({ size: '12' });
+
+    const search = ref('');
+    const sortBy = ref('createdDate');
+    const viewMode = ref<DashboardViewMode>('grid');
+    const currentPage = ref(1);
+    const pageSize = ref(6);
+    const totalPages = ref(5);
+    const manualPageSize = ref<number | null>(null);
+    const resetPageSize = vi.fn();
+    const setPageSize = vi.fn();
+
+    const { applyStateFromRoute, buildStateQuery } = useListRouteSync(
+      {
+        router,
+        route,
+        validSortOptions: ['name', 'createdDate'],
+        validViewModes: ['grid', 'list'],
+        totalPages,
+        persistPageSizeInRoute: false,
+      },
+      {
+        search,
+        sortBy,
+        viewMode,
+        currentPage,
+        manualPageSize,
+        pageSize,
+        pageSizeOptions: [6, 12, 24],
+        resetPageSize,
+        setPageSize,
+      }
+    );
+
+    applyStateFromRoute();
+
+    expect(resetPageSize).toHaveBeenCalledTimes(1);
+    expect(setPageSize).not.toHaveBeenCalled();
+    expect(buildStateQuery(false)).not.toHaveProperty('size');
   });
 });

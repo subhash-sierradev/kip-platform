@@ -159,6 +159,11 @@ describe('resolveGridItems', () => {
     expect(res).toEqual([{ id: 9 }]);
   });
 
+  it('returns fallback data when the grid instance has no getDataSource function', async () => {
+    const res = await resolveGridItems<Row>({ instance: {} }, [{ id: 11 }]);
+    expect(res).toEqual([{ id: 11 }]);
+  });
+
   it('prefers filtered loadAll when filter is set', async () => {
     const ds = makeDataSource({ filter: { x: 1 }, loadResult: { data: [{ id: 1 }] } });
     const gridInst = makeGridInst();
@@ -243,9 +248,37 @@ describe('resolveGridItems', () => {
     const res = await resolveGridItems<Row>({ instance: gridInst });
     expect(res).toEqual([]);
   });
+
+  it('uses current data source items when expanded paging fails and no fallback data is provided', async () => {
+    const ds = makeDataSource({ items: [{ id: 55 }], loadResult: { data: [] } });
+    const gridInst = makeGridInst();
+    gridInst.getDataSource = vi.fn(() => ds);
+    gridInst.option = vi.fn(() => {
+      throw new Error('paging option failed');
+    });
+
+    const res = await resolveGridItems<Row>({ instance: gridInst });
+    expect(res).toEqual([{ id: 55 }]);
+  });
+
+  it('falls back to current items for filtered data sources without a load function', async () => {
+    const ds: DataSourceLike<Row> = {
+      filter: () => ({ status: 'ACTIVE' }),
+      items: () => [{ id: 77 }],
+    };
+    const gridInst = makeGridInst();
+    gridInst.getDataSource = vi.fn(() => ds);
+
+    const res = await resolveGridItems<Row>({ instance: gridInst });
+    expect(res).toEqual([{ id: 77 }]);
+  });
 });
 
 describe('exportGridData', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('warns and does nothing when no items are available', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation((_msg?: unknown) => {
       return undefined;
@@ -298,5 +331,30 @@ describe('exportGridData', () => {
     expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
     // Very basic CSV content check via blob creation argument captured indirectly
     // We can't read back the Blob easily here, but headers were added
+  });
+
+  it('uses fallback data and the default filename prefix during export', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    createElementSpy.mockImplementation((tagName: any) => {
+      const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
+      Object.defineProperty(el, 'click', { value: vi.fn() });
+      return el as unknown as HTMLElement;
+    });
+
+    const setAttributeSpy = vi.spyOn(HTMLAnchorElement.prototype, 'setAttribute');
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    await exportGridData<{ a: string }>({
+      gridRef: { instance: {} },
+      fallbackData: [{ a: 'fallback-row' }],
+      headers: ['A'],
+      pickFields: row => [row.a],
+    });
+
+    expect(setAttributeSpy).toHaveBeenCalledWith(
+      'download',
+      expect.stringMatching(/^grid-export_.*\.csv$/)
+    );
   });
 });

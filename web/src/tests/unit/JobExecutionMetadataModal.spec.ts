@@ -5,6 +5,15 @@ import { nextTick } from 'vue';
 import type { FailedRecordMetadata, RecordMetadata } from '@/api/models/RecordMetadata';
 import JobExecutionMetadataModal from '@/components/outbound/arcgisintegration/details/JobExecutionMetadataModal.vue';
 
+const hoisted = vi.hoisted(() => ({
+  showSuccess: vi.fn(),
+  showError: vi.fn(),
+  saveAs: vi.fn(),
+  exportDataGrid: vi.fn().mockResolvedValue(undefined),
+  addWorksheet: vi.fn().mockReturnValue({}),
+  writeBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+}));
+
 // Mock DevExtreme components
 vi.mock('devextreme-vue/data-grid', () => ({
   DxDataGrid: {
@@ -27,26 +36,28 @@ vi.mock('devextreme-vue/data-grid', () => ({
 // Mock dependencies
 vi.mock('@/store/toast', () => ({
   useToastStore: () => ({
-    showSuccess: vi.fn(),
-    showError: vi.fn(),
+    showSuccess: hoisted.showSuccess,
+    showError: hoisted.showError,
   }),
 }));
 
 vi.mock('file-saver', () => ({
-  saveAs: vi.fn(),
+  saveAs: hoisted.saveAs,
 }));
 
 vi.mock('devextreme/excel_exporter', () => ({
-  exportDataGrid: vi.fn().mockResolvedValue(undefined),
+  exportDataGrid: hoisted.exportDataGrid,
 }));
 
 vi.mock('devextreme-exceljs-fork', () => ({
-  Workbook: vi.fn().mockImplementation(() => ({
-    addWorksheet: vi.fn().mockReturnValue({}),
-    xlsx: {
-      writeBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
-    },
-  })),
+  Workbook: function Workbook() {
+    return {
+      addWorksheet: hoisted.addWorksheet,
+      xlsx: {
+        writeBuffer: hoisted.writeBuffer,
+      },
+    };
+  },
 }));
 
 // Helper function to create mock records with timestamp fields
@@ -390,6 +401,39 @@ describe('JobExecutionMetadataModal', () => {
       expect(wrapper.props().recordType).toBe('failed');
       expect(wrapper.props().records).toHaveLength(1);
     });
+
+    it('exports records successfully and shows a success toast', async () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      const event = { cancel: false, component: { id: 'grid' } } as any;
+      await wrapper.vm.onExporting(event);
+
+      expect(event.cancel).toBe(true);
+      expect(hoisted.addWorksheet).toHaveBeenCalledWith('Records');
+      expect(hoisted.exportDataGrid).toHaveBeenCalled();
+      expect(hoisted.writeBuffer).toHaveBeenCalled();
+      expect(hoisted.saveAs).toHaveBeenCalledTimes(1);
+      expect(hoisted.showSuccess).toHaveBeenCalledWith('Exported 2 records successfully');
+    });
+
+    it('shows an error toast when export generation fails', async () => {
+      hoisted.exportDataGrid.mockRejectedValueOnce(new Error('export failed'));
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      await wrapper.vm.onExporting({ cancel: false, component: { id: 'grid' } });
+
+      expect(hoisted.showError).toHaveBeenCalledWith('Failed to generate export file');
+      errorSpy.mockRestore();
+    });
   });
 
   describe('Record Display', () => {
@@ -513,6 +557,109 @@ describe('JobExecutionMetadataModal', () => {
 
       // Verify component renders even with empty error
       expect(document.body.querySelector('.kw-modal-backdrop')).not.toBeNull();
+    });
+  });
+
+  describe('Helper Methods', () => {
+    it('computes the title for the all record type', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: {
+          ...defaultProps,
+          recordType: 'all',
+        },
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.modalTitleText).toBe('All Records - 2 total');
+    });
+
+    it('formats timestamps for null, zero, and populated values', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.formatTimestamp(null)).toBe('N/A');
+      expect(wrapper.vm.formatTimestamp(undefined)).toBe('N/A');
+      expect(wrapper.vm.formatTimestamp(0)).toBe('');
+      expect(wrapper.vm.formatTimestamp(1000000)).not.toBe('N/A');
+    });
+
+    it('truncates and defaults IDs correctly', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.truncateId(undefined)).toBe('N/A');
+      expect(wrapper.vm.truncateId('123456789')).toBe('1234567...');
+    });
+
+    it('returns row indices from the precomputed map', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.getRowIndex(mockRecords[0])).toBe(1);
+      expect(
+        wrapper.vm.getRowIndex({ documentId: 'missing', locationId: 'missing-location' })
+      ).toBe(0);
+    });
+
+    it('handles copy to clipboard success and failure for record IDs', async () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      await wrapper.vm.copyToClipboard('doc-1', 'Document ID');
+      await Promise.resolve();
+      expect(hoisted.showSuccess).toHaveBeenCalledWith('Document ID copied to clipboard');
+
+      vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValueOnce(new Error('copy failed'));
+      await wrapper.vm.copyToClipboard('doc-1', 'Document ID');
+      await Promise.resolve();
+      expect(hoisted.showError).toHaveBeenCalledWith('Failed to copy Document ID');
+    });
+
+    it('returns export cell values for index rows, timestamp fields, and non-data rows', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.getExportCellValue(undefined)).toBeUndefined();
+      expect(wrapper.vm.getExportCellValue({ rowType: 'header' })).toBeUndefined();
+      expect(
+        wrapper.vm.getExportCellValue({
+          rowType: 'data',
+          column: { caption: '#' },
+          data: mockRecords[0],
+        })
+      ).toBe(1);
+
+      expect(
+        wrapper.vm.getExportCellValue({
+          rowType: 'data',
+          column: { dataField: 'documentCreatedAt' },
+          value: 1000000,
+        })
+      ).not.toBeUndefined();
+
+      expect(
+        wrapper.vm.getExportCellValue({
+          rowType: 'data',
+          column: { dataField: 'title' },
+          value: 'Document 1',
+        })
+      ).toBeUndefined();
     });
   });
 });

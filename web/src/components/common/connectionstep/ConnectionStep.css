@@ -116,7 +116,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: #f4a100;
+  background: #f59e0b;
   color: white;
   border: none;
   border-radius: 6px;
@@ -129,12 +129,12 @@
 }
 
 .cs-test-btn:hover:not(:disabled) {
-  background: #e0920a;
+  background: #d97706;
   transform: translateY(-1px);
 }
 
 .cs-test-btn:disabled {
-  background: #9ca3af;
+  opacity: 0.45;
   cursor: not-allowed;
   transform: none;
 }

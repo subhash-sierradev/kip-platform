@@ -55,6 +55,20 @@ vi.mock('../../../utils/notificationUtils', () => ({
 
 import SiteConfigPage from '@/components/admin/siteconfig/SiteConfigPage.vue';
 
+const InteractiveConfirmationDialogStub = {
+  props: ['open', 'type', 'title', 'description', 'confirmLabel', 'loading'],
+  emits: ['cancel', 'confirm'],
+  template: `
+    <div v-if="open" class="confirmation-dialog-stub">
+      <span class="dialog-description">{{ description }}</span>
+      <button class="dialog-cancel" @click="$emit('cancel')">cancel</button>
+      <button class="dialog-confirm" :disabled="loading" @click="$emit('confirm')">
+        {{ confirmLabel }}
+      </button>
+    </div>
+  `,
+};
+
 describe('SiteConfigPage', () => {
   it('renders grid', async () => {
     const wrapper = mount(SiteConfigPage, {
@@ -440,6 +454,150 @@ describe('SiteConfigPage', () => {
     expect(Alert.warning).toHaveBeenCalledWith('Warning: The timestamp is set in the future.');
   });
 
+  it('accepts valid boolean and number values without validation warnings', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+    vi.mocked(request).mockResolvedValue({});
+
+    const { SettingsService } = await import('@/api/services/SettingsService');
+    vi.mocked(SettingsService.listSiteConfigs).mockResolvedValue([
+      {
+        id: 'valid-config-id',
+        configKey: 'valid-key',
+        configValue: '1',
+        type: 'STRING',
+        description: '',
+        createdDate: new Date().toISOString(),
+        lastModifiedDate: new Date().toISOString(),
+        createdBy: 'tester',
+        lastModifiedBy: 'tester',
+        tenantId: 'tenant',
+        version: 1,
+        isDeleted: false,
+      },
+    ]);
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: {
+            name: 'SiteConfigModal',
+            template: '<div />',
+            props: ['show', 'isSaving', 'saveError', 'formData'],
+          },
+          ConfirmationDialog: { template: '<div />' },
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const config = {
+      id: 'valid-config-id',
+      configKey: 'valid-key',
+      configValue: '1',
+      type: 'STRING' as const,
+      description: 'test',
+      createdDate: new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      createdBy: 'tester',
+      lastModifiedBy: 'tester',
+      tenantId: 'tenant',
+      version: 1,
+      isDeleted: false,
+    };
+    wrapper.vm.handleEditConfiguration(config);
+    await wrapper.vm.$nextTick();
+
+    const modal = wrapper.findComponent({ name: 'SiteConfigModal' });
+    Alert.warning.mockClear();
+
+    modal.vm.$emit('update:type', 'BOOLEAN');
+    modal.vm.$emit('update:value', 'false');
+    modal.vm.$emit('save');
+    await Promise.resolve();
+
+    modal.vm.$emit('update:type', 'NUMBER');
+    modal.vm.$emit('update:value', '42');
+    modal.vm.$emit('save');
+    await Promise.resolve();
+
+    expect(Alert.warning).not.toHaveBeenCalled();
+  });
+
+  it('preserves an existing configuration key when editing the same record', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+    vi.mocked(request).mockResolvedValue({});
+
+    const { SettingsService } = await import('@/api/services/SettingsService');
+    vi.mocked(SettingsService.listSiteConfigs).mockResolvedValue([
+      {
+        id: 'same-id',
+        configKey: 'same-key',
+        configValue: 'value',
+        type: 'STRING',
+        description: '',
+        createdDate: new Date().toISOString(),
+        lastModifiedDate: new Date().toISOString(),
+        createdBy: 'tester',
+        lastModifiedBy: 'tester',
+        tenantId: 'tenant',
+        version: 1,
+        isDeleted: false,
+      },
+    ]);
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: {
+            name: 'SiteConfigModal',
+            template: '<div />',
+            props: ['show', 'isSaving', 'saveError', 'formData'],
+          },
+          ConfirmationDialog: { template: '<div />' },
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const config = {
+      id: 'same-id',
+      configKey: 'same-key',
+      configValue: 'value',
+      type: 'STRING' as const,
+      description: '',
+      createdDate: new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      createdBy: 'tester',
+      lastModifiedBy: 'tester',
+      tenantId: 'tenant',
+      version: 1,
+      isDeleted: false,
+    };
+
+    wrapper.vm.handleEditConfiguration(config);
+    await wrapper.vm.$nextTick();
+
+    const modal = wrapper.findComponent({ name: 'SiteConfigModal' });
+    modal.vm.$emit('update:id', 'same-key');
+    modal.vm.$emit('update:value', 'updated');
+    modal.vm.$emit('save');
+    await Promise.resolve();
+
+    expect(Alert.warning).not.toHaveBeenCalledWith(
+      'A configuration with this key already exists. Please use a unique key.'
+    );
+  });
+
   it('validates unique key - prevents duplicate keys', async () => {
     const Alert = (await import('@/utils/notificationUtils')).default as any;
 
@@ -721,5 +879,281 @@ describe('SiteConfigPage', () => {
     await wrapper.vm.$nextTick();
 
     expect(modal.props('show')).toBe(false);
+  });
+
+  it('deletes a configuration after confirmation and refreshes the data', async () => {
+    const { request } = await import('@/api/core/request');
+    const { SettingsService } = await import('@/api/services/SettingsService');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+
+    vi.clearAllMocks();
+    vi.mocked(request).mockResolvedValue({});
+    vi.mocked(SettingsService.listSiteConfigs)
+      .mockResolvedValueOnce([
+        {
+          id: 'to-delete-id',
+          configKey: 'to-delete',
+          configValue: 'value',
+          type: 'STRING',
+          description: '',
+          createdDate: new Date().toISOString(),
+          lastModifiedDate: new Date().toISOString(),
+          createdBy: 'tester',
+          lastModifiedBy: 'tester',
+          tenantId: 'tenant',
+          version: 1,
+          isDeleted: false,
+        },
+      ] as any)
+      .mockResolvedValueOnce([] as any);
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: { template: '<div />' },
+          ConfirmationDialog: InteractiveConfirmationDialogStub,
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.handleDeleteConfiguration({
+      id: 'to-delete-id',
+      configKey: 'to-delete',
+      tenantId: 'tenant',
+    } as any);
+    await wrapper.vm.$nextTick();
+
+    await wrapper.find('.dialog-confirm').trigger('click');
+    await flushPromises();
+
+    expect(request).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ method: 'DELETE', url: '/management/site-configs/to-delete-id' })
+    );
+    expect(Alert.success).toHaveBeenCalledWith('Configuration deleted successfully');
+    expect(SettingsService.listSiteConfigs).toHaveBeenCalledTimes(2);
+    expect(wrapper.vm.configToDelete).toBeNull();
+    expect(wrapper.vm.dialogOpen).toBe(false);
+  });
+
+  it('shows a delete error and keeps the dialog open when delete fails', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+
+    vi.clearAllMocks();
+    vi.mocked(request).mockRejectedValueOnce(new Error('delete failed'));
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: { template: '<div />' },
+          ConfirmationDialog: InteractiveConfirmationDialogStub,
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.handleDeleteConfiguration({
+      id: 'to-delete-id',
+      configKey: 'to-delete',
+      tenantId: 'tenant',
+    } as any);
+    await wrapper.vm.$nextTick();
+
+    await wrapper.find('.dialog-confirm').trigger('click');
+    await flushPromises();
+
+    expect(Alert.error).toHaveBeenCalledWith('Failed to delete configuration. Please try again.');
+    expect(wrapper.vm.dialogOpen).toBe(true);
+    expect(wrapper.vm.configToDelete).toEqual(
+      expect.objectContaining({ id: 'to-delete-id', configKey: 'to-delete' })
+    );
+  });
+
+  it('does not delete when no configuration is pending', async () => {
+    const { request } = await import('@/api/core/request');
+
+    vi.clearAllMocks();
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: { template: '<div />' },
+          ConfirmationDialog: InteractiveConfirmationDialogStub,
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.pendingAction = 'delete';
+    await wrapper.vm.$nextTick();
+
+    await (wrapper.vm as any).handleConfirm();
+    await flushPromises();
+
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('shows the backend update error message when save fails with a response payload', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+
+    vi.clearAllMocks();
+    vi.mocked(request).mockRejectedValueOnce({
+      response: { data: { message: 'Configuration cannot be overridden right now.' } },
+    });
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: {
+            name: 'SiteConfigModal',
+            template: '<div />',
+            props: ['show', 'isSaving', 'saveError', 'formData'],
+          },
+          ConfirmationDialog: { template: '<div />' },
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.handleEditConfiguration({
+      id: 'config-id',
+      configKey: 'config-key',
+      configValue: 'value',
+      type: 'STRING',
+      description: 'test',
+      createdDate: new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      createdBy: 'tester',
+      lastModifiedBy: 'tester',
+      tenantId: 'tenant',
+      version: 1,
+      isDeleted: false,
+    } as any);
+    await wrapper.vm.$nextTick();
+
+    const modal = wrapper.findComponent({ name: 'SiteConfigModal' });
+    modal.vm.$emit('update:value', 'updated-value');
+    modal.vm.$emit('save');
+    await flushPromises();
+
+    expect(Alert.error).toHaveBeenCalledWith('Configuration cannot be overridden right now.');
+  });
+
+  it('falls back to the generic update error message when save fails without a backend message', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+
+    vi.clearAllMocks();
+    vi.mocked(request).mockRejectedValueOnce(new Error('update failed'));
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: {
+            name: 'SiteConfigModal',
+            template: '<div />',
+            props: ['show', 'isSaving', 'saveError', 'formData'],
+          },
+          ConfirmationDialog: { template: '<div />' },
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.handleEditConfiguration({
+      id: 'config-id',
+      configKey: 'config-key',
+      configValue: 'value',
+      type: 'STRING',
+      description: 'test',
+      createdDate: new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      createdBy: 'tester',
+      lastModifiedBy: 'tester',
+      tenantId: 'tenant',
+      version: 1,
+      isDeleted: false,
+    } as any);
+    await wrapper.vm.$nextTick();
+
+    const modal = wrapper.findComponent({ name: 'SiteConfigModal' });
+    modal.vm.$emit('update:value', 'updated-value');
+    modal.vm.$emit('save');
+    await flushPromises();
+
+    expect(Alert.error).toHaveBeenCalledWith('Failed to update configuration. Please try again.');
+  });
+
+  it('saves a valid past timestamp without showing validation warnings', async () => {
+    const { request } = await import('@/api/core/request');
+    const Alert = (await import('@/utils/notificationUtils')).default as any;
+
+    vi.clearAllMocks();
+    vi.mocked(request).mockResolvedValue({});
+
+    const wrapper = mount(SiteConfigPage, {
+      global: {
+        stubs: {
+          GenericDataGrid: { template: '<div />' },
+          SiteConfigModal: {
+            name: 'SiteConfigModal',
+            template: '<div />',
+            props: ['show', 'isSaving', 'saveError', 'formData'],
+          },
+          ConfirmationDialog: { template: '<div />' },
+          DxButton: { name: 'DxButton', template: '<button><slot /></button>' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.vm.handleEditConfiguration({
+      id: 'config-id',
+      configKey: 'config-key',
+      configValue: '2020-01-01T00:00:00Z',
+      type: 'TIMESTAMP',
+      description: 'test',
+      createdDate: new Date().toISOString(),
+      lastModifiedDate: new Date().toISOString(),
+      createdBy: 'tester',
+      lastModifiedBy: 'tester',
+      tenantId: 'tenant',
+      version: 1,
+      isDeleted: false,
+    } as any);
+    await wrapper.vm.$nextTick();
+
+    const modal = wrapper.findComponent({ name: 'SiteConfigModal' });
+    modal.vm.$emit('update:type', 'TIMESTAMP');
+    modal.vm.$emit('update:value', '2020-01-01T00:00:00Z');
+    modal.vm.$emit('save');
+    await flushPromises();
+
+    expect(request).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        method: 'PUT',
+        url: '/management/site-configs/config-id',
+      })
+    );
+    expect(Alert.warning).not.toHaveBeenCalledWith('Warning: The timestamp is set in the future.');
   });
 });

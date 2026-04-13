@@ -6,6 +6,8 @@ import com.integration.execution.contract.queue.QueueNames;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Publishes platform notification events to the notification exchange.
@@ -25,5 +27,32 @@ public class NotificationEventPublisher {
                 QueueNames.NOTIFICATION_EXCHANGE,
                 QueueNames.NOTIFICATION_ROUTING_KEY,
                 event);
+    }
+
+    /**
+     * Defers publishing until after the surrounding transaction commits.
+     * If no transaction is active, publishes immediately.
+     * Prevents orphaned notifications when the DB transaction is rolled back.
+     */
+    public void publishAfterCommit(final NotificationEvent event) {
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    safePublish(event);
+                }
+            });
+        } else {
+            safePublish(event);
+        }
+    }
+
+    private void safePublish(final NotificationEvent event) {
+        try {
+            publish(event);
+        } catch (Exception ex) {
+            log.error("Failed to publish notification event '{}': {}",
+                    event.getEventKey(), ex.getMessage(), ex);
+        }
     }
 }

@@ -107,6 +107,9 @@ class ResizeObserver {
 }
 vi.stubGlobal('ResizeObserver', ResizeObserver);
 
+// silence window.scrollTo (not implemented in jsdom)
+vi.stubGlobal('scrollTo', vi.fn());
+
 // Mock EventSource (jsdom does not implement SSE)
 class EventSourceMock {
   static CONNECTING = 0;
@@ -148,6 +151,14 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: vi.fn(),
   })),
 });
+
+if (typeof window !== 'undefined' && typeof window.scrollTo !== 'function') {
+  Object.defineProperty(window, 'scrollTo', {
+    writable: true,
+    configurable: true,
+    value: vi.fn(),
+  });
+}
 
 // Activate a fresh Pinia instance before each test to avoid store injection errors
 beforeEach(() => {

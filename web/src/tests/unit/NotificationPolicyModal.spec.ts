@@ -118,4 +118,21 @@ describe('NotificationPolicyModal', () => {
     const selects = wrapper.findAll('select');
     expect(selects[0].element.value).toBe('r1');
   });
+
+  it('omits userIds for SELECTED_USERS when no users are selected and emits close from cancel', async () => {
+    const wrapper = mountModal({ preselectedRuleId: 'r1' });
+
+    await wrapper.setProps({ show: false });
+    await wrapper.setProps({ show: true });
+
+    await wrapper.findAll('select')[1].setValue('SELECTED_USERS');
+    await wrapper.findAll('.dx-button')[1].trigger('click');
+    await wrapper.findAll('.dx-button')[0].trigger('click');
+
+    expect(wrapper.emitted('save')?.[0]?.[0]).toEqual({
+      ruleId: 'r1',
+      recipientType: 'SELECTED_USERS',
+    });
+    expect(wrapper.emitted('close')).toBeTruthy();
+  });
 });

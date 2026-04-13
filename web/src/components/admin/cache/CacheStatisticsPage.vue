@@ -6,59 +6,101 @@
 
 <template>
   <div class="cache-statistics-page">
-    <h2 class="title">Cache Statistics</h2>
-    <div class="section cache-select-section">
-      <div class="cache-label-row">
-        <div class="section-label">Select Cache</div>
+    <div v-if="isStatsError" class="state-card error-state">
+      <div>
+        <h3>Unable to load cache statistics</h3>
+        <p>Try refreshing the page data and then select a cache region again.</p>
       </div>
-      <div v-if="isStatsLoading" class="loading">Loading cache options...</div>
-      <div v-else-if="isStatsError" class="error">Error loading cache options.</div>
-      <div class="cache-options-scroll-wrapper cache-options-modern">
-        <span
-          v-for="option in cacheOptions"
-          :key="option"
-          class="cache-chip-wrapper"
-          @mouseenter="e => showTooltip(e, option)"
-          @mousemove="moveTooltip"
-          @mouseleave="hideTooltip"
-        >
-          <DxButton
-            :text="option.length > 25 ? option.slice(0, 25) + '…' : option"
-            :type="selectedCache === option ? 'default' : 'normal'"
-            :styling-mode="selectedCache === option ? 'contained' : 'outlined'"
-            :class="['cache-chip-modern', { selected: selectedCache === option }]"
-            :aria-label="option"
-            :tabindex="0"
-            @click="() => handleCacheSelection(option)"
-          />
-        </span>
-      </div>
+      <DxButton text="Retry" type="normal" styling-mode="outlined" @click="fetchStats" />
     </div>
-    <div v-if="isStatsLoading" class="loading">Loading cache statistics...</div>
-    <div v-else-if="isStatsError" class="error">Error loading cache statistics.</div>
-    <div v-else class="stats-cards-modern">
-      <div class="stats-card-modern">
-        <div class="stats-title-modern">
-          {{ selectedCache === 'All' ? 'Aggregated Cache Size' : 'Cache Size' }}
-        </div>
-        <div class="stats-value-modern">{{ statsValue('size') }}</div>
+    <template v-else>
+      <div class="cache-layout-grid">
+        <aside class="cache-selection-panel">
+          <div class="section cache-select-section">
+            <div class="section-header">
+              <div class="section-heading-row">
+                <div class="section-label">Select Cache</div>
+                <p class="section-helper">
+                  Choose a specific cache region or stay on All to review aggregate platform
+                  metrics.
+                </p>
+              </div>
+            </div>
+
+            <div v-if="isStatsLoading" class="state-inline loading-inline">
+              <DxLoadIndicator :width="20" :height="20" />
+              <span>Loading cache options...</span>
+            </div>
+            <div v-else-if="hasCacheData" class="cache-options-scroll-wrapper cache-options-modern">
+              <span v-for="option in cacheOptions" :key="option" class="cache-chip-wrapper">
+                <DxButton
+                  :text="option"
+                  :type="selectedCache === option ? 'default' : 'normal'"
+                  :styling-mode="selectedCache === option ? 'contained' : 'outlined'"
+                  :class="['cache-chip-modern', { selected: selectedCache === option }]"
+                  :aria-label="option"
+                  :tabindex="0"
+                  @click="() => handleCacheSelection(option)"
+                />
+              </span>
+            </div>
+            <div v-else class="state-inline empty-inline">
+              <span>No cache filters are available yet.</span>
+            </div>
+          </div>
+        </aside>
+
+        <section class="cache-metrics-panel">
+          <div v-if="isStatsLoading" class="state-card loading-state">
+            <DxLoadIndicator :width="24" :height="24" />
+            <div>
+              <h3>Loading cache statistics</h3>
+              <p>Preparing current cache metrics for the selected region.</p>
+            </div>
+          </div>
+          <div v-else-if="hasCacheData" class="stats-cards-modern">
+            <div class="stats-card-modern">
+              <div class="stats-card-header">
+                <span class="stats-card-kicker">Capacity</span>
+                <span class="stats-context">{{ capacityContextLabel }}</span>
+              </div>
+              <div class="stats-title-modern">{{ capacityTitle }}</div>
+              <div class="stats-value-modern">{{ statsValue('size') }}</div>
+            </div>
+            <div class="stats-card-modern">
+              <div class="stats-card-header">
+                <span class="stats-card-kicker">Traffic</span>
+                <span class="stats-context">Requests</span>
+              </div>
+              <div class="stats-title-modern">Request Count</div>
+              <div class="stats-value-modern">{{ statsValue('requestCount') }}</div>
+            </div>
+            <div class="stats-card-modern ratio-card">
+              <div class="stats-card-header">
+                <span class="stats-card-kicker">Performance</span>
+                <span class="stats-context">Hit vs Miss</span>
+              </div>
+              <div class="stats-title-modern">Hit / Miss Ratio</div>
+              <div class="stats-ratio-modern">
+                <span class="ratio-pill ratio-pill-hit">Hit Rate: {{ statsValue('hitRate') }}</span>
+                <span class="ratio-pill ratio-pill-miss"
+                  >Miss Rate: {{ statsValue('missRate') }}</span
+                >
+              </div>
+            </div>
+          </div>
+          <div v-else class="state-card empty-state">
+            <i class="dx-icon dx-icon-box empty-icon" aria-hidden="true"></i>
+            <h3>No cache statistics found</h3>
+            <p>Cache metrics will appear here once the application reports cache activity.</p>
+          </div>
+
+          <div class="note-modern">
+            Statistics update based on the selected cache or the aggregated All selection.
+          </div>
+        </section>
       </div>
-      <div class="stats-card-modern">
-        <div class="stats-title-modern">Request Count</div>
-        <div class="stats-value-modern request-count">{{ statsValue('requestCount') }}</div>
-      </div>
-      <div class="stats-card-modern">
-        <div class="stats-title-modern">Hit / Miss Ratio</div>
-        <div class="stats-ratio-modern">
-          <span class="hit-modern">Hit Rate: {{ statsValue('hitRate') }}</span>
-          <span class="miss-modern">Miss Rate: {{ statsValue('missRate') }}</span>
-        </div>
-      </div>
-    </div>
-    <div class="note-modern">Statistics update based on selected cache or all caches.</div>
-    <teleport to="body">
-      <CommonTooltip v-bind="tooltip" />
-    </teleport>
+    </template>
   </div>
 </template>
 
@@ -66,10 +108,9 @@
 import './CacheStatisticsPage.css';
 import { ref, computed, onMounted } from 'vue';
 import { DxButton } from 'devextreme-vue';
+import DxLoadIndicator from 'devextreme-vue/load-indicator';
 import { SettingsService } from '@/api/services/SettingsService';
 import { splitCamelCase } from '@/utils/stringFormatUtils';
-import CommonTooltip from '@/components/common/Tooltip.vue';
-import { useTooltip } from '@/composables/useTooltip';
 import type { CacheStat, AggregatedStats } from '@/types/CacheTypes';
 
 type Stats = CacheStat | AggregatedStats;
@@ -79,7 +120,8 @@ const isStatsLoading = ref(true);
 const isStatsError = ref(false);
 const selectedCache = ref('All');
 
-const { tooltip, showTooltip, moveTooltip, hideTooltip } = useTooltip();
+const cacheCount = computed(() => Object.keys(statsData.value ?? {}).length);
+const hasCacheData = computed(() => cacheCount.value > 0);
 
 onMounted(async () => {
   await fetchStats();
@@ -112,6 +154,14 @@ const cacheOptions = computed(() => {
 function handleCacheSelection(cache: string) {
   selectedCache.value = cache;
 }
+
+const capacityContextLabel = computed(() =>
+  selectedCache.value === 'All' ? 'All Caches' : selectedCache.value
+);
+
+const capacityTitle = computed(() =>
+  selectedCache.value === 'All' ? 'Aggregated Cache Size' : 'Cache Size'
+);
 
 function getCacheKey(label: string): string | null {
   if (!statsData.value) return null;

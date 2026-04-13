@@ -79,4 +79,15 @@ describe('useNotificationReset', () => {
     expect(mockToast.showError).toHaveBeenCalled();
     expect(c.isResetting.value).toBe(false);
   });
+
+  it('confirmReset uses the generic fallback message for non-Error failures', async () => {
+    mockAdminService.resetRulesToDefaults.mockRejectedValueOnce('plain failure');
+    const c = mountComposable(() => useNotificationReset());
+
+    await c.resetToDefaults();
+    await expect(c.confirmReset()).rejects.toBe('plain failure');
+
+    expect(mockToast.showError).toHaveBeenCalledWith('Error: Failed to reset notification rules');
+    expect(c.isResetting.value).toBe(false);
+  });
 });

@@ -26,6 +26,12 @@ const actionSpies = vi.hoisted(() => ({
   toggleIntegrationStatus: vi.fn().mockResolvedValue(true),
 }));
 
+const confirmationSpies = vi.hoisted(() => ({
+  openDialog: vi.fn(),
+  closeDialog: vi.fn(),
+  confirmWithHandlers: vi.fn(),
+}));
+
 vi.mock('@/composables/useConfluenceIntegrationActions', () => ({
   useConfluenceIntegrationActions: () => ({
     loading: false,
@@ -45,9 +51,9 @@ vi.mock('@/composables/useConfirmationDialog', () => ({
     dialogTitle: '',
     dialogDescription: '',
     dialogConfirmLabel: '',
-    openDialog: vi.fn(),
-    closeDialog: vi.fn(),
-    confirmWithHandlers: vi.fn(),
+    openDialog: confirmationSpies.openDialog,
+    closeDialog: confirmationSpies.closeDialog,
+    confirmWithHandlers: confirmationSpies.confirmWithHandlers,
   }),
 }));
 
@@ -104,6 +110,8 @@ describe('ConfluenceIntegrationPage', () => {
     vi.clearAllMocks();
     __route.query = {};
     actionSpies.getAllIntegrations.mockResolvedValue([]);
+    actionSpies.deleteIntegration.mockResolvedValue(true);
+    actionSpies.toggleIntegrationStatus.mockResolvedValue(true);
   });
 
   it('renders empty state when integration list is empty', async () => {
@@ -237,5 +245,185 @@ describe('ConfluenceIntegrationPage', () => {
     } else {
       expect(vm.wizardOpen).toBe(true); // Already validated it was open
     }
+  });
+
+  it('opens confirmation dialog for delete and enable actions', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([sampleIntegration]);
+    const wrapper = mount(ConfluenceIntegrationPage);
+    await new Promise(r => setTimeout(r, 0));
+
+    (wrapper.vm as any).handleIntegrationAction('delete', sampleIntegration);
+    (wrapper.vm as any).handleIntegrationAction('enable', sampleIntegration);
+
+    expect(confirmationSpies.openDialog).toHaveBeenNthCalledWith(1, 'delete');
+    expect(confirmationSpies.openDialog).toHaveBeenNthCalledWith(2, 'enable');
+  });
+
+  it('warns for unknown actions', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const wrapper = mount(ConfluenceIntegrationPage);
+    await new Promise(r => setTimeout(r, 0));
+
+    (wrapper.vm as any).handleIntegrationAction('mystery', sampleIntegration);
+
+    expect(warnSpy).toHaveBeenCalledWith('Unknown action:', 'mystery');
+    warnSpy.mockRestore();
+  });
+
+  it('removes an integration after confirmed deletion', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([sampleIntegration]);
+    confirmationSpies.confirmWithHandlers.mockImplementation(
+      async (handlers: Record<string, () => Promise<boolean>>) => {
+        await handlers.delete();
+        return true;
+      }
+    );
+
+    const wrapper = mount(ConfluenceIntegrationPage);
+    await new Promise(r => setTimeout(r, 0));
+
+    (wrapper.vm as any).handleIntegrationAction('delete', sampleIntegration);
+    await (wrapper.vm as any).handleConfirm();
+    await nextTick();
+
+    expect(actionSpies.deleteIntegration).toHaveBeenCalledWith('ci-1');
+    expect((wrapper.vm as any).integrations).toEqual([]);
+  });
+
+  it('updates the integration status when confirm executes the enable branch', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([sampleIntegration]);
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(false);
+    confirmationSpies.confirmWithHandlers.mockImplementation(
+      async (handlers: Record<string, () => Promise<boolean>>) => {
+        await handlers.enable();
+        return true;
+      }
+    );
+
+    const wrapper = mount(ConfluenceIntegrationPage);
+    await new Promise(r => setTimeout(r, 0));
+
+    (wrapper.vm as any).handleIntegrationAction('enable', sampleIntegration);
+    await (wrapper.vm as any).handleConfirm();
+    await nextTick();
+
+    expect(actionSpies.toggleIntegrationStatus).toHaveBeenCalledWith('ci-1', true);
+    expect((wrapper.vm as any).integrations[0].isEnabled).toBe(false);
+  });
+
+  it('refetches integrations when toggle returns a non-boolean result', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([sampleIntegration]);
+    actionSpies.toggleIntegrationStatus.mockResolvedValueOnce(undefined);
+    confirmationSpies.confirmWithHandlers.mockImplementation(
+      async (handlers: Record<string, () => Promise<boolean>>) => {
+        await handlers.disable();
+        return true;
+      }
+    );
+
+    const wrapper = mount(ConfluenceIntegrationPage);
+    await new Promise(r => setTimeout(r, 0));
+
+    (wrapper.vm as any).handleIntegrationAction('disable', sampleIntegration);
+    await (wrapper.vm as any).handleConfirm();
+    await nextTick();
+
+    expect(actionSpies.getAllIntegrations).toHaveBeenCalledTimes(2);
+  });
+
+  it('sorts integrations by name, status, and created date', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([
+      {
+        ...sampleIntegration,
+        id: 'ci-2',
+        name: 'Zulu',
+        createdDate: '2026-01-01T00:00:00Z',
+        isEnabled: false,
+      },
+      {
+        ...sampleIntegration,
+        id: 'ci-1',
+        name: 'Alpha',
+        createdDate: '2026-02-01T00:00:00Z',
+        isEnabled: true,
+      },
+    ]);
+
+    const wrapper = mount(ConfluenceIntegrationPage) as any;
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.sortBy = 'name';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'ci-1',
+      'ci-2',
+    ]);
+
+    wrapper.vm.sortBy = 'isEnabled';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'ci-1',
+      'ci-2',
+    ]);
+
+    wrapper.vm.sortBy = 'createdDate';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'ci-1',
+      'ci-2',
+    ]);
+  });
+
+  it('filters integrations by creator name and leaves state unchanged when delete returns false', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue([
+      sampleIntegration,
+      { ...sampleIntegration, id: 'ci-2', name: 'Second', createdBy: 'other-admin' },
+    ]);
+    actionSpies.deleteIntegration.mockResolvedValueOnce(false);
+
+    const wrapper = mount(ConfluenceIntegrationPage) as any;
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.search = 'other-admin';
+    await nextTick();
+    expect(wrapper.vm.filteredIntegrations).toHaveLength(1);
+    expect(wrapper.vm.filteredIntegrations[0].id).toBe('ci-2');
+
+    await wrapper.vm.deleteIntegrationAction('ci-1');
+    expect(wrapper.vm.integrations).toHaveLength(2);
+  });
+
+  it('returns early from handleConfirm without a pending integration and clears pending state on local close', async () => {
+    const wrapper = mount(ConfluenceIntegrationPage) as any;
+    await new Promise(r => setTimeout(r, 0));
+
+    await wrapper.vm.handleConfirm();
+    expect(confirmationSpies.confirmWithHandlers).not.toHaveBeenCalled();
+
+    wrapper.vm.pendingIntegration = sampleIntegration;
+    wrapper.vm.closeDialogLocal();
+    expect(wrapper.vm.pendingIntegration).toBeNull();
+    expect(confirmationSpies.closeDialog).toHaveBeenCalled();
+  });
+
+  it('respects pagination boundaries and updates page size through the toolbar setter', async () => {
+    actionSpies.getAllIntegrations.mockResolvedValue(manyIntegrations);
+    const wrapper = mount(ConfluenceIntegrationPage) as any;
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.prevPage();
+    expect(wrapper.vm.currentPage).toBe(1);
+
+    wrapper.vm.nextPage();
+    expect(wrapper.vm.currentPage).toBe(2);
+
+    wrapper.vm.nextPage();
+    expect(wrapper.vm.currentPage).toBe(2);
+
+    const toolbar = wrapper.findComponent({ name: 'DashboardToolbar' });
+    toolbar.vm.$emit('update:pageSize', 12);
+    await nextTick();
+
+    expect(wrapper.vm.pageSize).toBe(12);
   });
 });

@@ -177,4 +177,14 @@ describe('StandardDetailPageLayout', () => {
     expect(wrapperVm.props('showRetry')).toBe(true);
     expect(wrapperVm.props('container')).toBe('.detail-page');
   });
+
+  it('renders the custom icon slot when provided', () => {
+    const wrapper = mountLayout({}, {
+      slots: {
+        'custom-icon': '<div data-test="custom-icon">icon</div>',
+      },
+    } as any);
+
+    expect(wrapper.find('[data-test="custom-icon"]').exists()).toBe(true);
+  });
 });

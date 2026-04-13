@@ -44,7 +44,7 @@ describe('JiraFieldMappingTab', () => {
         jiraFieldId: 'assignee',
         jiraFieldName: 'Assignee',
         dataType: 'USER',
-        displayLabel: 'u1',
+        displayLabel: 'Alice',
         required: false,
       },
       {
@@ -52,7 +52,7 @@ describe('JiraFieldMappingTab', () => {
         jiraFieldId: 'watchers',
         jiraFieldName: 'Watchers',
         dataType: 'MULTIUSER',
-        displayLabel: 'u2,u3',
+        displayLabel: 'Bob, Cara',
         required: false,
       },
       {
@@ -83,16 +83,11 @@ describe('JiraFieldMappingTab', () => {
     ],
   } as any;
 
-  it('renders mapped values with correct formatting and user name mapping', () => {
+  it('renders mapped values with correct formatting', () => {
     const wrapper = mount(JiraFieldMappingTab, {
       props: {
         webhookData: baseWebhook,
         webhookId: 'w1',
-        users: [
-          { accountId: 'u1', displayName: 'Alice' },
-          { accountId: 'u2', displayName: 'Bob' },
-          { accountId: 'u3', displayName: 'Cara' },
-        ],
         sprints: [{ value: '67', label: 'Sprint 24 (active)' }],
       },
     });
@@ -101,9 +96,8 @@ describe('JiraFieldMappingTab', () => {
     // DATE/DATETIME are formatted
     expect(rows[0].text()).toBe('DISPLAY_DATE');
     expect(rows[1].text()).toBe('META_DATE');
-    // USER maps id -> name, trimming prefix
+    // USER and MULTIUSER use persisted display labels
     expect(rows[2].text()).toBe('Alice');
-    // MULTIUSER maps and joins
     expect(rows[3].text()).toBe('Bob, Cara');
     // Template with {{}} remains unchanged
     expect(rows[4].text()).toBe('{{ fields.summary }}');
@@ -161,7 +155,7 @@ describe('JiraFieldMappingTab', () => {
     expect(wrapper.findAll('.row').length).toBe(0);
   });
 
-  it('prefers parent template over displayLabel and renders parent key', () => {
+  it('prefers parent displayLabel over template', () => {
     const wrapper = mount(JiraFieldMappingTab, {
       props: {
         webhookData: {
@@ -172,7 +166,7 @@ describe('JiraFieldMappingTab', () => {
               jiraFieldId: 'parent',
               jiraFieldName: 'Parent',
               dataType: 'STRING',
-              displayLabel: 'SHOULD_NOT_BE_USED',
+              displayLabel: 'SCRUM-436 - Parent one',
               template: '{"key":"SCRUM-436"}',
               required: true,
             },
@@ -182,8 +176,7 @@ describe('JiraFieldMappingTab', () => {
       },
     });
 
-    expect(wrapper.find('.mapped-value').text()).toBe('SCRUM-436');
-    expect(wrapper.text()).not.toContain('SHOULD_NOT_BE_USED');
+    expect(wrapper.find('.mapped-value').text()).toBe('SCRUM-436 - Parent one');
   });
 
   it('keeps parent token template unchanged for mapped value display', () => {
@@ -207,6 +200,205 @@ describe('JiraFieldMappingTab', () => {
     });
 
     expect(wrapper.find('.mapped-value').text()).toBe('{{fields.parentKey}}');
+  });
+
+  it('falls back to default values, raw sprint ids, and unknown-field labels when display labels are missing', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'fallback-1',
+              jiraFieldId: 'plain_fallback',
+              jiraFieldName: 'Plain Fallback',
+              dataType: 'STRING',
+              defaultValue: 'plain-default',
+              required: false,
+            },
+            {
+              id: 'sprint-2',
+              jiraFieldId: 'customfield_10021',
+              jiraFieldName: 'Sprint',
+              dataType: 'NUMBER',
+              defaultValue: '77',
+              metadata: { fieldType: 'sprint' },
+              required: false,
+            },
+            {
+              id: '',
+              jiraFieldId: '',
+              jiraFieldName: '',
+              dataType: 'STRING',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+        sprints: [],
+      },
+    });
+
+    const rows = wrapper.findAll('.mapped-value');
+    expect(rows[0].text()).toBe('plain-default');
+    expect(rows[1].text()).toBe('77');
+    expect(rows[2].text()).toBe('No mapping');
+
+    const fieldNames = wrapper.findAll('.field-name');
+    expect(fieldNames[2].text()).toBe('Unknown Field');
+  });
+
+  it('shows a loading sprint label when sprint metadata is still loading', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'sprint-loading',
+              jiraFieldId: 'customfield_10021',
+              jiraFieldName: 'Sprint',
+              dataType: 'NUMBER',
+              displayLabel: '91',
+              metadata: { fieldType: 'sprint' },
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+        sprints: [],
+        sprintsLoading: true,
+      },
+    });
+
+    expect(wrapper.find('.mapped-value').text()).toBe('Loading sprints...');
+  });
+
+  it('detects sprint fields from the field name even without metadata', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'sprint-name-only',
+              jiraFieldId: 'customfield_55',
+              jiraFieldName: 'Sprint',
+              dataType: 'string',
+              displayLabel: '42,43',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+        sprints: [{ value: '42', label: 'Sprint 42' }],
+      },
+    });
+
+    expect(wrapper.find('.mapped-value').text()).toBe('Sprint 42, 43');
+  });
+
+  it('returns raw values for invalid dates and unparseable parent mappings', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'bad-date',
+              jiraFieldId: 'cf_date',
+              jiraFieldName: 'Bad Date',
+              dataType: 'DATE',
+              displayLabel: 'not-a-date',
+              required: false,
+            },
+            {
+              id: 'bad-parent',
+              jiraFieldId: 'parent',
+              jiraFieldName: 'Parent',
+              dataType: 'STRING',
+              displayLabel: '{"summary":"Missing key"}',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+      },
+    });
+
+    const rows = wrapper.findAll('.mapped-value');
+    expect(rows[0].text()).toBe('not-a-date');
+    expect(rows[1].text()).toBe('{"summary":"Missing key"}');
+  });
+
+  it('prefers templates for string and date fields while preserving template tokens', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'string-template-preferred',
+              jiraFieldId: 'cf_string',
+              jiraFieldName: 'String Template',
+              dataType: 'STRING',
+              displayLabel: 'Rendered value',
+              template: '{{fields.summary}}',
+              required: false,
+            },
+            {
+              id: 'date-template-preferred',
+              jiraFieldId: 'cf_due',
+              jiraFieldName: 'Due Date',
+              dataType: 'DATE',
+              displayLabel: '2024-01-01',
+              template: '{{issue.dueDate}}',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+      },
+    });
+
+    const rows = wrapper.findAll('.mapped-value');
+    expect(rows[0].text()).toBe('{{fields.summary}}');
+    expect(rows[1].text()).toBe('{{issue.dueDate}}');
+  });
+
+  it('falls back to a parent default value and clears empty sprint content', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'parent-default',
+              jiraFieldId: 'parent',
+              jiraFieldName: 'Parent',
+              dataType: 'STRING',
+              defaultValue: 'SCRUM-999',
+              required: false,
+            },
+            {
+              id: 'empty-sprint',
+              jiraFieldId: 'customfield_10021',
+              jiraFieldName: 'Sprint',
+              dataType: 'NUMBER',
+              displayLabel: ' , ',
+              metadata: { fieldType: 'sprint' },
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+        sprints: [{ value: '67', label: 'Sprint 67' }],
+      },
+    });
+
+    const rows = wrapper.findAll('.mapped-value');
+    expect(rows[0].text()).toBe('SCRUM-999');
+    expect(rows[1].text()).toBe('');
   });
 });
 
@@ -245,7 +437,6 @@ describe('JiraFieldMappingTab', () => {
         webhookData,
         webhookId: 'w1',
         loading: false,
-        users: [{ accountId: 'u1', displayName: 'User X' }],
       },
       global: { stubs: { GenericDataGrid: gridStub } },
     });

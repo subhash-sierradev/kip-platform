@@ -8,7 +8,6 @@ const hoisted = vi.hoisted(() => ({
   backMock: vi.fn(),
   getWebhookByIdMock: vi.fn(),
   getProjectsByConnectionIdMock: vi.fn(),
-  getProjectUsersByConnectionIdMock: vi.fn(),
   getSprintsByConnectionIdMock: vi.fn(),
 }));
 
@@ -26,7 +25,6 @@ vi.mock('@/api/services/JiraWebhookService', () => ({
 vi.mock('@/api/services/JiraIntegrationService', () => ({
   JiraIntegrationService: {
     getProjectsByConnectionId: hoisted.getProjectsByConnectionIdMock,
-    getProjectUsersByConnectionId: hoisted.getProjectUsersByConnectionIdMock,
     getSprintsByConnectionId: hoisted.getSprintsByConnectionIdMock,
   },
 }));
@@ -91,9 +89,6 @@ describe('JiraWebhookDetailsPage', () => {
       { key: 'P1', name: 'Project One' },
       { key: 'P2', name: 'Project Two' },
     ]);
-    hoisted.getProjectUsersByConnectionIdMock.mockResolvedValue([
-      { accountId: 'u1', displayName: 'Alice' },
-    ]);
     hoisted.getSprintsByConnectionIdMock.mockResolvedValue([
       { id: 101, name: 'Sprint A', state: 'active' },
     ]);
@@ -128,13 +123,12 @@ describe('JiraWebhookDetailsPage', () => {
 
     const layout = wrapper.findComponent({ name: 'StandardDetailPageLayout' });
     expect((layout.props() as any).activeTab).toBe('details');
-    expect((layout.props() as any).componentProps.users).toBeUndefined();
+    expect((layout.props() as any).componentProps.sprints).toBeUndefined();
 
     await wrapper.find('.emit-tab-mapping').trigger('click');
     await flushPromises();
 
     expect((layout.props() as any).activeTab).toBe('mapping');
-    expect((layout.props() as any).componentProps.users).toBeDefined();
     expect((layout.props() as any).componentProps.sprints).toBeDefined();
   });
 
@@ -170,15 +164,170 @@ describe('JiraWebhookDetailsPage', () => {
     expect(wrapperGeneral.find('.error').text()).toContain('boom');
   });
 
-  it('loads users and sprints for mapping using resolved project key', async () => {
+  it('loads sprints using one resolved project key lookup', async () => {
     mount(JiraWebhookDetailsPage);
     await flushPromises();
 
+    expect(hoisted.getProjectsByConnectionIdMock).toHaveBeenCalledTimes(1);
     expect(hoisted.getProjectsByConnectionIdMock).toHaveBeenCalledWith('conn-1');
-    expect(hoisted.getProjectUsersByConnectionIdMock).toHaveBeenCalledWith('conn-1', 'P1');
     expect(hoisted.getSprintsByConnectionIdMock).toHaveBeenCalledWith(
       'conn-1',
       expect.objectContaining({ projectKey: 'P1', state: 'active,future' })
     );
+  });
+
+  it('shows a required-id error and skips fetching when the route id is missing', async () => {
+    hoisted.routeId = '';
+
+    const wrapper = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    expect(hoisted.getWebhookByIdMock).not.toHaveBeenCalled();
+    expect(wrapper.find('.error').text()).toContain('Webhook ID is required');
+  });
+
+  it('falls back to a generic fetch error message when no error message is available', async () => {
+    hoisted.getWebhookByIdMock.mockRejectedValueOnce({});
+    const wrapper = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    expect(wrapper.find('.error').text()).toContain('Failed to load webhook details');
+  });
+
+  it('keeps the details tab active for unknown tab ids', async () => {
+    const wrapper = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    const layout = wrapper.findComponent({ name: 'StandardDetailPageLayout' });
+    await layout.vm.$emit('tab-change', 'missing-tab');
+    await flushPromises();
+
+    expect((layout.props() as any).activeTab).toBe('details');
+  });
+
+  it('resolves the project key from defaultValue when displayLabel is empty', async () => {
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      jiraFieldMappings: [
+        {
+          jiraFieldId: 'project',
+          jiraFieldName: 'Project',
+          displayLabel: '',
+          defaultValue: 'P2',
+        },
+      ],
+    });
+
+    mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    expect(hoisted.getSprintsByConnectionIdMock).toHaveBeenCalledWith(
+      'conn-1',
+      expect.objectContaining({ projectKey: 'P2' })
+    );
+  });
+
+  it('resolves the project key from the project name when the mapping label is not already a key', async () => {
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      jiraFieldMappings: [
+        {
+          jiraFieldId: 'project',
+          jiraFieldName: 'Project',
+          displayLabel: 'Project Two',
+          defaultValue: '',
+        },
+      ],
+    });
+
+    mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    expect(hoisted.getSprintsByConnectionIdMock).toHaveBeenCalledWith(
+      'conn-1',
+      expect.objectContaining({ projectKey: 'P2' })
+    );
+  });
+
+  it('clears sprint options when mapping context cannot be resolved or sprint loading fails', async () => {
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      connectionId: '',
+      jiraFieldMappings: [],
+    });
+    const wrapperNoContext = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    let layout = wrapperNoContext.findComponent({ name: 'StandardDetailPageLayout' });
+    await wrapperNoContext.find('.emit-tab-mapping').trigger('click');
+    await flushPromises();
+    expect((layout.props() as any).componentProps.sprints).toEqual([]);
+
+    wrapperNoContext.unmount();
+
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      jiraFieldMappings: [
+        {
+          jiraFieldId: 'project',
+          jiraFieldName: 'Project',
+          displayLabel: 'Project One',
+          defaultValue: '',
+        },
+      ],
+    });
+    hoisted.getSprintsByConnectionIdMock.mockRejectedValueOnce(new Error('bad sprints'));
+
+    const wrapperSprintFailure = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    layout = wrapperSprintFailure.findComponent({ name: 'StandardDetailPageLayout' });
+    await wrapperSprintFailure.find('.emit-tab-mapping').trigger('click');
+    await flushPromises();
+
+    expect((layout.props() as any).componentProps.sprints).toEqual([]);
+    expect((layout.props() as any).componentProps.sprintsLoading).toBe(false);
+  });
+
+  it('clears sprint options when the mapped project cannot be resolved or the project lookup fails', async () => {
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      jiraFieldMappings: [
+        {
+          jiraFieldId: 'project',
+          jiraFieldName: 'Project',
+          displayLabel: 'Missing Project',
+          defaultValue: '',
+        },
+      ],
+    });
+
+    const wrapperNoProjectMatch = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    let layout = wrapperNoProjectMatch.findComponent({ name: 'StandardDetailPageLayout' });
+    await wrapperNoProjectMatch.find('.emit-tab-mapping').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.getSprintsByConnectionIdMock).not.toHaveBeenCalled();
+    expect((layout.props() as any).componentProps.sprints).toEqual([]);
+
+    wrapperNoProjectMatch.unmount();
+    vi.clearAllMocks();
+
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({ ...defaultWebhook });
+    hoisted.getProjectsByConnectionIdMock.mockRejectedValueOnce(new Error('projects failed'));
+
+    const wrapperProjectFailure = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    layout = wrapperProjectFailure.findComponent({ name: 'StandardDetailPageLayout' });
+    await wrapperProjectFailure.find('.emit-tab-mapping').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.getProjectsByConnectionIdMock).toHaveBeenCalledWith('conn-1');
+    expect(hoisted.getSprintsByConnectionIdMock).not.toHaveBeenCalled();
+    expect((layout.props() as any).componentProps.sprints).toEqual([]);
+    expect((layout.props() as any).componentProps.sprintsLoading).toBe(false);
   });
 });

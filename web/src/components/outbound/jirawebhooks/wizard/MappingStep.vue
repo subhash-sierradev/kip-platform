@@ -29,6 +29,7 @@
               @project-change="onProjectChange"
               @issue-type-change="onIssueTypeChange"
               @parent-change="onParentChange"
+              @parent-label-change="onParentLabelChange"
               @parent-search="onParentSearch"
               @assignee-change="emitMapping"
             />
@@ -147,6 +148,7 @@ const emit = defineEmits<{
   (e: 'projects-change', list: JiraProject[]): void;
   (e: 'issueTypes-change', list: JiraIssueType[]): void;
   (e: 'users-change', list: JiraUser[]): void;
+  (e: 'parent-label-change', payload: { value: string; label: string }): void;
 }>();
 
 const activeCustomRowIndex = ref<number | null>(null);
@@ -365,6 +367,10 @@ async function onParentSearch(query: string) {
 function onParentChange() {
   upsertParentCustomField(selectedParentField.value);
   emitMapping();
+}
+
+function onParentLabelChange(payload: { value: string; label: string }) {
+  emit('parent-label-change', payload);
 }
 validate();
 const showSummaryPreview = ref(false);

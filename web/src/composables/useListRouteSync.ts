@@ -21,6 +21,9 @@ export interface RouteSyncState {
   currentPage: Ref<number>;
   pageSize: Ref<number>;
   pageSizeOptions: number[];
+  manualPageSize?: Ref<number | null>;
+  resetPageSize?: () => void;
+  setPageSize?: (newPageSize: number) => void;
 }
 /**
  * Configuration required for route synchronization.
@@ -35,6 +38,11 @@ export interface RouteSyncConfig {
   validSortOptions: string[];
   validViewModes: Array<DashboardViewMode>;
   totalPages: Ref<number>;
+  persistPageSizeInRoute?: boolean;
+}
+
+function shouldPersistPageSizeInRoute(config: RouteSyncConfig): boolean {
+  return config.persistPageSizeInRoute !== false;
 }
 
 /**
@@ -45,6 +53,36 @@ function isValidViewMode(
   modes: ReadonlyArray<DashboardViewMode>
 ): val is DashboardViewMode {
   return typeof val === 'string' && (modes as ReadonlyArray<string>).includes(val);
+}
+
+function applyPageFromQuery(pageQuery: unknown, currentPage: Ref<number>): void {
+  if (typeof pageQuery !== 'string') {
+    return;
+  }
+
+  const parsedPage = Number(pageQuery);
+  if (!Number.isNaN(parsedPage) && parsedPage >= 1) {
+    currentPage.value = parsedPage;
+  }
+}
+
+function applyPageSizeFromQuery(sizeQuery: unknown, state: RouteSyncState): void {
+  if (typeof sizeQuery !== 'string') {
+    state.resetPageSize?.();
+    return;
+  }
+
+  const parsedPageSize = Number(sizeQuery);
+  if (!state.pageSizeOptions.includes(parsedPageSize)) {
+    return;
+  }
+
+  if (state.setPageSize) {
+    state.setPageSize(parsedPageSize);
+    return;
+  }
+
+  state.pageSize.value = parsedPageSize;
 }
 
 // Internal helpers to keep the main composable small
@@ -60,17 +98,18 @@ function applyStateFromRouteInternal(config: RouteSyncConfig, state: RouteSyncSt
     state.viewMode.value = q.view;
   }
 
-  if (typeof q.page === 'string') {
-    const p = Number(q.page);
-    if (!Number.isNaN(p) && p >= 1) state.currentPage.value = p;
+  applyPageFromQuery(q.page, state.currentPage);
+
+  if (!shouldPersistPageSizeInRoute(config)) {
+    state.resetPageSize?.();
+    return;
   }
-  if (typeof q.size === 'string') {
-    const s = Number(q.size);
-    if (state.pageSizeOptions.includes(s)) state.pageSize.value = s;
-  }
+
+  applyPageSizeFromQuery(q.size, state);
 }
 
 function buildStateQueryInternal(
+  config: RouteSyncConfig,
   state: RouteSyncState,
   includeScroll = false
 ): Record<string, string | number> {
@@ -79,8 +118,12 @@ function buildStateQueryInternal(
     sort: state.sortBy.value,
     view: state.viewMode.value,
     page: state.currentPage.value,
-    size: state.pageSize.value,
   };
+
+  if (shouldPersistPageSizeInRoute(config) && state.manualPageSize?.value !== null) {
+    q.size = state.pageSize.value;
+  }
+
   if (includeScroll) q.scroll = Math.max(0, Math.round(window.scrollY));
   return q;
 }
@@ -208,7 +251,8 @@ export function useListRouteSync(config: RouteSyncConfig, state: RouteSyncState)
   const initialRestorationDone = ref(false);
 
   const applyStateFromRoute = () => applyStateFromRouteInternal(config, state);
-  const buildStateQuery = (includeScroll = false) => buildStateQueryInternal(state, includeScroll);
+  const buildStateQuery = (includeScroll = false) =>
+    buildStateQueryInternal(config, state, includeScroll);
   const restoreScrollFromQuery = () => restoreScrollFromQueryInternal(config.route);
   const ensureDetailsRoute = (
     path: string,

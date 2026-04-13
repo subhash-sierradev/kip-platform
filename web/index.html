@@ -10,6 +10,8 @@
     <meta name="description" content="Kaseware Integration Platform" />
   </head>
   <body>
+    <!-- Runtime config injected by Docker entrypoint (no-op in local dev) -->
+    <script src="/config.js"></script>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
     <script>

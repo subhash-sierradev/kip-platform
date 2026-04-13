@@ -253,4 +253,327 @@ describe('ArcGISIntegrationPage', () => {
 
     warnSpy.mockRestore();
   });
+
+  it('opens confirmation dialogs for enable, disable, and delete actions', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+
+    const enabledIntegration = {
+      id: 'arc-enabled',
+      name: 'Enabled Arc',
+      createdBy: 'bob',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: true,
+    };
+    const disabledIntegration = {
+      ...enabledIntegration,
+      id: 'arc-disabled',
+      isEnabled: false,
+    };
+
+    wrapper.vm.handleIntegrationAction('disable', enabledIntegration);
+    wrapper.vm.handleIntegrationAction('enable', disabledIntegration);
+    wrapper.vm.handleIntegrationAction('delete', enabledIntegration);
+
+    expect(hoisted.openDialogMock).toHaveBeenNthCalledWith(1, 'disable');
+    expect(hoisted.openDialogMock).toHaveBeenNthCalledWith(2, 'enable');
+    expect(hoisted.openDialogMock).toHaveBeenNthCalledWith(3, 'delete');
+  });
+
+  it('filters integrations by creator name when search text is set', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-1',
+        name: 'Road Sync',
+        createdBy: 'alice',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: true,
+      },
+      {
+        id: 'arc-2',
+        name: 'River Sync',
+        createdBy: 'bob',
+        createdDate: '2024-01-02T00:00:00Z',
+        isEnabled: false,
+      },
+    ]);
+
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.search = 'bob';
+    await nextTick();
+
+    expect(wrapper.vm.filteredIntegrations).toHaveLength(1);
+    expect(wrapper.vm.filteredIntegrations[0].id).toBe('arc-2');
+  });
+
+  it('omits the trigger menu item for disabled integrations', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+
+    const items = wrapper.vm.getIntegrationMenuItems({
+      id: 'arc-disabled',
+      name: 'Disabled',
+      createdBy: 'user',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: false,
+    });
+
+    expect(items.some((item: { id: string }) => item.id === 'trigger')).toBe(false);
+    expect(items.some((item: { id: string }) => item.id === 'enable')).toBe(true);
+  });
+
+  it('opens edit and clone wizards from integration actions', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+
+    const integration = {
+      id: 'arc-3',
+      name: 'Arc Three',
+      createdBy: 'eve',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: true,
+    };
+
+    wrapper.vm.handleIntegrationAction('edit', integration);
+    wrapper.vm.handleIntegrationAction('clone', integration);
+    await nextTick();
+
+    expect(wrapper.vm.editWizardOpen).toBe(true);
+    expect(wrapper.vm.editingIntegrationId).toBe('arc-3');
+    expect(wrapper.vm.cloneWizardOpen).toBe(true);
+    expect(wrapper.vm.cloningIntegrationId).toBe('arc-3');
+  });
+
+  it('stores pending integration and stops propagation when opening a dialog', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+    const stopPropagation = vi.fn();
+    const integration = {
+      id: 'arc-4',
+      name: 'Arc Four',
+      createdBy: 'sam',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: true,
+    };
+
+    wrapper.vm.openDialog('delete', integration, { stopPropagation } as unknown as Event);
+
+    expect(stopPropagation).toHaveBeenCalledTimes(1);
+    expect(wrapper.vm.pendingIntegration).toEqual(integration);
+    expect(hoisted.openDialogMock).toHaveBeenCalledWith('delete');
+  });
+
+  it('returns early from handleConfirm when there is no pending integration', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+
+    await wrapper.vm.handleConfirm();
+
+    expect(hoisted.confirmWithHandlersMock).not.toHaveBeenCalled();
+  });
+
+  it('passes delete and run-now handlers to confirmWithHandlers', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+    wrapper.vm.pendingIntegration = {
+      id: 'arc-5',
+      name: 'Arc Five',
+      createdBy: 'lee',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: true,
+    };
+
+    await wrapper.vm.handleConfirm();
+
+    const handlers = hoisted.confirmWithHandlersMock.mock.calls[0][0] as {
+      delete: () => Promise<boolean>;
+      runNow: () => Promise<void>;
+    };
+
+    hoisted.deleteIntegrationMock.mockResolvedValueOnce(true);
+    await expect(handlers.delete()).resolves.toBe(true);
+
+    hoisted.deleteIntegrationMock.mockRejectedValueOnce(new Error('delete failed'));
+    await expect(handlers.delete()).resolves.toBe(false);
+
+    await handlers.runNow();
+    expect(hoisted.triggerJobExecutionMock).toHaveBeenCalledWith('arc-5', 'Arc Five');
+  });
+
+  it('updates a local integration when toggle returns a boolean and refetches when it does not', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-6',
+        name: 'Arc Six',
+        createdBy: 'maya',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: false,
+      },
+    ]);
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce(true);
+    await wrapper.vm.enableDisableIntegration('arc-6', false);
+    expect(wrapper.vm.integrations[0].isEnabled).toBe(true);
+
+    hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce('non-boolean');
+    await wrapper.vm.enableDisableIntegration('arc-6', true);
+    expect(hoisted.getAllIntegrationsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('removes an integration only when delete succeeds', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-7',
+        name: 'Arc Seven',
+        createdBy: 'maya',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: true,
+      },
+    ]);
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    hoisted.deleteIntegrationMock.mockResolvedValueOnce(false);
+    await wrapper.vm.deleteIntegrationAction('arc-7');
+    expect(wrapper.vm.integrations).toHaveLength(1);
+
+    hoisted.deleteIntegrationMock.mockResolvedValueOnce(true);
+    await wrapper.vm.deleteIntegrationAction('arc-7');
+    expect(wrapper.vm.integrations).toHaveLength(0);
+  });
+
+  it('respects pagination boundaries and clears pending integration on local dialog close', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue(
+      Array.from({ length: 7 }, (_, index) => ({
+        id: `arc-${index}`,
+        name: `Arc ${index}`,
+        createdBy: 'user',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: true,
+      }))
+    );
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.prevPage();
+    expect(wrapper.vm.currentPage).toBe(1);
+    wrapper.vm.nextPage();
+    expect(wrapper.vm.currentPage).toBe(2);
+    wrapper.vm.nextPage();
+    expect(wrapper.vm.currentPage).toBe(2);
+
+    wrapper.vm.pendingIntegration = { id: 'arc-1' };
+    wrapper.vm.closeDialogLocal();
+    expect(wrapper.vm.pendingIntegration).toBeNull();
+    expect(hoisted.closeDialogMock).toHaveBeenCalled();
+  });
+
+  it('sorts integrations by name, status, created date, and leaves lastTrigger unchanged', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-b',
+        name: 'Beta',
+        createdBy: 'zoe',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: false,
+      },
+      {
+        id: 'arc-a',
+        name: 'Alpha',
+        createdBy: 'amy',
+        createdDate: '2024-02-01T00:00:00Z',
+        isEnabled: true,
+      },
+    ]);
+
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.sortBy = 'name';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'arc-a',
+      'arc-b',
+    ]);
+
+    wrapper.vm.sortBy = 'isEnabled';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'arc-a',
+      'arc-b',
+    ]);
+
+    wrapper.vm.sortBy = 'createdDate';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'arc-a',
+      'arc-b',
+    ]);
+
+    wrapper.vm.sortBy = 'lastTrigger';
+    await nextTick();
+    expect(wrapper.vm.sortedIntegrations.map((item: { id: string }) => item.id)).toEqual([
+      'arc-b',
+      'arc-a',
+    ]);
+  });
+
+  it('updates the page state from toolbar events and resets page size through the setter', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+
+    const toolbar = wrapper.findComponent({ name: 'DashboardToolbar' });
+    toolbar.vm.$emit('setViewMode', 'list');
+    toolbar.vm.$emit('update:pageSize', 12);
+    await nextTick();
+
+    expect(wrapper.vm.viewMode).toBe('list');
+    expect(wrapper.vm.pageSize).toBe(12);
+  });
+
+  it('renders search-aware empty-state messaging', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(wrapper.find('.empty-title').text()).toBe('No ArcGIS Integration Found');
+    expect(wrapper.find('.empty-subtitle').text()).toBe('Create Your First ArcGIS Integration');
+
+    wrapper.vm.search = 'roads';
+    await nextTick();
+
+    expect(wrapper.find('.empty-title').text()).toBe('No matching integrations found');
+    expect(wrapper.find('.empty-subtitle').text()).toContain('No integrations match "roads"');
+  });
+
+  it('opens details without showing an error when router navigation succeeds', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-success',
+        name: 'Arc Success',
+        createdBy: 'alice',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: true,
+      },
+    ]);
+
+    const wrapper = mountPage();
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.findComponent({ name: 'ArcGISIntegrationCard' }).vm.$emit('open', 'arc-success');
+    await new Promise(r => setTimeout(r, 0));
+
+    expect(hoisted.router.push).toHaveBeenCalled();
+    expect(hoisted.showErrorMock).not.toHaveBeenCalled();
+  });
 });

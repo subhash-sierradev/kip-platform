@@ -6,7 +6,7 @@ import { FieldTransformationType } from '@/api/models/FieldTransformationType';
 import type { IntegrationScheduleRequest } from '@/api/models/IntegrationScheduleRequest';
 import type { ArcGISFormData } from '@/types/ArcGISFormData';
 
-import { convertUserTimezoneToUtc, getUserTimezone } from './timezoneUtils';
+import { convertLocalDateTimeToUtc, getLocalDateString, getUserTimezone } from './timezoneUtils';
 
 type BaseSchedule = Pick<
   IntegrationScheduleRequest,
@@ -158,11 +158,6 @@ function parseDailyInterval(val: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-function getCurrentDateString(): string {
-  const now = new Date();
-  return now.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
-}
-
 export function buildScheduleRequest(form: ArcGISFormData): IntegrationScheduleRequest {
   const frequencyPattern = normalizePattern(form.frequencyPattern);
 
@@ -191,10 +186,13 @@ export function buildScheduleRequest(form: ArcGISFormData): IntegrationScheduleR
 }
 
 function buildOnceSchedule(form: ArcGISFormData, base: BaseSchedule): IntegrationScheduleRequest {
-  const executionDate = form.executionDate || getCurrentDateString();
+  const localDate = form.executionDate || getLocalDateString();
   const localTime = toHMS(form.executionTime);
-  // Convert user's browser local time to UTC (user input is always in browser timezone)
-  const executionTime = convertUserTimezoneToUtc(localTime, executionDate);
+  // Convert local date+time together to UTC — handles midnight crossing across timezone boundaries
+  const { utcDate: executionDate, utcTime: executionTime } = convertLocalDateTimeToUtc(
+    localDate,
+    localTime
+  );
 
   return {
     ...base,
@@ -209,10 +207,13 @@ function buildOnceSchedule(form: ArcGISFormData, base: BaseSchedule): Integratio
 }
 
 function buildDailySchedule(form: ArcGISFormData, base: BaseSchedule): IntegrationScheduleRequest {
-  const executionDate = form.executionDate || getCurrentDateString();
+  const localDate = form.executionDate || getLocalDateString();
   const localTime = toHMS(form.executionTime);
-  // Convert user's browser local time to UTC (user input is always in browser timezone)
-  const executionTime = convertUserTimezoneToUtc(localTime, executionDate);
+  // Convert local date+time together to UTC — handles midnight crossing across timezone boundaries
+  const { utcDate: executionDate, utcTime: executionTime } = convertLocalDateTimeToUtc(
+    localDate,
+    localTime
+  );
   let dailyExecutionInterval = parseDailyInterval(form.dailyFrequency);
 
   // Default to 24 hours if not specified
@@ -233,10 +234,13 @@ function buildDailySchedule(form: ArcGISFormData, base: BaseSchedule): Integrati
 }
 
 function buildWeeklySchedule(form: ArcGISFormData, base: BaseSchedule): IntegrationScheduleRequest {
-  const executionDate = form.executionDate || getCurrentDateString();
+  const localDate = form.executionDate || getLocalDateString();
   const localTime = toHMS(form.executionTime);
-  // Convert user's browser local time to UTC (user input is always in browser timezone)
-  const executionTime = convertUserTimezoneToUtc(localTime, executionDate);
+  // Convert local date+time together to UTC — handles midnight crossing across timezone boundaries
+  const { utcDate: executionDate, utcTime: executionTime } = convertLocalDateTimeToUtc(
+    localDate,
+    localTime
+  );
   const daySchedule = form.selectedDays || [];
 
   return {
@@ -255,15 +259,15 @@ function buildMonthlySchedule(
   form: ArcGISFormData,
   base: BaseSchedule
 ): IntegrationScheduleRequest {
-  const executionDate = form.isExecuteOnMonthEnd
-    ? null
-    : form.executionDate || getCurrentDateString();
+  const localDate = form.isExecuteOnMonthEnd ? null : form.executionDate || getLocalDateString();
   const localTime = toHMS(form.executionTime);
-  // Convert user's browser local time to UTC (user input is always in browser timezone)
-  const executionTime = convertUserTimezoneToUtc(
-    localTime,
-    executionDate || getCurrentDateString()
+  // Convert local date+time together to UTC — handles midnight crossing across timezone boundaries
+  const { utcDate: utcExecutionDate, utcTime: executionTime } = convertLocalDateTimeToUtc(
+    localDate || getLocalDateString(),
+    localTime
   );
+  // Preserve null for end-of-month schedules; use the UTC date otherwise
+  const executionDate = form.isExecuteOnMonthEnd ? null : utcExecutionDate;
   const monthSchedule = form.selectedMonths?.map((m: number) => getMonthName(m)) || [];
 
   return {
@@ -281,10 +285,13 @@ function buildMonthlySchedule(
 function buildCustomSchedule(form: ArcGISFormData, base: BaseSchedule): IntegrationScheduleRequest {
   // Use the user-provided cron expression if available, otherwise use yearly cron
   const cronExpression = form.cronExpression;
-  const executionDate = form.executionDate || getCurrentDateString();
+  const localDate = form.executionDate || getLocalDateString();
   const localTime = toHMS(form.executionTime);
-  // Convert user's browser local time to UTC (user input is always in browser timezone)
-  const executionTime = convertUserTimezoneToUtc(localTime, executionDate);
+  // Convert local date+time together to UTC — handles midnight crossing across timezone boundaries
+  const { utcDate: executionDate, utcTime: executionTime } = convertLocalDateTimeToUtc(
+    localDate,
+    localTime
+  );
 
   return {
     ...base,

@@ -8,10 +8,11 @@ applyTo: '**/*.vue, **/*.ts, **/*.js, **/*.scss'
 Instructions for building high-quality VueJS 3 applications with the Composition API, TypeScript, and modern best practices.
 
 ## Project Context
+
 - Vue 3.5.29 with Composition API (`<script setup>` syntax) as default
 - TypeScript 5.7.2 — strict mode enabled
 - Single File Components (`.vue`) with `<script setup lang="ts">`
-- Build tool: Vite 7.3.0 with `@vitejs/plugin-vue` 6.0.1
+- Build tool: Vite 7.x with `@vitejs/plugin-vue` 6.x
 - UI components: DevExtreme 25.2.3 — use for all data grids, forms, popups, toolbars
 - State management: Pinia 3.0.4 with persistent stores
 - Routing: Vue Router 4.6.3 with lazy-loaded routes
@@ -27,6 +28,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 ## Development Standards
 
 ### Architecture
+
 - Favor the Composition API (`setup` functions and composables) over the Options API
 - Organize components and composables by feature or domain for scalability
 - Separate UI-focused components (presentational) from logic-focused components (containers)
@@ -34,6 +36,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Structure store modules (Pinia) by domain, with clearly defined actions, state, and getters
 
 ### TypeScript Integration
+
 - Enable `strict` mode in `tsconfig.json` for maximum type safety
 - Use `defineComponent` or `<script setup lang="ts">` with `defineProps` and `defineEmits`
 - Leverage `PropType<T>` for typed props and default values
@@ -42,6 +45,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Implement generic components and composables where applicable
 
 ### Component Design
+
 - Adhere to the single responsibility principle for components
 - Use PascalCase for component names and kebab-case for file names
 - Keep components small and focused on one concern
@@ -50,6 +54,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Favor slots and scoped slots for flexible composition
 
 ### State Management
+
 - Use Pinia for global state: define stores with `defineStore`
 - For simple local state, use `ref` and `reactive` within `setup`
 - Use `computed` for derived state
@@ -58,6 +63,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Leverage store plugins for persistence or debugging
 
 ### Composition API Patterns
+
 - Create reusable composables for shared logic, e.g., `useFetch`, `useAuth`
 - Use `watch` and `watchEffect` with precise dependency lists
 - Cleanup side effects in `onUnmounted` or `watch` cleanup callbacks
@@ -65,6 +71,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Use `useAsyncData` or third-party data utilities (Vue Query)
 
 ### Styling
+
 - Use `<style scoped>` for component-level styles or CSS Modules
 - Consider utility-first frameworks (Tailwind CSS) for rapid styling
 - Follow BEM or functional CSS conventions for class naming
@@ -73,6 +80,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Ensure styles are accessible (contrast, focus states)
 
 ### Performance Optimization
+
 - Lazy-load components with dynamic imports and `defineAsyncComponent`
 - Use `<Suspense>` for async component loading fallbacks
 - Apply `v-once` and `v-memo` for static or infrequently changing elements
@@ -81,6 +89,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Tree-shake unused code and leverage Vite’s optimization features
 
 ### Data Fetching
+
 - Use composables like `useFetch` (Nuxt) or libraries like Vue Query
 - Handle loading, error, and success states explicitly
 - Cancel stale requests on component unmount or param change
@@ -88,6 +97,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Cache responses and use background revalidation
 
 ### Error Handling
+
 - Use global error handler (`app.config.errorHandler`) for uncaught errors
 - Wrap risky logic in `try/catch`; provide user-friendly messages
 - Use `errorCaptured` hook in components for local boundaries
@@ -95,6 +105,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Log errors to external services (Sentry, LogRocket)
 
 ### Forms and Validation
+
 - Use libraries like VeeValidate or @vueuse/form for declarative validation
 - Build forms with controlled `v-model` bindings
 - Validate on blur or input with debouncing for performance
@@ -102,6 +113,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Ensure accessible labeling, error announcements, and focus management
 
 ### Routing
+
 - Use Vue Router 4 with `createRouter` and `createWebHistory`
 - Implement nested routes and route-level code splitting
 - Protect routes with navigation guards (`beforeEnter`, `beforeEach`)
@@ -110,6 +122,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Implement breadcrumb data via route meta fields
 
 ### Testing
+
 - Write unit tests with Vue Test Utils and Vitest (NOT Jest — this project uses Vitest 4.0.9)
 - Focus on behavior, not implementation details
 - Use `mount` and `shallowMount` for component isolation
@@ -119,6 +132,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - **Coverage targets**: 80% lines, statements, functions, branches (enforced via `vitest.config.ts`)
 
 ### Security
+
 - Avoid using `v-html`; sanitize any HTML inputs rigorously
 - Use CSP headers to mitigate XSS and injection attacks
 - Validate and escape data in templates and directives
@@ -126,6 +140,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Store sensitive tokens in HTTP-only cookies, not `localStorage`
 
 ### Accessibility
+
 - Use semantic HTML elements and ARIA attributes
 - Manage focus for modals and dynamic content
 - Provide keyboard navigation for interactive components
@@ -133,6 +148,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Ensure color contrast meets WCAG AA standards
 
 ## Implementation Process
+
 1. Plan component and composable architecture
 2. Initialize Vite project with Vue 3 and TypeScript
 3. Define Pinia stores and composables
@@ -147,6 +163,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 12. Document components, composables, and stores
 
 ## Additional Guidelines
+
 - Follow Vue’s official style guide (vuejs.org/style-guide)
 - Use ESLint (with `plugin:vue/vue3-recommended`) and Prettier for code consistency
 - Write meaningful commit messages and maintain clean git history
@@ -155,6 +172,7 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 - Use Vue DevTools for debugging and profiling
 
 ## Common Patterns
+
 - Renderless components and scoped slots for flexible UI
 - Compound components using provide/inject
 - Custom directives for cross-cutting concerns
@@ -167,29 +185,33 @@ Instructions for building high-quality VueJS 3 applications with the Composition
 ## Kaseware-Specific Patterns
 
 ### Prompt Governance
+
 - Canonical runnable prompts for frontend work live in `.github/prompts/web/`.
 - E2E prompts live in `.github/prompts/e2e/`.
 - `packages/prompt-library/` contains mirrored documentation and examples.
 
 ### API Layer
+
 - Always use services from `src/api/services/` (auto-generated from `openapi.yaml`) — never call axios directly
 - Token management is handled automatically in `src/config/configureOpenAPI.ts`
 - To regenerate the client: `npm run generate:api`
 
 ### Authentication
+
 - Keycloak config: `src/config/keycloak.ts`
 - Use `useAuth` / `useAuthInfo` composables for reactive user/tenant state
 - Tenant ID is extracted from JWT claims automatically
 
 ### Composables (42 available in `src/composables/`)
+
 `useApiData` · `useArcGISConnectionsAdmin` · `useArcgisFeatures` · `useArcGISIntegrationActions` · `useArcGISJobHistory` · `useArcGISWizardState` · `useAuditLogs` · `useAuth` · `useAuthInfo` · `useAutoLogout` · `useCharacterCounter` · `useConfigureOpenAPI` · `useConfirmationDialog` · `useConnectionTest` · `useConnectionValidation` · `useCredentialTypes` · `useCron` · `useDashboardStats` · `useExistingConnections` · `useGlobalLoading` · `useIntegrationNameValidation` · `useJiraConnections` · `useJiraSprints` · `useJiraTeams` · `useJiraWebhookConnection` · `useJiraWebhookNameValidation` · `useJiraWebhookPrefill` · `useJiraWebhookSubmit` · `useJiraWebhookWizardState` · `useListRouteSync` · `useNotificationAdmin` · `useNotificationRulesToggle` · `useNotifications` · `useServiceConnectionsAdmin` · `useSourceFields` · `useTooltip` · `useTroubleshootDialog` · `useWebhookActions` · `useWebhookHistory` · `useWebhookHistoryData` · `useWebhookHistoryPagination`
 
 **Before creating a new composable**, check this list — the needed logic may already exist.
 
-
 > `ArcGISWizard.FieldMappingStep.spec.ts` is temporarily excluded in `vitest.config.ts`.
 
 ### Quality Gate Commands
+
 ```powershell
 npm run lint                   # ESLint — zero warnings allowed
 npm run type-check             # vue-tsc strict validation
@@ -198,6 +220,7 @@ npm run test:coverage          # Coverage report
 ```
 
 ### Notification System
+
 - SSE connection managed by `useNotifications()` — initialized **once** in `AppShell.vue`; never instantiate elsewhere
 - `useNotificationStore` (`src/store/notification.ts`) is the single source of truth: `unreadCount`, `notifications[]`, `notificationToasts[]`
 - `UserNotificationService` (`src/api/services/UserNotificationService.ts`) is **hand-crafted** (not auto-generated) — use it directly for notification API calls; do not call axios

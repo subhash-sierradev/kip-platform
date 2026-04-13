@@ -134,5 +134,47 @@ describe('errorHandler', () => {
 
       expect(mockShowError).toHaveBeenCalledWith('Validation failed from response data');
     });
+
+    it('extracts the backend error field from a parsed string body', () => {
+      const error = {
+        body: JSON.stringify({ error: 'Body error field message' }),
+      };
+
+      handleError(error, 'Fallback message');
+
+      expect(mockShowError).toHaveBeenCalledWith('Body error field message');
+    });
+
+    it('uses the raw body string when it is not valid JSON', () => {
+      const error = {
+        body: 'plain backend failure',
+      };
+
+      handleError(error, 'Fallback message');
+
+      expect(mockShowError).toHaveBeenCalledWith('plain backend failure');
+    });
+
+    it('falls back to statusText when message fields are missing', () => {
+      const error = {
+        statusText: 'Bad Gateway',
+      };
+
+      handleError(error, 'Fallback message');
+
+      expect(mockShowError).toHaveBeenCalledWith('Bad Gateway');
+    });
+
+    it('uses the body error property when the body object has no message field', () => {
+      const error = {
+        body: {
+          error: 'Body object error',
+        },
+      };
+
+      handleError(error, 'Fallback message');
+
+      expect(mockShowError).toHaveBeenCalledWith('Body object error');
+    });
   });
 });

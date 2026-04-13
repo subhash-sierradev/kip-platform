@@ -73,12 +73,14 @@ public class NotificationAspect {
             String userId = evaluate(publishNotification.userId(), ctx, String.class);
             Map<String, Object> metadata = resolveMetadata(publishNotification, ctx, prefetchedMetadata);
 
-            notificationEventPublisher.publish(NotificationEvent.builder()
+            NotificationEvent event = NotificationEvent.builder()
                     .eventKey(publishNotification.eventKey().name())
                     .tenantId(tenantId)
                     .triggeredByUserId(userId)
                     .metadata(metadata)
-                    .build());
+                    .build();
+
+            notificationEventPublisher.publishAfterCommit(event);
         } catch (Exception ex) {
             // Never let notification failure propagate to the calling operation
             log.error("NotificationAspect failed for eventKey='{}': {}",

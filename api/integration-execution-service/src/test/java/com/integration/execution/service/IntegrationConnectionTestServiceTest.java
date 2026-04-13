@@ -128,8 +128,8 @@ class IntegrationConnectionTestServiceTest {
         ApiResponse response = service.testConnection(ServiceType.JIRA, integrationSecret);
 
         assertThat(response.success()).isFalse();
-        assertThat(response.statusCode()).isEqualTo(SC_INTERNAL_SERVER_ERROR);
-        assertThat(response.message()).contains("no projects found or accessible");
+        assertThat(response.statusCode()).isEqualTo(SC_FORBIDDEN);
+        assertThat(response.message()).contains("no projects are accessible");
     }
 
     @Test
@@ -430,8 +430,8 @@ class IntegrationConnectionTestServiceTest {
         ApiResponse response = service.testConnection(ServiceType.JIRA, integrationSecret);
 
         assertThat(response.success()).isFalse();
-        assertThat(response.statusCode()).isEqualTo(SC_INTERNAL_SERVER_ERROR);
-        assertThat(response.message()).contains("no projects found or accessible");
+        assertThat(response.statusCode()).isEqualTo(SC_FORBIDDEN);
+        assertThat(response.message()).contains("no projects are accessible");
     }
 
     @Test
@@ -442,8 +442,8 @@ class IntegrationConnectionTestServiceTest {
         ApiResponse response = service.testConnection(ServiceType.JIRA, integrationSecret);
 
         assertThat(response.success()).isFalse();
-        assertThat(response.statusCode()).isEqualTo(SC_INTERNAL_SERVER_ERROR);
-        assertThat(response.message()).contains("no projects found or accessible");
+        assertThat(response.statusCode()).isEqualTo(SC_FORBIDDEN);
+        assertThat(response.message()).contains("no projects are accessible");
     }
 
     @Test

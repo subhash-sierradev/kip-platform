@@ -13,7 +13,7 @@
       create-button-text="+ Add Jira Webhook"
       @update:search="search = $event"
       @update:sortBy="sortBy = $event"
-      @update:pageSize="pageSize = $event"
+      @update:pageSize="setPageSize($event)"
       @setViewMode="setViewMode"
       @prevPage="prevPage"
       @nextPage="nextPage"
@@ -88,6 +88,7 @@ import {
   useConfirmationDialog,
   createDefaultDialogConfig,
 } from '@/composables/useConfirmationDialog';
+import { useResponsivePageSize } from '@/composables/useResponsivePageSize';
 import { useWebhookActions } from '@/composables/useWebhookActions';
 import { useToastStore } from '@/store/toast';
 import type { DashboardSortOption, DashboardViewMode } from '@/types/dashboard';
@@ -100,9 +101,9 @@ const sortBy = ref('createdDate');
 const viewMode = ref<DashboardViewMode>('grid');
 const wizardOpen = ref(false);
 // Pagination state
-const pageSize = ref(6); // default page size
+const { manualPageSize, pageSize, resetPageSize, setPageSize } = useResponsivePageSize();
 const currentPage = ref(1);
-const pageSizeOptions = [6, 12, 24, 48];
+const pageSizeOptions = [6, 9, 12, 24, 48];
 
 // Sort options for Jira webhooks
 const jiraSortOptions: DashboardSortOption[] = [
@@ -144,10 +145,16 @@ function applyStateFromRoute() {
     const p = Number(q.page);
     if (!Number.isNaN(p) && p >= 1) currentPage.value = p;
   }
+
   if (typeof q.size === 'string') {
-    const s = Number(q.size);
-    if (pageSizeOptions.includes(s)) pageSize.value = s;
+    const size = Number(q.size);
+    if (pageSizeOptions.includes(size)) {
+      setPageSize(size);
+      return;
+    }
   }
+
+  resetPageSize();
 }
 
 onMounted(async () => {
@@ -267,6 +274,7 @@ function buildStateQuery(includeScroll = false) {
     viewMode: viewMode.value,
     currentPage: currentPage.value,
     pageSize: pageSize.value,
+    persistPageSize: manualPageSize.value !== null,
     includeScroll,
   });
 }

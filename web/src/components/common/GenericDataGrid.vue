@@ -10,6 +10,7 @@
       :element-attr="{ 'aria-label': 'Export CSV' }"
       @click="handleExport"
     />
+    <slot name="toolbarActions" />
     <DxButton
       v-if="enableClearFilters"
       icon="refresh"
@@ -53,6 +54,7 @@
       :allowed-page-sizes="[10, 20, 50, 100]"
       :show-info="true"
       :visible="true"
+      :info-text="pagerInfoText"
     />
     <DxHeaderFilter :visible="true" />
 
@@ -124,6 +126,7 @@ const props = withDefaults(
     enableExport?: boolean;
     enableClearFilters?: boolean;
     exportConfig?: ExportConfig;
+    pagerInfoText?: string;
   }>(),
   {
     data: () => [],
@@ -133,13 +136,16 @@ const props = withDefaults(
     rowKey: 'id',
     enableExport: false,
     enableClearFilters: false,
+    pagerInfoText: '{0} - {1} of {2} items',
   }
 );
 
 const resolvedPageSize = computed(() => props.pageSize);
 const resolvedPageIndex = computed(() => props.pageIndex);
 
-const showToolbar = computed(() => props.enableExport || props.enableClearFilters);
+const showToolbar = computed(
+  () => props.enableExport || props.enableClearFilters || !!slots.toolbarActions
+);
 
 const gridRef = ref<InstanceType<typeof DxDataGrid> | null>(null);
 

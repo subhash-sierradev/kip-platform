@@ -35,13 +35,6 @@ public class IntegrationConnectionService {
     private final VaultService vaultService;
     private final TokenCache tokenCache;
 
-    /**
-     * Tests the supplied credentials and, on success, saves them to Azure Key Vault.
-     * Returns a {@link ConnectionTestResponse} indicating the outcome and, on success, the generated
-     * secret name that IMS must persist on the {@code IntegrationConnection} entity.
-     *
-     * <p>No IES database rows are created — IMS owns the connection entity.
-     */
     public ResponseEntity<ConnectionTestResponse> testAndCreateConnection(
             IntegrationConnectionRequest request,
             String tenantId,
@@ -71,12 +64,6 @@ public class IntegrationConnectionService {
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Re-tests an existing connection using the caller-supplied {@link ConnectionReTestRequest}.
-     * IMS resolves {@code secretName} and {@code serviceType} from its own entity before calling this endpoint.
-     *
-     * <p>No IES database rows are read or written — IMS owns the connection entity.
-     */
     public ConnectionTestResponse testExistingConnection(UUID connectionId, ConnectionReTestRequest request) {
         Instant now = Instant.now();
         ApiResponse result = integrationConnectionTestService
@@ -90,18 +77,6 @@ public class IntegrationConnectionService {
                 .build();
     }
 
-    /**
-     * Returns connection secret payload from Azure Key Vault for internal IMS lookups.
-     */
-    public IntegrationSecret getSecret(String secretName) {
-        return vaultService.getSecret(secretName);
-    }
-
-    /**
-     * Rotates the stored credential secret for an existing connection.
-     * IMS enriches the {@link IntegrationConnectionSecretRotateRequest} with {@code secretName}
-     * and {@code serviceType} from its own entity before forwarding here.
-     */
     @Transactional(noRollbackFor = IntegrationApiException.class)
     public void rotateConnectionSecret(
             UUID connectionId,

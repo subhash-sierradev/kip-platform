@@ -117,6 +117,7 @@ class JiraResponseMapperTest {
         assertThat(result).isEmpty();
     }
 
+
     // -----------------------------------------------------------------------
     // mapUsers
     // -----------------------------------------------------------------------
@@ -574,6 +575,7 @@ class JiraResponseMapperTest {
         assertThat(mapper.hasValidData(root)).isFalse();
     }
 
+
     // -----------------------------------------------------------------------
     // hasValidProjectMetaFieldsData
     // -----------------------------------------------------------------------
@@ -581,10 +583,6 @@ class JiraResponseMapperTest {
     @Test
     void hasValidProjectMetaFieldsData_null_returnsFalse() {
         assertThat(mapper.hasValidProjectMetaFieldsData(null)).isFalse();
-    }
-
-    @Test
-    void hasValidProjectMetaFieldsData_nullNode_returnsFalse() {
         assertThat(mapper.hasValidProjectMetaFieldsData(objectMapper.nullNode())).isFalse();
     }
 
@@ -636,6 +634,17 @@ class JiraResponseMapperTest {
         ObjectNode root = objectMapper.createObjectNode();
         ArrayNode projects = root.putArray("projects");
         projects.addObject(); // no "issuetypes" key at all
+
+        assertThat(mapper.hasValidProjectMetaFieldsData(root)).isFalse();
+    }
+
+    @Test
+    void hasValidProjectMetaFieldsData_issueTypeWithNoFieldsKey_skippedAndReturnsFalse() {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode projects = root.putArray("projects");
+        ObjectNode project = projects.addObject();
+        ArrayNode issueTypes = project.putArray("issuetypes");
+        issueTypes.addObject().put("id", "10001"); // no "fields" key
 
         assertThat(mapper.hasValidProjectMetaFieldsData(root)).isFalse();
     }
@@ -821,6 +830,80 @@ class JiraResponseMapperTest {
         assertThat(result).isEmpty();
     }
 
+
+    @Test
+    void mapCreateMetaFields_multipleProjects_collectsFromAll() {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode projects = root.putArray("projects");
+
+        // Project 1
+        ObjectNode project1 = projects.addObject();
+        ArrayNode issueTypes1 = project1.putArray("issuetypes");
+        ObjectNode type1 = issueTypes1.addObject();
+        type1.put("id", "10001");
+        type1.putObject("fields").putObject("summary").put("name", "Summary");
+
+        // Project 2 - different field
+        ObjectNode project2 = projects.addObject();
+        ArrayNode issueTypes2 = project2.putArray("issuetypes");
+        ObjectNode type2 = issueTypes2.addObject();
+        type2.put("id", "10001");
+        type2.putObject("fields").putObject("description").put("name", "Description");
+
+        List<JiraFieldResponse> result = mapper.mapCreateMetaFields(root, "10001");
+
+        assertThat(result).hasSize(2);
+        assertThat(result.stream().map(JiraFieldResponse::getId))
+                .containsExactlyInAnyOrder("summary", "description");
+    }
+
+    @Test
+    void mapFields_fieldWithNoSchemaNode_setsNullSchema() {
+        ArrayNode root = objectMapper.createArrayNode();
+        ObjectNode field = root.addObject();
+        field.put("id", "f1");
+        field.put("name", "Field1");
+        // no schema node
+
+        List<JiraFieldResponse> result = mapper.mapFields(root);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getSchema()).isNull();
+        assertThat(result.get(0).getSchemaDetails()).isNull();
+    }
+
+    @Test
+    void mapParentIssues_issueWithBlankKey_filtered() {
+        ObjectNode root = objectMapper.createObjectNode();
+        ArrayNode issues = root.putArray("issues");
+
+        // Issue with blank key - should be filtered out
+        ObjectNode issue1 = issues.addObject();
+        issue1.put("key", "   ");
+        issue1.putObject("fields").put("summary", "Some issue");
+
+        // Issue with valid key
+        ObjectNode issue2 = issues.addObject();
+        issue2.put("key", "TEST-1");
+        issue2.putObject("fields").put("summary", "Valid issue");
+
+        List<?> result = mapper.mapParentIssues(root);
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void mapTeams_valuesHasNonArrayValue_treatedAsNoArray() {
+        ObjectNode root = objectMapper.createObjectNode();
+        // values key exists but not as array - this exercises the "values but not array" path
+        root.put("values", "not-an-array");
+        root.put("data", "not-array-either");
+
+        List<JiraTeamResponse> result = mapper.mapTeams(root);
+
+        assertThat(result).isEmpty();
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
@@ -850,5 +933,4 @@ class JiraResponseMapperTest {
         return root;
     }
 }
-
 

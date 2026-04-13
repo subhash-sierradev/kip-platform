@@ -169,6 +169,51 @@ describe('useConfluenceIntegrationActions', () => {
     expect(serviceSpies.buildConfluenceIntegrationRequest).toHaveBeenCalledWith(newForm, 'conn-22');
   });
 
+  it('creates integration from an already created connection id', async () => {
+    const newForm = {
+      ...form,
+      connectionMethod: 'new',
+      existingConnectionId: '',
+      createdConnectionId: 'created-42',
+    };
+    serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
+    serviceSpies.createIntegration.mockResolvedValueOnce({ id: 'int-42' });
+
+    const actions = useConfluenceIntegrationActions();
+    const id = await actions.createIntegrationFromWizard(
+      newForm,
+      'https://acme.atlassian.net/wiki'
+    );
+
+    expect(id).toBe('int-42');
+    expect(serviceSpies.testAndCreateConnection).not.toHaveBeenCalled();
+    expect(serviceSpies.buildConfluenceIntegrationRequest).toHaveBeenCalledWith(
+      newForm,
+      'created-42'
+    );
+  });
+
+  it('handles missing connection ids during create', async () => {
+    const invalidForm = {
+      ...form,
+      connectionMethod: 'existing',
+      existingConnectionId: '',
+      createdConnectionId: '',
+    };
+
+    const actions = useConfluenceIntegrationActions();
+    const id = await actions.createIntegrationFromWizard(
+      invalidForm,
+      'https://acme.atlassian.net/wiki'
+    );
+
+    expect(id).toBe(null);
+    expect(serviceSpies.handleError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to create Confluence integration'
+    );
+  });
+
   it('handles duplicate-name conflict during create', async () => {
     serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
     serviceSpies.createIntegration.mockRejectedValueOnce({ status: 409 });
@@ -191,6 +236,20 @@ describe('useConfluenceIntegrationActions', () => {
 
     expect(id).toBe(null);
     expect(toastSpies.showWarning).toHaveBeenCalledWith('Integration created but no ID returned');
+  });
+
+  it('handles generic create failures', async () => {
+    serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
+    serviceSpies.createIntegration.mockRejectedValueOnce(new Error('server fail'));
+    const actions = useConfluenceIntegrationActions();
+
+    const id = await actions.createIntegrationFromWizard(form, 'https://acme.atlassian.net/wiki');
+
+    expect(id).toBe(null);
+    expect(serviceSpies.handleError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to create Confluence integration'
+    );
   });
 });
 
@@ -263,6 +322,31 @@ describe('useConfluenceIntegrationEditor', () => {
     expect(serviceSpies.buildConfluenceIntegrationRequest).toHaveBeenCalledWith(newForm, 'conn-2');
   });
 
+  it('uses created connection ids during update without creating a new connection', async () => {
+    const createdForm = {
+      ...form,
+      connectionMethod: 'new',
+      existingConnectionId: '',
+      createdConnectionId: 'created-77',
+    };
+    serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
+    serviceSpies.updateIntegration.mockResolvedValueOnce(undefined);
+    const editor = useConfluenceIntegrationEditor();
+
+    const ok = await editor.updateIntegrationFromWizard(
+      'int-77',
+      createdForm,
+      'https://acme.atlassian.net/wiki'
+    );
+
+    expect(ok).toBe(true);
+    expect(serviceSpies.testAndCreateConnection).not.toHaveBeenCalled();
+    expect(serviceSpies.buildConfluenceIntegrationRequest).toHaveBeenCalledWith(
+      createdForm,
+      'created-77'
+    );
+  });
+
   it('handles duplicate-name conflict during update', async () => {
     serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
     serviceSpies.updateIntegration.mockRejectedValueOnce({ status: 409 });
@@ -277,6 +361,46 @@ describe('useConfluenceIntegrationEditor', () => {
     expect(ok).toBe(false);
     expect(toastSpies.showError).toHaveBeenCalledWith(
       'Confluence Integration Name already Exists.'
+    );
+  });
+
+  it('handles missing connection ids during update', async () => {
+    const invalidForm = {
+      ...form,
+      connectionMethod: 'existing',
+      existingConnectionId: '',
+      createdConnectionId: '',
+    };
+    const editor = useConfluenceIntegrationEditor();
+
+    const ok = await editor.updateIntegrationFromWizard(
+      'int-1',
+      invalidForm,
+      'https://acme.atlassian.net/wiki'
+    );
+
+    expect(ok).toBe(false);
+    expect(serviceSpies.handleError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to update Confluence integration'
+    );
+  });
+
+  it('handles generic update failures', async () => {
+    serviceSpies.buildConfluenceIntegrationRequest.mockReturnValueOnce({ name: 'req' });
+    serviceSpies.updateIntegration.mockRejectedValueOnce(new Error('server fail'));
+    const editor = useConfluenceIntegrationEditor();
+
+    const ok = await editor.updateIntegrationFromWizard(
+      'int-1',
+      form,
+      'https://acme.atlassian.net/wiki'
+    );
+
+    expect(ok).toBe(false);
+    expect(serviceSpies.handleError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to update Confluence integration'
     );
   });
 });
@@ -330,6 +454,19 @@ describe('useConfluenceIntegrationStatus', () => {
       'Failed to determine new status. Please refresh and try again.'
     );
   });
+
+  it('returns null when status updates fail', async () => {
+    serviceSpies.toggleIntegrationStatus.mockRejectedValueOnce(new Error('boom'));
+    const statusApi = useConfluenceIntegrationStatus();
+
+    const result = await statusApi.toggleIntegrationStatus('id-1', false);
+
+    expect(result).toBe(null);
+    expect(serviceSpies.handleError).toHaveBeenCalledWith(
+      expect.any(Error),
+      'Failed to update Confluence integration status'
+    );
+  });
 });
 
 describe('useConfluenceIntegrationTrigger', () => {
@@ -375,5 +512,32 @@ describe('useConfluenceIntegrationTrigger', () => {
     await trigger.triggerJobExecution('id-1');
 
     expect(toastSpies.showError).toHaveBeenCalledWith('Raw backend error');
+  });
+
+  it('extracts error text from object bodies, messages, and status text', async () => {
+    const trigger = useConfluenceIntegrationTrigger();
+
+    serviceSpies.triggerJobExecution.mockRejectedValueOnce({
+      body: { error: 'Body object error' },
+    });
+    await trigger.triggerJobExecution('id-1', 'My Integration');
+    expect(toastSpies.showError).toHaveBeenLastCalledWith('Body object error');
+
+    serviceSpies.triggerJobExecution.mockRejectedValueOnce({ message: 'Direct message' });
+    await trigger.triggerJobExecution('id-1', 'My Integration');
+    expect(toastSpies.showError).toHaveBeenLastCalledWith('Direct message');
+
+    serviceSpies.triggerJobExecution.mockRejectedValueOnce({ statusText: 'Gateway Timeout' });
+    await trigger.triggerJobExecution('id-1', 'My Integration');
+    expect(toastSpies.showError).toHaveBeenLastCalledWith('Gateway Timeout');
+  });
+
+  it('falls back to the default trigger prefix for unstructured errors', async () => {
+    serviceSpies.triggerJobExecution.mockRejectedValueOnce('boom');
+    const trigger = useConfluenceIntegrationTrigger();
+
+    await trigger.triggerJobExecution('id-1', 'My Integration');
+
+    expect(toastSpies.showError).toHaveBeenCalledWith('Failed to trigger My Integration');
   });
 });

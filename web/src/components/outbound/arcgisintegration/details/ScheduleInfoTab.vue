@@ -84,7 +84,7 @@
               </div>
 
               <!-- Data Window Mode -->
-              <div v-if="scheduleInfo.timeCalculationMode" class="info-row">
+              <div class="info-row">
                 <span class="label">Data Window Mode:</span>
                 <span class="value">
                   <span class="timezone-chip">{{ timeCalcModeLabel }}</span>
@@ -145,9 +145,9 @@ import { computed, type PropType } from 'vue';
 import type { HasSchedule } from '@/types/HasSchedule';
 import { FrequencyPattern } from '@/api/models/FrequencyPattern';
 import { sortMonthsChronologically } from '@/utils/scheduleFormatUtils';
-import { formatDateOnlyDisplay } from '@/utils/scheduleDisplayUtils';
+import { formatScheduleExecutionDate } from '@/utils/scheduleDisplayUtils';
 import { formatTimezoneInfo, getUserTimezone } from '@/utils/timezoneUtils';
-import { formatDateUTC } from '@/utils/dateUtils';
+import { formatDate } from '@/utils/dateUtils';
 // Removed schedule index parsing here; shared utils handle computation
 
 const props = defineProps({
@@ -266,7 +266,7 @@ const nextRunInfo = computed(() => {
   const nextRunAtUtc = props.integrationData.nextRunAtUtc;
   if (!nextRunAtUtc) return null;
 
-  return formatDateUTC(nextRunAtUtc, {
+  return formatDate(nextRunAtUtc, {
     includeTime: true,
     includeWeekday: true,
     includeSeconds: false,
@@ -277,16 +277,9 @@ const nextRunInfo = computed(() => {
 
 // Fixed: Properly format start date (date only, no time)
 const formatStartDate = computed(() => {
-  return formatDateOnlyDisplay(
+  return formatScheduleExecutionDate(
     scheduleInfo.value?.executionDate,
-    {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    },
-    'Not configured',
-    'Invalid Date'
+    scheduleInfo.value?.executionTime
   );
 });
 
@@ -334,7 +327,7 @@ const timezoneDisplay = computed(() => `${formatTimezoneInfo(getUserTimezone())}
 
 // Data Window Mode display
 const timeCalcModeLabel = computed(() => {
-  if (!scheduleInfo.value?.timeCalculationMode) return 'Not Set';
+  if (!scheduleInfo.value?.timeCalculationMode) return 'Not configured';
 
   switch (scheduleInfo.value.timeCalculationMode) {
     case 'FIXED_DAY_BOUNDARY':

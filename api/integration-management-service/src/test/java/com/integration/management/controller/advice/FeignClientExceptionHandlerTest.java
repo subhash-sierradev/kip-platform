@@ -35,7 +35,7 @@ class FeignClientExceptionHandlerTest {
         assertThat(out.getBody()).isNotNull();
         assertThat(out.getBody().status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
         assertThat(out.getBody().errorCode()).isEqualTo("EXTERNAL_SERVICE_UNAVAILABLE");
-        assertThat(out.getBody().message()).contains("temporarily unavailable");
+        assertThat(out.getBody().message()).contains("Unable to reach the processing service");
         assertThat(out.getBody().path()).isEqualTo("/api/management/connections");
     }
 

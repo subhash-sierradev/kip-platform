@@ -20,7 +20,7 @@ import org.quartz.TriggerBuilder;
 import org.quartz.TriggerKey;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -314,7 +314,7 @@ public abstract class BaseIntegrationScheduleService<T extends SchedulableIntegr
         return Date.from(
                 schedule.getExecutionDate()
                         .atTime(schedule.getExecutionTime())
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(ZoneOffset.UTC)
                         .toInstant());
     }
 

@@ -8,6 +8,10 @@ on:
       - 'release/**'
     types: [opened, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: api-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Build and test Management Service (contract built inline as dependency)
   build-management-service:
@@ -24,16 +28,18 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
+          cache: gradle
 
-      - name: Build Contract Module (install to local repo)
-        run: mvn -B clean install --no-transfer-progress --file api/integration-execution-contract/pom.xml
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        working-directory: api
+        run: chmod +x gradlew
 
       - name: Build & Test Management Service
-        working-directory: api/integration-management-service
-        run: |
-          chmod +x mvnw
-          ./mvnw -B clean verify --no-transfer-progress
+        working-directory: api
+        run: ./gradlew :integration-management-service:check --no-daemon
 
   # Build and test Execution Service (contract built inline as dependency)
   build-execution-service:
@@ -50,13 +56,15 @@ jobs:
         with:
           java-version: '25'
           distribution: 'temurin'
-          cache: maven
+          cache: gradle
 
-      - name: Build Contract Module (install to local repo)
-        run: mvn -B clean install --no-transfer-progress --file api/integration-execution-contract/pom.xml
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Make gradlew executable
+        working-directory: api
+        run: chmod +x gradlew
 
       - name: Build & Test Execution Service
-        working-directory: api/integration-execution-service
-        run: |
-          chmod +x mvnw
-          ./mvnw -B clean verify --no-transfer-progress
+        working-directory: api
+        run: ./gradlew :integration-execution-service:check --no-daemon

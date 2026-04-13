@@ -12,6 +12,6 @@ import java.util.UUID;
 public interface NotificationTemplateRepository extends JpaRepository<NotificationTemplate, UUID> {
 
     @Query("SELECT t FROM NotificationTemplate t WHERE (t.tenantId = :tenantId OR t.tenantId = 'GLOBAL') "
-            + " AND t.isDeleted = false")
+            + " AND t.isDeleted = false ORDER BY t.event.eventKey ASC")
     List<NotificationTemplate> findByTenantId(String tenantId);
 }

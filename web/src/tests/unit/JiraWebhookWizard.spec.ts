@@ -529,4 +529,91 @@ describe('JiraWebhookWizard', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  it('clears stale selected parent label on close and on parent key drift', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const MappingStepStub = defineComponent({
+      name: 'MappingStep',
+      emits: ['parent-label-change', 'update:mappingData'],
+      template: '<div class="mapping-stub" />',
+    });
+
+    const PreviewStepStub = defineComponent({
+      name: 'PreviewStep',
+      props: {
+        selectedParentLabel: { type: String, required: false },
+      },
+      template: '<div class="preview-stub" />',
+    });
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div />' },
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: MappingStepStub,
+          PreviewStep: PreviewStepStub,
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    (wrapper.vm as any).activeStep = 3;
+    await nextTick();
+
+    let mapping = wrapper.findComponent(MappingStepStub);
+    expect(mapping.exists()).toBe(true);
+
+    mapping.vm.$emit('parent-label-change', {
+      value: 'PRJ-101',
+      label: 'PRJ-101 - Parent one',
+    });
+    await nextTick();
+
+    (wrapper.vm as any).activeStep = 4;
+    await nextTick();
+
+    const preview = wrapper.findComponent(PreviewStepStub);
+    expect(preview.props('selectedParentLabel')).toBe('PRJ-101 - Parent one');
+
+    await wrapper.setProps({ open: false });
+    await nextTick();
+    await wrapper.setProps({ open: true });
+    await nextTick();
+
+    (wrapper.vm as any).activeStep = 4;
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedParentLabel).toBe('');
+
+    (wrapper.vm as any).activeStep = 3;
+    await nextTick();
+    mapping = wrapper.findComponent(MappingStepStub);
+    expect(mapping.exists()).toBe(true);
+
+    const nextMappingData = {
+      ...(wrapper.vm as any).mappingDataState,
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '{"key":"PRJ-202"}',
+          valueSource: 'literal',
+        },
+      ],
+    };
+    mapping.vm.$emit('update:mappingData', nextMappingData);
+    await nextTick();
+
+    (wrapper.vm as any).activeStep = 4;
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedParentLabel).toBe('');
+  });
 });

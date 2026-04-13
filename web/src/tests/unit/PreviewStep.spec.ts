@@ -197,6 +197,128 @@ describe('PreviewStep', () => {
     expect(wrapper.text()).not.toContain('{"key":"SCRUM-436"}');
   });
 
+  it('shows selected parent label when provided', () => {
+    const parentMapping = {
+      ...mappingData,
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '{"key":"SCRUM-436"}',
+          valueSource: 'literal',
+        } as any,
+      ],
+    };
+
+    const wrapper = mount(PreviewStep, {
+      props: {
+        integrationName: 'Int',
+        isDuplicateName: false,
+        jsonSample: json,
+        mappingData: parentMapping,
+        projects,
+        issueTypes,
+        users,
+        selectedParentLabel: 'SCRUM-436 - Parent one',
+      },
+    });
+
+    expect(wrapper.text()).toContain('SCRUM-436 - Parent one');
+  });
+
+  it('falls back to parent key when selected parent label does not match key', () => {
+    const parentMapping = {
+      ...mappingData,
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '{"key":"SCRUM-436"}',
+          valueSource: 'literal',
+        } as any,
+      ],
+    };
+
+    const wrapper = mount(PreviewStep, {
+      props: {
+        integrationName: 'Int',
+        isDuplicateName: false,
+        jsonSample: json,
+        mappingData: parentMapping,
+        projects,
+        issueTypes,
+        users,
+        selectedParentLabel: 'ABC-123 - Different parent',
+      },
+    });
+
+    expect(wrapper.text()).toContain('SCRUM-436');
+    expect(wrapper.text()).not.toContain('ABC-123 - Different parent');
+  });
+
+  it('does not treat key prefix collisions as parent label match', () => {
+    const parentMapping = {
+      ...mappingData,
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '{"key":"PRJ-10"}',
+          valueSource: 'literal',
+        } as any,
+      ],
+    };
+
+    const wrapper = mount(PreviewStep, {
+      props: {
+        integrationName: 'Int',
+        isDuplicateName: false,
+        jsonSample: json,
+        mappingData: parentMapping,
+        projects,
+        issueTypes,
+        users,
+        selectedParentLabel: 'PRJ-101 - Another parent',
+      },
+    });
+
+    expect(wrapper.text()).toContain('PRJ-10');
+    expect(wrapper.text()).not.toContain('PRJ-101 - Another parent');
+  });
+
+  it('does not use selected parent label when parent key is empty', () => {
+    const parentMapping = {
+      ...mappingData,
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '',
+          valueSource: 'literal',
+        } as any,
+      ],
+    };
+
+    const wrapper = mount(PreviewStep, {
+      props: {
+        integrationName: 'Int',
+        isDuplicateName: false,
+        jsonSample: json,
+        mappingData: parentMapping,
+        projects,
+        issueTypes,
+        users,
+        selectedParentLabel: 'SCRUM-436 - Parent one',
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('SCRUM-436 - Parent one');
+  });
+
   it('computes project/issue/assignee display names', () => {
     const wrapper = mount(PreviewStep, {
       props: {

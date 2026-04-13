@@ -100,15 +100,17 @@ export function buildStateQuery(params: {
   viewMode: string;
   currentPage: number;
   pageSize: number;
+  persistPageSize?: boolean;
   includeScroll?: boolean;
 }): Record<string, string | undefined> {
-  const { search, sortBy, viewMode, currentPage, pageSize, includeScroll } = params;
+  const { search, sortBy, viewMode, currentPage, pageSize, persistPageSize, includeScroll } =
+    params;
   const query: Record<string, string | undefined> = {};
   if (search) query.search = search;
   if (sortBy) query.sort = sortBy;
   if (viewMode) query.view = viewMode;
   if (currentPage !== 1) query.page = String(currentPage);
-  if (pageSize !== 6) query.size = String(pageSize);
+  if (persistPageSize) query.size = String(pageSize);
   if (includeScroll) query.scroll = String(window.scrollY || 0);
   return query;
 }

@@ -314,6 +314,10 @@ public class ArcGISIntegrationService {
                 || message.contains("UNIQUE constraint"));
     }
 
+    @PublishNotification(
+            eventKey         = NotificationEventKey.ARCGIS_INTEGRATION_JOB_ADHOC_RUN,
+            metadataProvider = "arcGISNotificationMetadataProvider",
+            entityId         = "#integrationId")
     @Transactional
     public void triggerJobExecution(UUID integrationId, String tenantId, String userId) {
         log.info("Triggering manual job execution for ArcGIS integration: {} for tenant: {} by user: {}",
@@ -325,18 +329,8 @@ public class ArcGISIntegrationService {
             throw new IllegalStateException("Cannot trigger job for disabled integration: " + integrationId);
         }
 
-        // Publish event for async job trigger
         arcGISScheduleService.triggerJob(integration.getId(), tenantId, API, userId);
-        notificationEventPublisher.publish(NotificationEvent.builder()
-                .eventKey(NotificationEventKey.ARCGIS_INTEGRATION_JOB_ADHOC_RUN.name())
-                .tenantId(tenantId)
-                .triggeredByUserId(userId)
-                .metadata(java.util.Map.of(
-                        "integrationName", integration.getName() != null ? integration.getName() : "",
-                        "integrationId", integrationId.toString(),
-                        "triggeredBy", userId))
-                .build());
-        log.info("Published trigger job event for ArcGIS integration: {} by user: {}", integrationId, userId);
+        log.info("Triggered ArcGIS job for integration: {} by user: {}", integrationId, userId);
     }
 
     private void syncIntegrationFieldMappings(ArcGISIntegration existing,

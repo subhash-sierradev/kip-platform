@@ -84,7 +84,7 @@ import type {
   ArcGISIntegrationExecutionSummary,
   JobExecutionStatus,
 } from '@/types/ArcGISIntegrationExecution';
-import { getUserTimezone } from '@/utils/timezoneUtils';
+import { getUserTimezone, getLocalDateString } from '@/utils/timezoneUtils';
 import { getScheduleTextForCustomPattern } from '@/utils/cronTextFormatter';
 
 const emit = defineEmits<{ (e: 'action', id: string): void; (e: 'open', id: string): void }>();
@@ -126,7 +126,9 @@ const scheduleText = computed(() => {
     return getScheduleTextForCustomPattern(props.integration);
   }
 
-  const dateStr = info.executionDate || new Date().toISOString().split('T')[0];
+  // executionDate is the UTC calendar date; use local date as fallback so the display
+  // stays consistent with the user's day even when no date has been saved yet.
+  const dateStr = info.executionDate || getLocalDateString();
   const rawTime = info.executionTime || '09:00:00';
   let displayTime: string;
   try {

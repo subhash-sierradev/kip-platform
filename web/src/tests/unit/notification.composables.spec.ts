@@ -127,6 +127,12 @@ describe('notification composables', () => {
     (mockAdminService.getRules as any).mockResolvedValueOnce([{ id: 'r1', isEnabled: false }]);
     expect(await c.toggleRule('r1')).toBe(true);
     expect(c.rules.value[0].isEnabled).toBe(false);
+    expect(mockAlert.success).toHaveBeenCalledWith('Rule disabled');
+
+    (mockAdminService.toggleRule as any).mockResolvedValueOnce({ id: 'r1', isEnabled: true });
+    (mockAdminService.getRules as any).mockResolvedValueOnce([{ id: 'r1', isEnabled: true }]);
+    expect(await c.toggleRule('r1')).toBe(true);
+    expect(mockAlert.success).toHaveBeenCalledWith('Rule enabled');
 
     (mockAdminService.toggleRule as any).mockRejectedValueOnce(new Error('x'));
     expect(await c.toggleRule('r1')).toBe(false);

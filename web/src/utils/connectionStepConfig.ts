@@ -1,9 +1,11 @@
 /**
- * Pure data configuration for ConnectionStep component.
- * Service-specific configurations with NO business logic.
- * All credential handling logic moved to strategy classes.
+ * Declarative configuration for the ConnectionStep component.
+ * Contains service-specific configuration data and a small helper to select
+ * the appropriate config by service type.
+ * Credential handling logic remains delegated to strategy classes.
  */
 
+import { ServiceType } from '@/api/models/enums';
 import type { ConnectionStepConfig } from '@/types/ConnectionStepData';
 
 /**
@@ -48,3 +50,9 @@ export const CONFLUENCE_CONNECTION_CONFIG: ConnectionStepConfig = {
   defaultCredentialType: 'BASIC_AUTH',
   requiresConnectionName: true,
 };
+
+export function getConnectionStepConfig(serviceType: ServiceType): ConnectionStepConfig {
+  if (serviceType === ServiceType.ARCGIS) return ARCGIS_CONNECTION_CONFIG;
+  if (serviceType === ServiceType.CONFLUENCE) return CONFLUENCE_CONNECTION_CONFIG;
+  return JIRA_CONNECTION_CONFIG;
+}

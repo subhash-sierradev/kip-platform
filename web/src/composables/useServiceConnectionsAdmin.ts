@@ -5,6 +5,9 @@ import { ApiError } from '@/api/core/ApiError';
 import { ServiceType } from '@/api/models/enums';
 import { IntegrationConnectionService } from '@/api/services/IntegrationConnectionService';
 import { useToastStore } from '@/store/toast';
+import type { ConnectionStepData } from '@/types/ConnectionStepData';
+import { buildIntegrationSecret } from '@/utils/connectionTestHelpers';
+import { toPlainText } from '@/utils/stringFormatUtils';
 
 import { ConnectionStatus } from '../api/models/IntegrationConnection';
 import type { IntegrationConnectionResponse } from '../api/models/IntegrationConnectionResponse';
@@ -147,6 +150,37 @@ function createRotateSecret() {
   };
 }
 
+function createCreateConnection(serviceType: ServiceType, fetchConnections: () => Promise<void>) {
+  return async function createConnection(connectionData: ConnectionStepData) {
+    const requestBody = {
+      name: connectionData.connectionName || '',
+      serviceType,
+      integrationSecret: buildIntegrationSecret(serviceType, connectionData),
+    };
+
+    try {
+      const response = await IntegrationConnectionService.testAndCreateConnection({ requestBody });
+      const isSuccess = response.lastConnectionStatus === ConnectionStatus.SUCCESS;
+
+      if (isSuccess) {
+        await fetchConnections();
+        toast.showSuccess('Connection created successfully.');
+      } else {
+        const rawMessage = response.lastConnectionMessage || 'Connection test failed';
+        toast.showError(toPlainText(rawMessage, 'Connection test failed'));
+      }
+
+      return response;
+    } catch (error: unknown) {
+      const apiError = error as { body?: { message?: string }; message?: string };
+      const rawMessage =
+        apiError.body?.message || apiError.message || 'Failed to test and create connection';
+      toast.showError(toPlainText(rawMessage, 'Failed to test and create connection'));
+      throw error;
+    }
+  };
+}
+
 function buildActions(
   connections: Ref<IntegrationConnectionResponse[]>,
   loading: Ref<boolean>,
@@ -157,8 +191,9 @@ function buildActions(
   const testConnection = createTestConnection(connections);
   const deleteConnection = createDeleteConnection(connections);
   const rotateSecret = createRotateSecret();
+  const createConnection = createCreateConnection(serviceType, fetchConnections);
 
-  return { fetchConnections, testConnection, deleteConnection, rotateSecret };
+  return { fetchConnections, testConnection, deleteConnection, rotateSecret, createConnection };
 }
 
 export function useServiceConnectionsAdmin(serviceType: ServiceType) {
@@ -180,12 +215,8 @@ export function useServiceConnectionsAdmin(serviceType: ServiceType) {
     pageRef,
     rowsPerPageRef
   );
-  const { fetchConnections, testConnection, deleteConnection, rotateSecret } = buildActions(
-    connectionsRef,
-    loadingRef,
-    errorRef,
-    serviceType
-  );
+  const { fetchConnections, testConnection, deleteConnection, rotateSecret, createConnection } =
+    buildActions(connectionsRef, loadingRef, errorRef, serviceType);
 
   function toggleSort() {
     sortAscRef.value = !sortAscRef.value;
@@ -216,6 +247,7 @@ export function useServiceConnectionsAdmin(serviceType: ServiceType) {
     testConnection,
     deleteConnection,
     rotateSecret,
+    createConnection,
     fetchConnections,
   };
 }

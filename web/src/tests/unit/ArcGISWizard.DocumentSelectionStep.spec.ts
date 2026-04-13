@@ -351,4 +351,92 @@ describe('ArcGIS Wizard - DocumentSelectionStep', () => {
     expect(events).toBeTruthy();
     expect(events![events!.length - 1][0]).toBe(true);
   });
+
+  it('shows subtype API body error text and retries loading subtypes', async () => {
+    getSubItemTypesMock.mockRejectedValueOnce({ body: { message: 'Subtype load failed' } });
+    getSubItemTypesMock.mockResolvedValueOnce([
+      { code: 'DOCUMENT_FINAL_DYNAMIC', displayValue: 'Dynamic Document' },
+    ] as any);
+
+    const wrapper = mount(IntegrationDetailsStep, {
+      props: {
+        modelValue: createModel(),
+        config: ARCGIS_UNIFIED_STEP_CONFIG,
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('Subtype load failed');
+
+    const retryButton = wrapper.find('button.uis-retry-btn');
+    expect(retryButton.exists()).toBe(true);
+
+    await retryButton.trigger('click');
+    await flushPromises();
+
+    expect(getSubItemTypesMock).toHaveBeenCalledTimes(2);
+    expect(wrapper.text()).not.toContain('Subtype load failed');
+  });
+
+  it('clears an invalid preselected dynamic document when loaded documents do not contain it', async () => {
+    getDynamicDocumentsMock.mockResolvedValueOnce([
+      { id: 'doc-1', title: 'Valid document', tags: [] },
+    ] as any);
+
+    const wrapper = mount(IntegrationDetailsStep, {
+      props: {
+        modelValue: {
+          ...createModel(),
+          subType: 'DOCUMENT_FINAL_DYNAMIC',
+          dynamicDocument: 'missing-document',
+          dynamicDocumentLabel: 'Old label',
+        },
+        config: ARCGIS_UNIFIED_STEP_CONFIG,
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    const modelUpdates = wrapper.emitted('update:modelValue');
+    expect(modelUpdates).toBeTruthy();
+    expect(modelUpdates![modelUpdates!.length - 1][0]).toMatchObject({
+      dynamicDocument: '',
+      dynamicDocumentLabel: '',
+    });
+
+    const events = wrapper.emitted('validation-change');
+    expect(events).toBeTruthy();
+    expect(events![events!.length - 1][0]).toBe(false);
+  });
+
+  it('loads dynamic documents when the parent model switches to a dynamic subtype', async () => {
+    getDynamicDocumentsMock.mockResolvedValueOnce([
+      { id: 'doc-7', title: 'Loaded from parent update', tags: [] },
+    ] as any);
+
+    const wrapper = mount(IntegrationDetailsStep, {
+      props: {
+        modelValue: createModel(),
+        config: ARCGIS_UNIFIED_STEP_CONFIG,
+      },
+    });
+
+    await nextTick();
+    await flushPromises();
+
+    await wrapper.setProps({
+      modelValue: {
+        ...createModel(),
+        subType: 'DOCUMENT_FINAL_DYNAMIC',
+      },
+    });
+    await nextTick();
+    await flushPromises();
+
+    expect(getDynamicDocumentsMock).toHaveBeenCalledWith('DOCUMENT', 'DOCUMENT_FINAL_DYNAMIC');
+    expect(wrapper.findAll('select.uis-input')).toHaveLength(3);
+  });
 });

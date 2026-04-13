@@ -43,6 +43,7 @@ function createDataUpdaters(formData: ReturnType<typeof createDefaultFormData>) 
         isExecuteOnMonthEnd: data.isExecuteOnMonthEnd,
         cronExpression: data.cronExpression,
         businessTimeZone: data.businessTimeZone,
+        timeCalculationMode: data.timeCalculationMode,
       });
     },
     updateConnectionData(data: ConnectionData) {
@@ -83,6 +84,7 @@ function createComputedProperties(formData: ReturnType<typeof createDefaultFormD
     isExecuteOnMonthEnd: formData.isExecuteOnMonthEnd,
     cronExpression: formData.cronExpression,
     businessTimeZone: formData.businessTimeZone,
+    timeCalculationMode: formData.timeCalculationMode,
   }));
 
   const genericConnectionData = computed<ConnectionStepData>(() => ({

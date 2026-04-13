@@ -1,5 +1,19 @@
 import { mount } from '@vue/test-utils';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('devextreme-vue', () => ({
+  DxButton: {
+    name: 'DxButton',
+    template: '<button class="retry-button" @click="$emit(\'click\')">{{ text }}</button>',
+    props: ['text', 'icon', 'type', 'stylingMode', 'disabled'],
+    emits: ['click'],
+  },
+  DxLoadPanel: {
+    name: 'DxLoadPanel',
+    template: '<div v-if="visible" class="load-panel-stub">{{ message }}</div>',
+    props: ['visible', 'message', 'showIndicator', 'showPane', 'shading', 'container'],
+  },
+}));
 
 import LoadingErrorWrapper from '@/components/common/LoadingErrorWrapper.vue';
 
@@ -59,5 +73,33 @@ describe('LoadingErrorWrapper', () => {
     });
 
     expect(wrapper.text()).toContain('Default content');
+  });
+
+  it('renders custom labels for the error state', () => {
+    const wrapper = mount(LoadingErrorWrapper, {
+      props: {
+        loading: false,
+        error: 'Request failed',
+        errorTitle: 'Custom error title',
+        retryLabel: 'Retry now',
+      },
+    });
+
+    expect(wrapper.find('.error-title').text()).toBe('Custom error title');
+    expect(wrapper.find('.error-message').text()).toBe('Request failed');
+    expect(wrapper.find('.error-container').attributes('role')).toBe('alert');
+  });
+
+  it('emits retry when the retry button is clicked', async () => {
+    const wrapper = mount(LoadingErrorWrapper, {
+      props: {
+        loading: false,
+        error: 'Request failed',
+      },
+    });
+
+    await wrapper.find('.retry-button').trigger('click');
+
+    expect(wrapper.emitted('retry')).toHaveLength(1);
   });
 });

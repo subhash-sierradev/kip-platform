@@ -25,7 +25,7 @@ function getJiraCredentials(connectionName) {
   if (missing.length > 0) {
     throw new Error(
       `Missing required environment variables: ${missing.join(', ')}.\n` +
-      `Copy .env.example to .env and fill in your Jira credentials.`
+      `Create a .env file in the e2e/ directory with JIRA_BASE_URL, JIRA_EMAIL, and JIRA_API_TOKEN.`
     );
   }
 

@@ -155,7 +155,7 @@ import type { ConfluenceIntegrationResponse } from '@/api/models/ConfluenceInteg
 import { createSteps } from './confluenceWizardConfig';
 import { CONFLUENCE_CONNECTION_CONFIG } from '@/utils/connectionStepConfig';
 import { mapMonthSchedule } from '@/utils/arcgisWizardMappingHelpers';
-import { convertUtcTimeToUserTimezone } from '@/utils/scheduleDisplayUtils';
+import { convertUtcDateTimeToLocal, getUserTimezone } from '@/utils/timezoneUtils';
 import { CONFLUENCE_UNIFIED_STEP_CONFIG } from '@/utils/unifiedIntegrationStepConfig';
 
 const IntegrationDetailsStep = defineAsyncComponent(
@@ -312,11 +312,8 @@ async function handleSubmit() {
   }
 }
 
-// eslint-disable-next-line complexity
-function buildPrefillFormData(detail: ConfluenceIntegrationResponse, clone: boolean) {
+function buildPrefillDocumentFields(detail: ConfluenceIntegrationResponse) {
   return {
-    name: clone ? `Copy of ${detail.name}` : detail.name,
-    description: detail.description || '',
     itemType: detail.itemType || 'DOCUMENT',
     subType: detail.itemSubtype || '',
     subTypeLabel: detail.itemSubtypeLabel || '',
@@ -325,7 +322,11 @@ function buildPrefillFormData(detail: ConfluenceIntegrationResponse, clone: bool
     languageCodes: detail.languageCodes || [],
     reportNameTemplate: detail.reportNameTemplate || '',
     includeTableOfContents: detail.includeTableOfContents ?? true,
-    ...buildPrefillSchedule(detail),
+  };
+}
+
+function buildPrefillConnectionFields(detail: ConfluenceIntegrationResponse) {
+  return {
     confluenceSpaceKey: detail.confluenceSpaceKey || '',
     confluenceSpaceKeyFolderKey: detail.confluenceSpaceKeyFolderKey || 'ROOT',
     connectionMethod: 'existing' as const,
@@ -334,26 +335,63 @@ function buildPrefillFormData(detail: ConfluenceIntegrationResponse, clone: bool
   };
 }
 
-// eslint-disable-next-line complexity
-function buildPrefillSchedule(detail: ConfluenceIntegrationResponse) {
+function buildPrefillFormData(detail: ConfluenceIntegrationResponse, clone: boolean) {
   return {
-    executionTime: detail.schedule?.executionTime
-      ? convertUtcTimeToUserTimezone(
-          detail.schedule.executionTime,
-          detail.schedule.executionDate ?? undefined
-        )
-      : '02:00',
-    frequencyPattern: detail.schedule?.frequencyPattern || 'DAILY',
-    executionDate: detail.schedule?.executionDate || null,
-    dailyFrequency: detail.schedule?.dailyExecutionInterval?.toString() || '24',
-    selectedDays: detail.schedule?.daySchedule || [],
-    selectedMonths: detail.schedule?.monthSchedule
-      ? mapMonthSchedule(detail.schedule.monthSchedule)
-      : [],
-    isExecuteOnMonthEnd: detail.schedule?.isExecuteOnMonthEnd || false,
-    cronExpression: detail.schedule?.cronExpression || undefined,
-    businessTimeZone: detail.schedule?.businessTimeZone || 'UTC',
-    timeCalculationMode: detail.schedule?.timeCalculationMode || 'FIXED_DAY_BOUNDARY',
+    name: clone ? `Copy of ${detail.name}` : detail.name,
+    description: detail.description || '',
+    ...buildPrefillDocumentFields(detail),
+    ...buildPrefillSchedule(detail),
+    ...buildPrefillConnectionFields(detail),
+  };
+}
+
+function buildPrefillScheduleTiming(s: ConfluenceIntegrationResponse['schedule']) {
+  const utcDate = s?.executionDate || null;
+  const utcTime = s?.executionTime || null;
+  if (!utcTime) {
+    return { executionDate: utcDate, executionTime: '02:00' };
+  }
+  // When executionDate is absent (e.g. end-of-month schedules where no specific date is
+  // stored), use today's UTC date as an anchor so the UTC→local conversion still applies
+  // the correct timezone offset and normalises the value to HH:mm.
+  const anchorDate = utcDate ?? new Date().toISOString().split('T')[0];
+  // Pass the (mockable) getUserTimezone result explicitly so unit tests can control the timezone.
+  const { localDate, localTime } = convertUtcDateTimeToLocal(
+    anchorDate,
+    utcTime,
+    getUserTimezone()
+  );
+  return { executionDate: utcDate ? localDate : null, executionTime: localTime };
+}
+
+function buildPrefillScheduleFrequency(s: ConfluenceIntegrationResponse['schedule']) {
+  if (!s) {
+    return {
+      frequencyPattern: 'DAILY',
+      dailyFrequency: '24',
+      selectedDays: [] as string[],
+      selectedMonths: [] as number[],
+      isExecuteOnMonthEnd: false,
+      cronExpression: undefined as string | undefined,
+    };
+  }
+  return {
+    frequencyPattern: s.frequencyPattern || 'DAILY',
+    dailyFrequency: s.dailyExecutionInterval?.toString() || '24',
+    selectedDays: s.daySchedule || [],
+    selectedMonths: s.monthSchedule ? mapMonthSchedule(s.monthSchedule) : [],
+    isExecuteOnMonthEnd: s.isExecuteOnMonthEnd || false,
+    cronExpression: s.cronExpression || undefined,
+  };
+}
+
+function buildPrefillSchedule(detail: ConfluenceIntegrationResponse) {
+  const s = detail.schedule;
+  return {
+    ...buildPrefillScheduleTiming(s),
+    ...buildPrefillScheduleFrequency(s),
+    businessTimeZone: s?.businessTimeZone || 'UTC',
+    timeCalculationMode: s?.timeCalculationMode || 'FIXED_DAY_BOUNDARY',
   };
 }
 

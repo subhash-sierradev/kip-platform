@@ -10,6 +10,32 @@ import coverageConfig from './coverage.config.js';
 
 // Cross-platform path resolution
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const testSuite = process.env.VITEST_SUITE ?? 'all';
+
+const integrationIncludePatterns = ['src/tests/integration/**/*.{test,spec}.{ts,vue}'];
+const baseIncludePatterns = [
+  'src/**/*.{test,spec}.{ts,vue}',
+  'src/test/**/*.{test,spec}.{ts,vue}',
+  'src/tests/**/*.{test,spec}.{ts,vue}'
+];
+
+const includePatterns =
+  testSuite === 'integration'
+    ? integrationIncludePatterns
+    : testSuite === 'unit'
+      ? baseIncludePatterns
+      : [...baseIncludePatterns, ...integrationIncludePatterns];
+
+const excludePatterns = [
+  'node_modules/**',
+  'dist/**',
+  'coverage/**',
+  'src/test/setup.ts',
+  '*.e2e.{test,spec}.{ts}',
+  '**/*.d.ts',
+  'src/tests/unit/ArcGISWizard.FieldMappingStep.spec.ts',
+  ...(testSuite === 'unit' ? ['src/tests/integration/**'] : [])
+];
 
 export default defineConfig({
   plugins: [vue()],
@@ -30,21 +56,8 @@ export default defineConfig({
     isolate: true,
     environment: 'jsdom',
     setupFiles: ['./src/tests/setup/setup.ts'],
-    // Explicit test patterns for cross-platform consistency
-    include: [
-      'src/**/*.{test,spec}.{ts,vue}',
-      'src/test/**/*.{test,spec}.{ts,vue}',
-      'src/tests/**/*.{test,spec}.{ts,vue}'
-    ],
-    exclude: [
-      'node_modules/**',
-      'dist/**',
-      'coverage/**',
-      'src/test/setup.ts',
-      '*.e2e.{test,spec}.{ts}',
-      '**/*.d.ts',
-      'src/tests/unit/ArcGISWizard.FieldMappingStep.spec.ts'
-    ],
+    include: includePatterns,
+    exclude: excludePatterns,
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],

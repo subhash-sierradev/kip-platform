@@ -827,6 +827,158 @@ class JiraWebhookServiceTest {
         assertThat(webhook.getJiraFieldMappings()).hasSize(1);
         verify(jiraWebhookRepository).save(webhook);
     }
+
+    @Test
+    @DisplayName("create: DataIntegrityViolationException with 'duplicate entry' throws IntegrationNameAlreadyExistsException")
+    void create_duplicateEntry_throwsNameAlreadyExists() {
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("N").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder().name("N").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+
+        RuntimeException cause = new RuntimeException("Duplicate entry 'name' for key 'uk_name'");
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("constraint", cause));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(IntegrationNameAlreadyExistsException.class);
+    }
+
+    @Test
+    @DisplayName("create: DataIntegrityViolationException with non-constraint cause throws IntegrationPersistenceException")
+    void create_dataIntegrityNonConstraint_throwsPersistenceException() {
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("N2").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder().name("N2").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("non-constraint error"));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(IntegrationPersistenceException.class);
+    }
+
+    @Test
+    @DisplayName("create: non-DataIntegrityViolation exception wraps in RuntimeException")
+    void create_unexpectedException_wrapsInRuntimeException() {
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("N3").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder().name("N3").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+
+        when(jiraWebhookRepository.save(any())).thenThrow(new RuntimeException("unexpected"));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to create Jira webhook");
+    }
+
+    @Test
+    @DisplayName("getById with null fieldMappings returns empty list")
+    void getById_nullMappings_returnsEmptyList() {
+        JiraWebhook webhook = JiraWebhook.builder()
+                .id("w-null").tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .name("WNull").webhookUrl("url").connectionId(UUID.randomUUID())
+                .samplePayload("{}").jiraFieldMappings(null).build();
+        com.integration.management.model.dto.response.JiraWebhookDetailResponse resp =
+            com.integration.management.model.dto.response.JiraWebhookDetailResponse.builder()
+                .id("w-null").name("WNull").build();
+        when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse("w-null", "t1"))
+                .thenReturn(Optional.of(webhook));
+        when(jiraWebhookMapper.toResponse(webhook)).thenReturn(resp);
+
+        com.integration.management.model.dto.response.JiraWebhookDetailResponse out =
+            jiraWebhookService.getById("w-null", "t1");
+
+        assertThat(out.getJiraFieldMappings()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("getJiraWebhookNameById returns null when exception occurs")
+    void getJiraWebhookNameById_exceptionReturnsNull() {
+        when(jiraWebhookRepository.findJiraWebhookNameById("bad-id"))
+                .thenThrow(new RuntimeException("DB error"));
+
+        String result = jiraWebhookService.getJiraWebhookNameById("bad-id");
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("create: DataAccessException with null cause chain rethrows wrapped in RuntimeException")
+    void create_dataAccessExceptionNullCause_throwsDataAccessException() {
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("N4").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder().name("N4").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(2);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+
+        // DataAccessException with no cause (null cause chain, no "duplicate key" message)
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataAccessResourceFailureException("connection refused"));
+
+        // Non-duplicate DataAccessException is re-thrown from inner catch, then wrapped by outer Exception catch
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to create Jira webhook");
+    }
+
+    @Test
+    @DisplayName("create: isDuplicateKeyException false when cause has null message - wraps in RuntimeException")
+    void create_causeHasNullMessage_notDuplicate_rethrows() {
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("N5").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder().name("N5").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(2);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+
+        // cause has null message - not treated as duplicate key, re-thrown and wrapped by outer handler
+        RuntimeException causeWithNullMessage = new RuntimeException((String) null);
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataAccessResourceFailureException("err", causeWithNullMessage));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to create Jira webhook");
+    }
+
+    @Test
+    @DisplayName("toggleActiveStatus: DataAccessException wraps in IntegrationPersistenceException")
+    void toggleActiveStatus_dataAccessException_wrapsInPersistenceException() {
+        JiraWebhook webhook = JiraWebhook.builder()
+                .id("w-dae").tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .name("n").webhookUrl("url").connectionId(UUID.randomUUID())
+                .samplePayload("{}").isEnabled(true).build();
+        when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse("w-dae", "t1"))
+                .thenReturn(Optional.of(webhook));
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataAccessResourceFailureException("DB unavailable"));
+
+        assertThatThrownBy(() -> jiraWebhookService.toggleActiveStatus("w-dae", "t1", "u2"))
+                .isInstanceOf(IntegrationPersistenceException.class);
+    }
 }
-
-

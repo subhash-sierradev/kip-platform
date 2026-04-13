@@ -1,19 +1,21 @@
 <template>
   <div class="sc-root">
-    <div class="sc-header">
-      <h2 class="sc-title">Schedule Configuration</h2>
-      <div class="sc-timezone-info">
-        <i class="dx-icon-clock"></i>
-        {{ timezoneDisplay }}
-      </div>
-    </div>
-
     <div class="sc-container">
       <section class="sc-section">
         <!-- ── Data Window Mode and Business Timezone ─────────────────────── -->
+        <!-- step-level timezone indicator for simple mode (full mode shows it on Data Window Mode) -->
+        <div v-if="mode === 'simple'" class="sc-step-timezone">
+          <i class="dx-icon-clock"></i> {{ timezoneDisplay }}
+        </div>
+
         <div class="sc-field-row">
           <div v-if="mode === 'full'" class="sc-field">
-            <label class="sc-label">Data Window Mode <span class="sc-required">*</span></label>
+            <div class="sc-label-row">
+              <label class="sc-label">Data Window Mode <span class="sc-required">*</span></label>
+              <span class="sc-timezone-hint"
+                ><i class="dx-icon-clock"></i> {{ timezoneDisplay }}</span
+              >
+            </div>
             <select class="sc-input" v-model="localData.timeCalculationMode">
               <option value="FIXED_DAY_BOUNDARY">Daily Window</option>
               <option value="FLEXIBLE_INTERVAL">Rolling Window</option>
@@ -90,15 +92,17 @@
               <div class="sc-helper">
                 Enter the cron expression in UTC; the job runs based on UTC time.
               </div>
-              <div v-if="cronValidationError" class="sc-error-message">
-                {{ cronValidationError }}
-              </div>
-              <div v-else-if="cronDescription" class="sc-cron-description">
-                <span>{{ cronDescription.text }}</span>
-                <span v-if="cronDescription.timezoneLabel" class="sc-cron-timezone-chip">
-                  <i class="dx-icon-clock" aria-hidden="true"></i>
-                  <span class="sc-cron-timezone-value">{{ cronDescription.timezoneLabel }}</span>
-                </span>
+              <div class="sc-cron-feedback">
+                <div v-if="cronValidationError" class="sc-error-message">
+                  {{ cronValidationError }}
+                </div>
+                <div v-else-if="cronDescription" class="sc-cron-description">
+                  <span class="sc-cron-description-text">{{ cronDescription.text }}</span>
+                  <span v-if="cronDescription.timezoneLabel" class="sc-cron-timezone-chip">
+                    <i class="dx-icon-clock" aria-hidden="true"></i>
+                    <span class="sc-cron-timezone-value">{{ cronDescription.timezoneLabel }}</span>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -221,19 +225,6 @@
               <input class="sc-input" v-model="executionTimeModel" type="time" />
             </div>
           </div>
-
-          <!-- CRON: sample image -->
-          <div
-            v-if="localData.frequencyPattern === 'CUSTOM'"
-            class="sc-field-row sc-cron-sample-row"
-          >
-            <div class="sc-field sc-cron-sample-field">
-              <label class="sc-label">
-                Sample Cron Expression: <span class="sc-cron-example">0 0 9 * * ?</span>
-              </label>
-              <img src="/cron-expression-example.png" alt="Cron Expression Example" />
-            </div>
-          </div>
         </template>
       </section>
     </div>
@@ -247,11 +238,11 @@ import Tooltip from '@/components/common/Tooltip.vue';
 import { getUserTimezone, formatTimezoneInfo, getCommonTimezones } from '@/utils/timezoneUtils';
 import type { ScheduleConfigurationData } from '@/types/ArcGISFormData';
 import { useTooltip } from '@/composables/useTooltip';
+import { useCron } from '@/composables/cron/useCron';
 import {
   cronToTextWithTimezoneUniversal,
   type ScheduleDescriptionResult,
-} from '@/composables/useCronOccurrences';
-import { useCron } from '@/composables/useCron';
+} from '@/composables/cron/useCronOccurrences';
 import { DxSelectBox } from 'devextreme-vue/select-box';
 
 defineOptions({ name: 'ScheduleConfigurationStep' });
@@ -273,11 +264,14 @@ const withScheduleDefaults = (
   mode: 'full' | 'simple' = 'full'
 ): ScheduleConfigurationData => {
   const normalized = { ...input };
-  if (!normalized.businessTimeZone) {
-    normalized.businessTimeZone = 'UTC';
-  }
   if (!normalized.timeCalculationMode) {
     normalized.timeCalculationMode = 'FLEXIBLE_INTERVAL';
+  }
+  if (
+    !normalized.businessTimeZone &&
+    (mode === 'simple' || normalized.timeCalculationMode === 'FIXED_DAY_BOUNDARY')
+  ) {
+    normalized.businessTimeZone = 'UTC';
   }
   if (mode === 'simple' && !normalized.frequencyPattern) {
     normalized.frequencyPattern = 'DAILY';
@@ -448,6 +442,7 @@ const cronValidationError = computed(() => {
 const cronDescription = computed<ScheduleDescriptionResult | null>(() => {
   if (localData.value.frequencyPattern !== 'CUSTOM' || !cron.value || !isValidateCron.value)
     return null;
+
   return cronToTextWithTimezoneUniversal(
     cron.value,
     getUserTimezone(),
@@ -479,7 +474,7 @@ const executionTimeModel = computed({
 
 // ── Timezone ───────────────────────────────────────────────────────────────
 
-const timezoneDisplay = computed(() => `Timezone - ${formatTimezoneInfo(getUserTimezone())}`);
+const timezoneDisplay = computed(() => formatTimezoneInfo(getUserTimezone()));
 
 // ── Data Window Mode helper ───────────────────────────────────────────
 

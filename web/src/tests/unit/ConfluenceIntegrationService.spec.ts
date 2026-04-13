@@ -5,6 +5,27 @@ vi.mock('@/api/core/request', () => ({ request: vi.fn() }));
 import { request as coreRequest } from '@/api/core/request';
 import { ConfluenceIntegrationService } from '@/api/services/ConfluenceIntegrationService';
 
+async function importConfluenceServiceWithAuth(authState: {
+  token?: string | null;
+  user?: { tenantId?: string; userId?: string } | null;
+}) {
+  vi.resetModules();
+
+  const requestMock = vi.fn().mockResolvedValue([]);
+
+  vi.doMock('@/api/core/request', () => ({ request: requestMock }));
+  vi.doMock('@/config/keycloak', () => ({
+    getToken: () => authState.token ?? null,
+    getUserInfo: () => authState.user ?? null,
+  }));
+
+  const serviceModule = await import('@/api/services/ConfluenceIntegrationService');
+  return {
+    requestMock,
+    ConfluenceIntegrationService: serviceModule.ConfluenceIntegrationService,
+  };
+}
+
 describe('ConfluenceIntegrationService', () => {
   beforeEach(() => {
     (coreRequest as any).mockReset?.();
@@ -119,6 +140,76 @@ describe('ConfluenceIntegrationService', () => {
       expect.objectContaining({
         method: 'GET',
         url: '/integrations/confluence/connections/conn-1/spaces/ABC/pages',
+      })
+    );
+  });
+
+  it('adds authorization, tenant, and user headers to protected requests when auth context exists', async () => {
+    const { requestMock, ConfluenceIntegrationService: DynamicService } =
+      await importConfluenceServiceWithAuth({
+        token: 'token-123',
+        user: { tenantId: 'tenant-1', userId: 'user-7' },
+      });
+
+    await DynamicService.getJobHistory('i1');
+    await DynamicService.retryJobExecution('i1', 'job-9');
+
+    expect(requestMock).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({
+        method: 'GET',
+        url: '/integrations/confluence/i1/executions',
+        headers: {
+          Authorization: 'Bearer token-123',
+          'X-TENANT-ID': 'tenant-1',
+          'X-USER-ID': 'user-7',
+        },
+      })
+    );
+    expect(requestMock).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({
+        method: 'POST',
+        url: '/integrations/confluence/i1/executions/job-9/retry',
+        headers: {
+          Authorization: 'Bearer token-123',
+          'X-TENANT-ID': 'tenant-1',
+          'X-USER-ID': 'user-7',
+        },
+      })
+    );
+  });
+
+  it('omits missing auth headers when token or user data is unavailable', async () => {
+    const { requestMock, ConfluenceIntegrationService: DynamicService } =
+      await importConfluenceServiceWithAuth({
+        token: null,
+        user: { tenantId: 'tenant-1' },
+      });
+
+    await DynamicService.getJobHistory('i2');
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: {
+          'X-TENANT-ID': 'tenant-1',
+        },
+      })
+    );
+
+    const secondImport = await importConfluenceServiceWithAuth({
+      token: undefined,
+      user: null,
+    });
+    await secondImport.ConfluenceIntegrationService.retryJobExecution('i3', 'job-3');
+
+    expect(secondImport.requestMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        headers: {},
       })
     );
   });

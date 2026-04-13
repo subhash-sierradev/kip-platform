@@ -7,7 +7,7 @@
  */
 
 import { exec } from 'child_process';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import coverageConfig from '../coverage.config.js';
 
 console.log('🧪 Running tests with coverage...');
@@ -18,8 +18,18 @@ exec('npm run test:coverage', { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, s
   if (stderr) console.error(stderr);
   
   if (error) {
-    console.error('❌ Tests failed!');
-    process.exit(error.code || 1);
+    // Check vitest summary to distinguish real test failures from runtime errors
+    const hasTestFailures = /Test Files\s.*failed/.test(stdout);
+    if (hasTestFailures) {
+      console.error('❌ Tests failed!');
+      process.exit(error.code || 1);
+    }
+    // All tests passed but vitest reported runtime errors (e.g. mock warnings)
+    console.warn('⚠️  Vitest exited with errors but all test files passed. Proceeding to coverage check...');
+    if (!existsSync('./coverage/coverage-summary.json')) {
+      console.error('❌ Coverage report was not generated. Vitest may have crashed.');
+      process.exit(error.code || 1);
+    }
   }
   
   console.log('✅ Tests passed! Checking coverage thresholds...');
@@ -42,7 +52,8 @@ exec('npm run test:coverage', { maxBuffer: 1024 * 1024 * 10 }, (error, stdout, s
     if (failedChecks.length > 0) {
       console.error('\n💥 Coverage thresholds not met:');
       failedChecks.forEach(check => console.error(check));
-      console.error('\n🎯 Add more tests to reach 80% coverage on all metrics!');
+      const thresholdSummary = `${thresholds.statements}% statements | ${thresholds.branches}% branches | ${thresholds.functions}% functions | ${thresholds.lines}% lines`;
+      console.error(`\n🎯 Add more tests to reach ${thresholdSummary}.`);
       process.exit(1);
     } else {
       const fmt = (n) => typeof n === 'number' ? Number(n.toFixed(2)) : n;

@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 
 @Slf4j
 @RestControllerAdvice
@@ -32,7 +33,7 @@ public class DatabaseExceptionHandler {
                                                      Object details) {
         String path = getRequestPath(request);
         return ResponseEntity.status(status)
-                .body(new ErrorResponse(LocalDateTime.now(),
+                .body(new ErrorResponse(LocalDateTime.now(ZoneOffset.UTC),
                         status.value(),
                         status.getReasonPhrase(),
                         message,

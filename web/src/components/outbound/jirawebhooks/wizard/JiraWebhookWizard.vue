@@ -72,6 +72,7 @@
             @projects-change="onProjectsChange"
             @issueTypes-change="onIssueTypesChange"
             @users-change="onUsersChange"
+            @parent-label-change="onParentLabelChange"
           />
 
           <!-- Step 4: Review & Create -->
@@ -86,6 +87,7 @@
             :issueTypes="issueTypes"
             :users="users"
             :sprints="previewSprintOptions"
+            :selectedParentLabel="selectedParentLabel"
           />
         </main>
 
@@ -123,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, toRef, watch } from 'vue';
+import { computed, ref, toRef, watch } from 'vue';
 
 /* ---------- CHILD COMPONENTS ---------- */
 import BasicDetailsStep from './BasicDetailsStep.vue';
@@ -146,6 +148,7 @@ import { useJiraWebhookPrefill } from '@/composables/useJiraWebhookPrefill';
 import { useJiraWebhookConnection } from '@/composables/useJiraWebhookConnection';
 import { useJiraWebhookSubmit } from '@/composables/useJiraWebhookSubmit';
 import { useJiraSprints } from '@/composables/useJiraSprints';
+import { extractParentKey } from '@/utils/parentFieldUtils';
 import type { MappingData } from '@/api/models/jirawebhook/MappingData';
 import type { JiraWebhook } from '@/types/JiraWebhook';
 import type { JiraWebhookDetail } from '@/api/services/JiraWebhookService';
@@ -303,6 +306,9 @@ const { handleConnectionValidation, handleConnectionSuccess, handleConnectionCha
     syncMappingDataRef,
   });
 
+const selectedParentLabel = ref('');
+const selectedParentKey = ref('');
+
 const {
   isSubmitDisabled,
   submitButtonLabel,
@@ -322,6 +328,7 @@ const {
   projects,
   issueTypes,
   users,
+  selectedParentLabel,
   isCreating,
   showSuccess,
   createdWebhook,
@@ -346,6 +353,31 @@ const sprintLookupOpts = {
 };
 const sprintLookup = useJiraSprints(sprintLookupOpts);
 const previewSprintOptions = computed(() => sprintLookup.options.value);
+
+function extractMappedParentKey(mapping: MappingData): string {
+  const parentField = (mapping.customFields || []).find(
+    field =>
+      String(field.jiraFieldKey || '')
+        .trim()
+        .toLowerCase() === 'parent'
+  );
+
+  if (!parentField) {
+    return '';
+  }
+
+  return extractParentKey(parentField.value);
+}
+
+watch(
+  () => props.open,
+  isOpen => {
+    if (!isOpen) {
+      selectedParentKey.value = '';
+      selectedParentLabel.value = '';
+    }
+  }
+);
 
 watch(
   () => ({
@@ -401,10 +433,29 @@ const onJsonSampleUpdate = (val: string) => setJsonSample(val);
 const onJsonValidityChange = (val: boolean) => setJsonValid(val);
 
 const onMappingValidationUpdate = (val: boolean) => setMappingValid(val);
-const onMappingDataUpdate = (val: MappingData) => updateMappingData(val);
+const onMappingDataUpdate = (val: MappingData) => {
+  updateMappingData(val);
+
+  const mappedParentKey = extractMappedParentKey(val);
+  if (!mappedParentKey) {
+    selectedParentKey.value = '';
+    selectedParentLabel.value = '';
+    return;
+  }
+
+  if (selectedParentKey.value && mappedParentKey !== selectedParentKey.value) {
+    selectedParentKey.value = '';
+    selectedParentLabel.value = '';
+  }
+};
 const onProjectsChange = (val: Array<{ key: string; name: string }>) => setProjects(val);
 const onIssueTypesChange = (val: Array<{ id: string; name: string }>) => setIssueTypes(val);
 const onUsersChange = (val: Array<{ accountId: string; displayName: string }>) => setUsers(val);
+const onParentLabelChange = (payload: { value: string; label: string }) => {
+  const nextKey = String(payload.value || '').trim();
+  selectedParentKey.value = nextKey;
+  selectedParentLabel.value = nextKey ? payload.label : '';
+};
 
 /* ---------- NAVIGATION ---------- */
 const handlePrevious = () => {

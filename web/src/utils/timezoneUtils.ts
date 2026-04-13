@@ -1,10 +1,5 @@
-/**
- * Timezone utilities for handling user timezone detection and conversion
- */
+import { DateTime } from 'luxon';
 
-/**
- * Get the user's current timezone from the browser
- */
 export function getUserTimezone(): string {
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -18,9 +13,6 @@ export function getUserTimezone(): string {
   }
 }
 
-/**
- * Get timezone display name (e.g., "India Standard Time")
- */
 export function getTimezoneDisplayName(timezone?: string): string {
   const tz = timezone || getUserTimezone();
   try {
@@ -36,9 +28,6 @@ export function getTimezoneDisplayName(timezone?: string): string {
   }
 }
 
-/**
- * Get timezone abbreviation (e.g., "IST")
- */
 export function getTimezoneAbbreviation(timezone?: string): string {
   const tz = timezone || getUserTimezone();
   try {
@@ -54,18 +43,12 @@ export function getTimezoneAbbreviation(timezone?: string): string {
   }
 }
 
-/**
- * Format timezone info for display
- */
 export function formatTimezoneInfo(timezone?: string): string {
   const currentTz = timezone || getUserTimezone();
   const abbreviation = getTimezoneAbbreviation(currentTz);
   return `${currentTz} (${abbreviation})`;
 }
 
-/**
- * Check if a timezone is valid
- */
 export function isValidTimezone(timezone: string): boolean {
   try {
     Intl.DateTimeFormat(undefined, { timeZone: timezone });
@@ -75,12 +58,8 @@ export function isValidTimezone(timezone: string): boolean {
   }
 }
 
-/**
- * Get common timezone options for selection
- */
+// Sorted west→east; label includes UTC offset so users can search by city, country, or offset.
 export function getCommonTimezones(): Array<{ value: string; label: string }> {
-  // Sorted by UTC offset (west → east) with offset in label for quick scanning.
-  // Users can type city, country, or offset number in the DxSelectBox search.
   return [
     { value: 'Pacific/Honolulu', label: '(UTC-10:00) Hawaii (Pacific/Honolulu)' },
     { value: 'America/Anchorage', label: '(UTC-09:00) Alaska (America/Anchorage)' },
@@ -151,9 +130,6 @@ export function getCommonTimezones(): Array<{ value: string; label: string }> {
   ];
 }
 
-/**
- * Format current time in user's timezone
- */
 export function getCurrentTimeInTimezone(timezone?: string): string {
   const tz = timezone || getUserTimezone();
 
@@ -170,14 +146,6 @@ export function getCurrentTimeInTimezone(timezone?: string): string {
   }
 }
 
-/**
- * Convert user's local time to UTC time
- * Frontend sends times in UTC to backend to avoid double-conversion issues
- * @param localTimeStr - Local time in HH:mm or HH:mm:ss format
- * @param executionDate - Execution date in YYYY-MM-DD format (defaults to today)
- * @param timezone - User's timezone (defaults to browser timezone)
- * @returns UTC time string in HH:mm:ss format
- */
 export function convertUserTimezoneToUtc(
   localTimeStr: string,
   executionDate?: string,
@@ -185,81 +153,114 @@ export function convertUserTimezoneToUtc(
 ): string {
   try {
     const [hhStr, mmStr, ssStr] = localTimeStr.split(':');
-    const hours = parseInt(hhStr || '0', 10);
-    const minutes = parseInt(mmStr || '0', 10);
-    const seconds = parseInt(ssStr || '0', 10);
     const dateStr = executionDate || new Date().toISOString().split('T')[0];
     const userTz = timezone || getUserTimezone();
-
-    // Parse date components
     const [yyyy, mm, dd] = dateStr.split('-').map(Number);
 
-    // Create two formatter instances to compare the same instant in different timezones
-    // This gives us the offset between the user's timezone and UTC
-    const dummyDate = new Date(`${dateStr}T12:00:00`);
-    const offsetMinutes = getTimezoneOffsetMinutes(userTz, dummyDate);
+    const dt = DateTime.fromObject(
+      {
+        year: yyyy,
+        month: mm,
+        day: dd,
+        hour: parseInt(hhStr || '0', 10),
+        minute: parseInt(mmStr || '0', 10),
+        second: parseInt(ssStr || '0', 10),
+      },
+      { zone: userTz }
+    );
 
-    // Create UTC date with the local time values
-    const localAsUtcDate = new Date(Date.UTC(yyyy, mm - 1, dd, hours, minutes, seconds));
+    if (!dt.isValid) {
+      throw new Error(`Invalid DateTime: ${dt.invalidReason ?? 'unknown'}`);
+    }
 
-    // Apply timezone offset to get actual UTC time
-    // If timezone is ahead of UTC (e.g., IST +5:30), we subtract the offset
-    const utcTimestamp = localAsUtcDate.getTime() - offsetMinutes * 60 * 1000;
-    const utcDate = new Date(utcTimestamp);
-
-    const utcHours = utcDate.getUTCHours();
-    const utcMinutes = utcDate.getUTCMinutes();
-    const utcSeconds = utcDate.getUTCSeconds();
-
-    return `${String(utcHours).padStart(2, '0')}:${String(utcMinutes).padStart(2, '0')}:${String(utcSeconds).padStart(2, '0')}`;
+    return dt.toUTC().toFormat('HH:mm:ss');
   } catch (error) {
     console.error('convertUserTimezoneToUtc: Error converting time:', localTimeStr, error);
-    return localTimeStr; // Fallback to original if conversion fails
+    return localTimeStr;
   }
 }
 
-/**
- * Get timezone offset in minutes for a specific date
- * @param timezone - IANA timezone identifier
- * @param date - The date to calculate offset for (needed for DST)
- * @returns Offset in minutes (positive for ahead of UTC, negative for behind)
- */
-function getTimezoneOffsetMinutes(timezone: string, date: Date): number {
+// Returns YYYY-MM-DD in the given (or browser) timezone — not toISOString() which gives the UTC date.
+export function getLocalDateString(timezone?: string): string {
+  const tz = timezone || getUserTimezone();
+  return DateTime.now().setZone(tz).toISODate() ?? new Date().toISOString().slice(0, 10);
+}
+
+// Converts a local wall-clock date+time to UTC. Handles midnight crossings and DST transitions.
+export function convertLocalDateTimeToUtc(
+  localDate: string,
+  localTime: string,
+  timezone?: string
+): { utcDate: string; utcTime: string } {
   try {
-    // Create two date strings representing the same instant
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
+    const [hhStr, mmStr, ssStr] = localTime.split(':');
+    const userTz = timezone || getUserTimezone();
+    const [yyyy, mm, dd] = localDate.split('-').map(Number);
+
+    const dt = DateTime.fromObject(
+      {
+        year: yyyy,
+        month: mm,
+        day: dd,
+        hour: parseInt(hhStr || '0', 10),
+        minute: parseInt(mmStr || '0', 10),
+        second: parseInt(ssStr || '0', 10),
+      },
+      { zone: userTz }
+    );
+
+    if (!dt.isValid) {
+      throw new Error(`Invalid DateTime: ${dt.invalidReason ?? 'unknown'}`);
+    }
+
+    const utc = dt.toUTC();
+
+    return {
+      utcDate: utc.toFormat('yyyy-MM-dd'),
+      utcTime: utc.toFormat('HH:mm:ss'),
+    };
+  } catch (error) {
+    console.error('convertLocalDateTimeToUtc: Error converting:', localDate, localTime, error);
+    return { utcDate: localDate, utcTime: localTime };
+  }
+}
+
+// Converts a UTC date+time pair to the local wall-clock date and time in the given (or browser) timezone.
+// Both inputs must be UTC — they are combined into a single UTC instant before converting.
+export function convertUtcDateTimeToLocal(
+  utcDate: string,
+  utcTime: string,
+  timezone?: string
+): { localDate: string; localTime: string } {
+  try {
+    const [hhStr, mmStr, ssStr] = utcTime.split(':');
+    const hours = parseInt(hhStr || '0', 10);
+    const minutes = parseInt(mmStr || '0', 10);
+    const seconds = parseInt(ssStr || '0', 10);
+    const [yyyy, mm, dd] = utcDate.split('-').map(Number);
+
+    const utcInstant = new Date(Date.UTC(yyyy, mm - 1, dd, hours, minutes, seconds));
+    const userTz = timezone || getUserTimezone();
+
+    const localDate = new Intl.DateTimeFormat('en-CA', {
+      timeZone: userTz,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
+    }).format(utcInstant);
+
+    const localTime = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTz,
       hour: '2-digit',
       minute: '2-digit',
-      second: '2-digit',
       hour12: false,
-    });
+    })
+      .format(utcInstant)
+      .replace('24:', '00:');
 
-    const parts = formatter.formatToParts(date);
-    const tzParts: Record<string, string> = {};
-    parts.forEach(part => {
-      if (part.type !== 'literal') {
-        tzParts[part.type] = part.value;
-      }
-    });
-
-    // Create a date from the timezone parts
-    const tzDate = new Date(
-      `${tzParts.year}-${tzParts.month}-${tzParts.day}T${tzParts.hour}:${tzParts.minute}:${tzParts.second}Z`
-    );
-
-    // Create UTC date from the same instant
-    const utcDate = new Date(date.toISOString());
-
-    // Calculate the difference
-    const diffMs = tzDate.getTime() - utcDate.getTime();
-    return Math.round(diffMs / (1000 * 60));
+    return { localDate, localTime };
   } catch (error) {
-    console.error('getTimezoneOffsetMinutes: Error calculating offset:', error);
-    // Fallback: use standard Date offset method
-    return -date.getTimezoneOffset();
+    console.error('convertUtcDateTimeToLocal: Error converting:', utcDate, utcTime, error);
+    return { localDate: utcDate, localTime: utcTime.slice(0, 5) };
   }
 }

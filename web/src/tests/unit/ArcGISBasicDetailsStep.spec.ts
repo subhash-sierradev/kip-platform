@@ -139,4 +139,60 @@ describe('ArcGIS BasicDetailsStep', () => {
       | undefined;
     expect(validations?.some(args => args[0] === true)).toBe(true);
   });
+
+  it('shows the required-name validation after the user clears the field', async () => {
+    const wrapper = mount(IntegrationDetailsStep, {
+      props: {
+        modelValue: {
+          name: 'Existing Name',
+          description: '',
+          itemType: 'DOCUMENT',
+          subType: 'DOCUMENT_PDF',
+        },
+        config: ARCGIS_UNIFIED_STEP_CONFIG,
+      },
+    });
+    await nextTick();
+
+    const input = wrapper.find('input.uis-input');
+    await input.setValue('');
+    await nextTick();
+
+    expect(wrapper.text()).toContain('Integration name is required');
+
+    const validations = wrapper.emitted('validation-change') as
+      | Array<[boolean, ...any[]]>
+      | undefined;
+    expect(validations?.at(-1)?.[0]).toBe(false);
+  });
+
+  it('revalidates the current name when normalized names change', async () => {
+    const wrapper = mount(IntegrationDetailsStep, {
+      props: {
+        modelValue: {
+          name: 'ArcGIS Unique',
+          description: '',
+          itemType: 'DOCUMENT',
+          subType: 'DOCUMENT_PDF',
+        },
+        config: ARCGIS_UNIFIED_STEP_CONFIG,
+        normalizedNames: [],
+      },
+    });
+    await nextTick();
+
+    vi.advanceTimersByTime(350);
+    await nextTick();
+
+    await wrapper.setProps({ normalizedNames: ['arcgis_unique'] });
+    vi.advanceTimersByTime(350);
+    await nextTick();
+
+    expect(wrapper.text()).toContain(ARCGIS_UNIFIED_STEP_CONFIG.duplicateNameMessage);
+
+    const validations = wrapper.emitted('validation-change') as
+      | Array<[boolean, ...any[]]>
+      | undefined;
+    expect(validations?.at(-1)?.[0]).toBe(false);
+  });
 });

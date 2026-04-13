@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 
 import { roleGuard } from './guards';
+import { ROUTES } from './routes';
 
 // Centralized lazy-loaded components with chunk names for consistency
 const IntegrationPage = () =>
@@ -53,98 +54,102 @@ const ConfluenceConnectionPage = () =>
 const routes: RouteRecordRaw[] = [
   // Set HomePage as the startup (root) component; provide '/home' as an alias for backward compatibility
   {
-    path: '/',
+    path: ROUTES.home,
     component: () => import(/* webpackChunkName: "home" */ '@/components/home/HomePage.vue'),
     alias: '/home',
   },
 
   // Inbound routes
   {
-    path: '/inbound/integrations',
+    path: ROUTES.inboundIntegrations,
     component: IntegrationPage,
     beforeEnter: roleGuard(['feature_integration']),
   },
 
   {
-    path: '/outbound/webhook/jira',
+    path: ROUTES.jiraWebhook,
     component: JiraWebhookPage,
     meta: { disableShellPadding: true },
     beforeEnter: roleGuard(['feature_jira_webhook']),
   },
   {
-    path: '/outbound/webhook/jira/:id',
+    path: `${ROUTES.jiraWebhook}/:id`,
     component: JiraWebhookDetailsPage,
     beforeEnter: roleGuard(['feature_jira_webhook']),
   },
   {
-    path: '/outbound/integration/arcgis',
+    path: ROUTES.arcgisIntegration,
     component: ArcGISIntegrationPage,
     meta: { disableShellPadding: true },
     beforeEnter: roleGuard(['feature_arcgis_integration']),
   },
   {
-    path: '/outbound/integration/arcgis/:id',
+    path: `${ROUTES.arcgisIntegration}/:id`,
     component: () =>
       import('@/components/outbound/arcgisintegration/details/ArcGISIntegrationDetailsPage.vue'),
     beforeEnter: roleGuard(['feature_arcgis_integration']),
   },
   {
-    path: '/outbound/jira-webhook/wizard',
+    path: ROUTES.jiraWebhookWizard,
     name: 'jira-webhook-wizard',
     component: () => import('@/components/outbound/jirawebhooks/wizard/JiraWebhookWizard.vue'),
     beforeEnter: roleGuard(['feature_jira_webhook']),
   },
   {
-    path: '/outbound/integration/confluence',
+    path: ROUTES.confluenceIntegration,
     component: ConfluenceIntegrationPage,
     meta: { disableShellPadding: true },
     beforeEnter: roleGuard(['feature_confluence_integration']),
   },
   {
-    path: '/outbound/integration/confluence/:id',
+    path: `${ROUTES.confluenceIntegration}/:id`,
     component: () =>
       import('@/components/outbound/confluenceintegration/details/ConfluenceIntegrationDetailsPage.vue'),
     beforeEnter: roleGuard(['feature_confluence_integration']),
   },
 
   // Admin routes
-  { path: '/admin/audit-log', component: AuditLogPage, beforeEnter: roleGuard(['tenant_admin']) },
-  { path: '/admin/clear-cache', component: ClearCachePage, beforeEnter: roleGuard(['app_admin']) },
+  { path: ROUTES.adminAuditLog, component: AuditLogPage, beforeEnter: roleGuard(['tenant_admin']) },
   {
-    path: '/admin/cache-statistics',
+    path: ROUTES.adminClearCache,
+    component: ClearCachePage,
+    beforeEnter: roleGuard(['app_admin']),
+  },
+  {
+    path: ROUTES.adminCacheStatistics,
     component: CacheStatisticsPage,
     beforeEnter: roleGuard(['app_admin']),
   },
   {
-    path: '/admin/site-config',
+    path: ROUTES.adminSiteConfig,
     component: SiteConfigPage,
     beforeEnter: roleGuard(['tenant_admin', 'app_admin']),
   },
   {
-    path: '/admin/connections/jira',
+    path: ROUTES.jiraConnection,
     component: JiraConnectionPage,
     beforeEnter: roleGuard(['tenant_admin']),
   },
   {
-    path: '/admin/connections/arcgis',
+    path: ROUTES.arcgisConnection,
     component: ArcGISConnectionPage,
     beforeEnter: roleGuard(['tenant_admin']),
   },
   {
-    path: '/admin/connections/confluence',
+    path: ROUTES.confluenceConnection,
     component: ConfluenceConnectionPage,
     beforeEnter: roleGuard(['tenant_admin', 'feature_confluence_integration']),
   },
   {
-    path: '/admin/notifications',
+    path: ROUTES.adminNotifications,
     component: NotificationsPage,
     beforeEnter: roleGuard(['tenant_admin', 'app_admin']),
   },
-  { path: '/notifications', component: NotificationsAllPage },
-  { path: '/unauthorized', component: UnauthorizedPage },
+  { path: ROUTES.allNotifications, component: NotificationsAllPage },
+  { path: ROUTES.unauthorized, component: UnauthorizedPage },
 
   // Catch all route
-  { path: '/:pathMatch(.*)*', redirect: '/' },
+  { path: '/:pathMatch(.*)*', redirect: ROUTES.home },
 ];
 
 const router = createRouter({

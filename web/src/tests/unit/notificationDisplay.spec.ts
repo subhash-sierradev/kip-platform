@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { ROUTES } from '@/router/routes';
 import type { AppNotification } from '@/types/notification';
 import {
   applyNotificationFilters,
@@ -84,6 +85,168 @@ describe('notificationDisplay utilities', () => {
 
     const noMetadata: AppNotification = { ...baseNotification, metadata: undefined };
     expect(getPrimaryAction(noMetadata)).toBeNull();
+  });
+
+  describe('getPrimaryAction - derived routes from semantic metadata', () => {
+    const VALID_UUID = 'b8c9f96f-6f42-4bb0-8a2f-d41c4a5c7f8e';
+
+    it('derives ArcGIS integration route from integrationId', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'ARCGIS_INTEGRATION_UPDATED',
+        metadata: { integrationId: VALID_UUID },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open ArcGIS Integration',
+        target: ROUTES.arcgisIntegrationDetails(VALID_UUID),
+        external: false,
+      });
+    });
+
+    it('derives Confluence integration route from integrationId when type starts with CONFLUENCE_', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'CONFLUENCE_INTEGRATION_CREATED',
+        metadata: { integrationId: VALID_UUID },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open Confluence Integration',
+        target: ROUTES.confluenceIntegrationDetails(VALID_UUID),
+        external: false,
+      });
+    });
+
+    it('derives Jira webhook route from webhookId', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'JIRAWEBHOOK_EVENT_COMPLETED',
+        metadata: { webhookId: 'wh_9jk2A1', issueKey: 'OPS-421' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open Jira Webhook',
+        target: ROUTES.jiraWebhookDetails('wh_9jk2A1'),
+        external: false,
+      });
+    });
+
+    it('derives Jira webhook route from webhookId alone (lifecycle events have no issueKey)', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'JIRAWEBHOOK_INTEGRATION_ENABLED',
+        metadata: { webhookId: 'wh_9jk2A1' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open Jira Webhook',
+        target: ROUTES.jiraWebhookDetails('wh_9jk2A1'),
+        external: false,
+      });
+    });
+
+    it('returns null for _DELETED event even when webhookId is present', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'JIRAWEBHOOK_INTEGRATION_DELETED',
+        metadata: { webhookId: 'wh_9jk2A1' },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('returns null for _DELETED event even when integrationId is present (ArcGIS)', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'ARCGIS_INTEGRATION_DELETED',
+        metadata: { integrationId: VALID_UUID },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('returns null for _DELETED event even when integrationId is present (Confluence)', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'CONFLUENCE_INTEGRATION_DELETED',
+        metadata: { integrationId: VALID_UUID },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('derives ArcGIS connection route from non-empty connectionId + serviceType ARCGIS', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'INTEGRATION_CONNECTION_CREATED',
+        metadata: { connectionId: 'conn-arcgis-1', serviceType: 'ARCGIS' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open ArcGIS Connection',
+        target: ROUTES.arcgisConnection,
+        external: false,
+      });
+    });
+
+    it('derives Jira connection route from non-empty connectionId + serviceType JIRA', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'INTEGRATION_CONNECTION_CREATED',
+        metadata: { connectionId: 'conn-jira-1', serviceType: 'JIRA' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open Jira Connection',
+        target: ROUTES.jiraConnection,
+        external: false,
+      });
+    });
+
+    it('derives Confluence connection route from non-empty connectionId + serviceType CONFLUENCE', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'INTEGRATION_CONNECTION_CREATED',
+        metadata: { connectionId: 'conn-confluence-1', serviceType: 'CONFLUENCE' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Open Confluence Connection',
+        target: ROUTES.confluenceConnection,
+        external: false,
+      });
+    });
+
+    it('returns null when connectionId is absent even if serviceType is valid', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'INTEGRATION_CONNECTION_CREATED',
+        metadata: { serviceType: 'ARCGIS' },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('returns null when integrationId is not a valid UUID', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'ARCGIS_INTEGRATION_UPDATED',
+        metadata: { integrationId: 'not-a-uuid' },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('returns null when connectionId is valid but serviceType is unknown', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'INTEGRATION_CONNECTION_CREATED',
+        metadata: { connectionId: VALID_UUID, serviceType: 'UNKNOWN' },
+      };
+      expect(getPrimaryAction(n)).toBeNull();
+    });
+
+    it('explicit actionUrl takes precedence over derived route', () => {
+      const n: AppNotification = {
+        ...baseNotification,
+        type: 'ARCGIS_INTEGRATION_UPDATED',
+        metadata: { integrationId: VALID_UUID, actionUrl: '/custom/path', actionLabel: 'Custom' },
+      };
+      expect(getPrimaryAction(n)).toEqual({
+        label: 'Custom',
+        target: '/custom/path',
+        external: false,
+      });
+    });
   });
 
   it('applyNotificationFilters handles unread and all filters', () => {

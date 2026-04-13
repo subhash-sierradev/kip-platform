@@ -283,6 +283,10 @@
   height: 11px;
 }
 
+.toolbar-action-wrapper :deep(.add-connection-button .dx-icon-plus) {
+  color: #000;
+}
+
 /* SWITCH ON  — amber */
 :deep(.dx-switch.dx-switch-on-value .dx-switch-handle)::before {
   background-color: #f59e0b !important;

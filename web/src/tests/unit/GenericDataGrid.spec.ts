@@ -1,5 +1,5 @@
 /* eslint-disable simple-import-sort/imports */
-import { mount } from '@vue/test-utils';
+import { mount, flushPromises } from '@vue/test-utils';
 import { describe, it, expect, vi } from 'vitest';
 import { defineComponent } from 'vue';
 
@@ -63,6 +63,40 @@ describe('GenericDataGrid', () => {
     expect(args.fallbackData.length).toBe(2);
   });
 
+  it('exports filtered data when grid combined filter is present', async () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns, enableExport: true, exportConfig },
+      global: { stubs },
+    });
+
+    const component = wrapper.vm as any;
+    component.gridRef = {
+      instance: {
+        getCombinedFilter: () => ['id', '=', 1],
+      },
+    };
+
+    await wrapper.find('button.dx-btn').trigger('click');
+    const args = (exportGridData as any).mock.calls.at(-1)[0];
+    expect(args.fallbackData).toEqual([{ id: 1, name: 'A' }]);
+  });
+
+  it('logs export errors when CSV export fails', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(exportGridData).mockRejectedValueOnce(new Error('export failed'));
+
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns, enableExport: true, exportConfig },
+      global: { stubs },
+    });
+
+    await wrapper.find('button.dx-btn').trigger('click');
+    await flushPromises();
+
+    expect(consoleErrorSpy).toHaveBeenCalledWith('CSV export failed:', expect.any(Error));
+    consoleErrorSpy.mockRestore();
+  });
+
   it('shows only export button when enableExport is true and enableClearFilters is false', () => {
     const wrapper = mount(GenericDataGrid, {
       props: { data, columns, enableExport: true, enableClearFilters: false, exportConfig },
@@ -88,6 +122,19 @@ describe('GenericDataGrid', () => {
     });
     const toolbar = wrapper.find('.generic-grid-toolbar');
     expect(toolbar.exists()).toBe(false);
+  });
+
+  it('shows toolbar when toolbarActions slot is provided', () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns, enableExport: false, enableClearFilters: false },
+      slots: {
+        toolbarActions: '<button class="custom-toolbar-action">add</button>',
+      },
+      global: { stubs },
+    });
+
+    expect(wrapper.find('.generic-grid-toolbar').exists()).toBe(true);
+    expect(wrapper.find('.custom-toolbar-action').exists()).toBe(true);
   });
 
   it('renders column without dataField (caption-only column)', () => {
@@ -246,5 +293,101 @@ describe('GenericDataGrid', () => {
     await wrapper.find('button.dx-btn').trigger('click');
     expect(mockClearFilter).toHaveBeenCalled();
     expect(mockClearSorting).toHaveBeenCalled();
+  });
+
+  it('does nothing when clear filters runs without a grid instance', () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns, enableClearFilters: true },
+      global: { stubs },
+    });
+
+    expect(() => (wrapper.vm as any).handleClearFilters()).not.toThrow();
+  });
+
+  it('exports full data with the default filename when no usable filter is returned', async () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: {
+        data,
+        columns,
+        enableExport: true,
+        exportConfig: {
+          headers: ['ID', 'Name'],
+          pickFields: (row: any) => [row.id, row.name],
+        },
+      },
+      global: { stubs },
+    });
+
+    (wrapper.vm as any).gridRef = {
+      instance: {
+        getCombinedFilter: () => [],
+      },
+    };
+
+    await (wrapper.vm as any).handleExport();
+
+    expect(exportGridData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fallbackData: data,
+        filenamePrefix: 'grid-export',
+      })
+    );
+  });
+
+  it('logs export failures instead of throwing', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    (exportGridData as any).mockRejectedValueOnce(new Error('export failed'));
+
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns, enableExport: true, exportConfig },
+      global: { stubs },
+    });
+
+    (wrapper.vm as any).gridRef = {
+      instance: {},
+    };
+
+    await expect((wrapper.vm as any).handleExport()).resolves.toBeUndefined();
+    expect(consoleSpy).toHaveBeenCalledWith('CSV export failed:', expect.any(Error));
+
+    consoleSpy.mockRestore();
+  });
+
+  it('exposes the underlying grid instance when available', () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: { data, columns },
+      global: { stubs },
+    });
+
+    const gridInstance = { refresh: vi.fn() };
+    (wrapper.vm as any).gridRef = { instance: gridInstance };
+
+    expect((wrapper.vm as any).instance).toStrictEqual(gridInstance);
+  });
+
+  it('renders slot templates with nested cell data and falls back safely when the slot is missing', () => {
+    const wrapper = mount(GenericDataGrid, {
+      props: {
+        data,
+        columns: [{ dataField: 'name', caption: 'Name', template: 'nameCell' }],
+      },
+      slots: {
+        nameCell: ({ data: row }: any) => `Row:${row.name}`,
+      },
+      global: { stubs },
+    });
+
+    const renderTemplate = (wrapper.vm as any).getTemplate('nameCell');
+    const slotContainer = document.createElement('div');
+    const returnedContainer = renderTemplate(slotContainer, { data: { name: 'Nested' } });
+
+    expect(returnedContainer).toBe(slotContainer);
+    expect(slotContainer.textContent).toContain('Row:Nested');
+
+    const missingSlotTemplate = (wrapper.vm as any).getTemplate('missingSlot');
+    const fallbackContainer = document.createElement('div');
+    missingSlotTemplate(fallbackContainer, null);
+
+    expect(fallbackContainer.textContent).toBe('');
   });
 });

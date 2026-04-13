@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 
 import TemplateFieldEditor from '@/components/outbound/jirawebhooks/wizard/TemplateFieldEditor.vue';
 
@@ -47,5 +48,94 @@ describe('TemplateFieldEditor', () => {
     const updates = wrapper.emitted('update:modelValue') || [];
     const lastUpdate = updates[updates.length - 1] as string[];
     expect(lastUpdate[0]).toBe('Hello {{foo}}');
+  });
+
+  it('replaces the selected range when inserting a placeholder', async () => {
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello world',
+      },
+      attachTo: document.body,
+    });
+
+    const textarea = wrapper.find('textarea');
+    const element = textarea.element as HTMLTextAreaElement;
+    element.setSelectionRange(6, 11);
+    await textarea.trigger('click');
+
+    const vm = wrapper.vm as { insertPlaceholder: (value: string) => Promise<void> };
+    await vm.insertPlaceholder('{{name}}');
+
+    const updates = wrapper.emitted('update:modelValue') || [];
+    const lastUpdate = updates[updates.length - 1] as string[];
+    expect(lastUpdate[0]).toBe('Hello {{name}}');
+  });
+
+  it('does not add a leading space when inserting at the beginning', async () => {
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello',
+      },
+      attachTo: document.body,
+    });
+
+    const textarea = wrapper.find('textarea');
+    const element = textarea.element as HTMLTextAreaElement;
+    element.setSelectionRange(0, 0);
+    await textarea.trigger('click');
+
+    const vm = wrapper.vm as { insertPlaceholder: (value: string) => Promise<void> };
+    await vm.insertPlaceholder('{{start}}');
+
+    const updates = wrapper.emitted('update:modelValue') || [];
+    const lastUpdate = updates[updates.length - 1] as string[];
+    expect(lastUpdate[0]).toBe('{{start}}Hello');
+  });
+
+  it('shows preview text, disables preview toggle without content, and emits toggle-preview when enabled', async () => {
+    const wrapperDisabled = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: '   ',
+        showPreview: true,
+        previewText: '',
+      },
+    });
+
+    expect(wrapperDisabled.text()).toContain('Preview is empty');
+    expect(wrapperDisabled.find('.ps-eye-icon').attributes('disabled')).toBeDefined();
+
+    const wrapperEnabled = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello',
+        showPreview: true,
+        previewText: 'Rendered preview',
+      },
+    });
+
+    expect(wrapperEnabled.text()).toContain('Rendered preview');
+    await wrapperEnabled.find('.ps-eye-icon').trigger('click');
+    expect(wrapperEnabled.emitted('toggle-preview')).toEqual([[]]);
+  });
+
+  it('forwards tooltip text for add and preview actions', async () => {
+    const onActionEnter = vi.fn();
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello',
+        onActionEnter,
+      },
+    });
+
+    await wrapper.find('.ps-add-icon').trigger('mouseenter');
+    await wrapper.find('.ps-eye-icon').trigger('mouseenter');
+    await nextTick();
+
+    expect(onActionEnter).toHaveBeenNthCalledWith(1, 'Insert fields', expect.any(MouseEvent));
+    expect(onActionEnter).toHaveBeenNthCalledWith(2, 'Show preview', expect.any(MouseEvent));
   });
 });

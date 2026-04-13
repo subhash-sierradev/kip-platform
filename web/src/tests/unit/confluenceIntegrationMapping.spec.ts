@@ -163,6 +163,6 @@ describe('confluenceIntegrationMapping', () => {
     expect(request.itemSubtype).toBe('');
     expect(request.dynamicDocumentType).toBeUndefined();
     expect(request.dynamicDocumentTypeLabel).toBeUndefined();
-    expect(request.confluenceSpaceKeyFolderKey).toBeUndefined();
+    expect(request.confluenceSpaceKeyFolderKey).toBe('ROOT');
   });
 });

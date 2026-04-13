@@ -7,6 +7,7 @@ import { nextTick } from 'vue';
 vi.mock('@/api/services/JiraWebhookService', () => ({
   JiraWebhookService: {
     listJiraWebhooks: vi.fn(),
+    getAllJiraNormalizedNames: vi.fn().mockResolvedValue([]),
   },
 }));
 import { JiraWebhookService } from '@/api/services/JiraWebhookService';

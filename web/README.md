@@ -6,21 +6,21 @@ Enterprise-grade Vue 3 + TypeScript UI for the Kaseware Integration Platform —
 
 ## Tech Stack
 
-| Component | Technology |
-|---|---|
-| **Framework** | Vue.js 3.5.25 + TypeScript 5.7.2 |
-| **Build Tool** | Vite 7.3.0 |
-| **UI Components** | DevExtreme 25.2.3 |
-| **State Management** | Pinia 3.0.4 |
-| **Routing** | Vue Router 4.6.3 |
-| **Authentication** | Keycloak 26.2.0 (fully integrated) |
-| **HTTP Client** | Axios 1.13.2 |
-| **Utilities** | @vueuse/core 14.1.0 |
-| **Icons** | lucide-vue-next 0.553.0 |
-| **Scheduling** | cron-validator 1.4.0 |
-| **Export** | XLSX export (devextreme-exceljs-fork), file-saver 2.0.5 |
-| **Testing** | Vitest 4.0.9, @vue/test-utils 2.4.6, Vue Testing Library 8.1.0 |
-| **Linting** | ESLint 9.39.3, @typescript-eslint 8.49.0 |
+| Component            | Technology                                                     |
+| -------------------- | -------------------------------------------------------------- |
+| **Framework**        | Vue.js 3.5.25 + TypeScript 5.7.2                               |
+| **Build Tool**       | Vite 7.x                                                       |
+| **UI Components**    | DevExtreme 25.2.3                                              |
+| **State Management** | Pinia 3.0.4                                                    |
+| **Routing**          | Vue Router 4.6.3                                               |
+| **Authentication**   | Keycloak 26.2.0 (fully integrated)                             |
+| **HTTP Client**      | Axios 1.13.2                                                   |
+| **Utilities**        | @vueuse/core 14.1.0                                            |
+| **Icons**            | lucide-vue-next 0.553.0                                        |
+| **Scheduling**       | cron-validator 1.4.0                                           |
+| **Export**           | XLSX export (devextreme-exceljs-fork), file-saver 2.0.5        |
+| **Testing**          | Vitest 4.0.9, @vue/test-utils 2.4.6, Vue Testing Library 8.1.0 |
+| **Linting**          | ESLint 9.39.3, @typescript-eslint 8.49.0                       |
 
 ---
 
@@ -103,12 +103,12 @@ Upgrade policy:
 
 Coverage thresholds are enforced via `vitest.config.ts` (v8 provider) and `coverage.config.js`.
 
-| Metric | Target | Current |
-|---|---|---|
-| **Lines** | 80% | ~88.7% ✅ |
-| **Statements** | 80% | ~87.5% ✅ |
-| **Functions** | 80% | ~84.4% ✅ |
-| **Branches** | 80% | ~79.8% ⚠️ |
+| Metric         | Target | Current   |
+| -------------- | ------ | --------- |
+| **Lines**      | 80%    | ~88.7% ✅ |
+| **Statements** | 80%    | ~87.5% ✅ |
+| **Functions**  | 80%    | ~84.4% ✅ |
+| **Branches**   | 80%    | ~79.8% ⚠️ |
 
 After running `npm run test:coverage`, open `coverage/index.html` for file-level detail.
 
@@ -178,17 +178,18 @@ Real-time in-app notifications delivered via Server-Sent Events (SSE) backed by 
 
 ### Key Files
 
-| File | Purpose |
-|---|---|
-| `src/composables/useNotifications.ts` | SSE lifecycle: connect, exponential backoff reconnect (2s → 30s), heartbeat handling |
-| `src/store/notification.ts` | Pinia store: `unreadCount`, `notifications[]`, `notificationToasts[]`, pagination, optimistic mark-read |
-| `src/api/services/UserNotificationService.ts` | Hand-crafted service (not auto-generated): `getNotifications()`, `getUnreadCount()`, `markAsRead()` |
-| `src/components/layout/NotificationBell.vue` | Lucide `Bell` SVG with amber badge overflowing top-right (`top: -6px; right: -6px`) |
-| `src/components/layout/NotificationPanel.vue` | Dropdown: recent notifications, mark-as-read, "View all" link |
-| `src/components/notifications/NotificationsAllPage.vue` | Full-page list at `/notifications` |
-| `src/components/admin/notifications/NotificationsPage.vue` | Admin UI: Event Catalog, Notification Rules, Templates tabs |
+| File                                                       | Purpose                                                                                                 |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `src/composables/useNotifications.ts`                      | SSE lifecycle: connect, exponential backoff reconnect (2s → 30s), heartbeat handling                    |
+| `src/store/notification.ts`                                | Pinia store: `unreadCount`, `notifications[]`, `notificationToasts[]`, pagination, optimistic mark-read |
+| `src/api/services/UserNotificationService.ts`              | Hand-crafted service (not auto-generated): `getNotifications()`, `getUnreadCount()`, `markAsRead()`     |
+| `src/components/layout/NotificationBell.vue`               | Lucide `Bell` SVG with amber badge overflowing top-right (`top: -6px; right: -6px`)                     |
+| `src/components/layout/NotificationPanel.vue`              | Dropdown: recent notifications, mark-as-read, "View all" link                                           |
+| `src/components/notifications/NotificationsAllPage.vue`    | Full-page list at `/notifications`                                                                      |
+| `src/components/admin/notifications/NotificationsPage.vue` | Admin UI: Event Catalog, Notification Rules, Templates tabs                                             |
 
 ### SSE Connection (`useNotifications`)
+
 - Initialized once in `AppShell.vue` on mount
 - Stream URL: `{API_BASE}/management/notifications/stream`
 - Authentication: uses the standard OAuth2/JWT flow (e.g., `Authorization: Bearer <token>` header managed by Keycloak/axios) — no tokens in the URL
@@ -197,6 +198,7 @@ Real-time in-app notifications delivered via Server-Sent Events (SSE) backed by 
 - Exponential backoff reconnect on error: 2s → 4s → 8s → 16s → 30s (capped)
 
 ### Notification Store (`useNotificationStore`)
+
 - `unreadCount` — drives bell badge
 - `notifications[]` — in-memory page 0; deduplication on incoming SSE
 - `notificationToasts[]` — auto-dismissed after 6s
@@ -204,7 +206,9 @@ Real-time in-app notifications delivered via Server-Sent Events (SSE) backed by 
 - `markReadLocal()` / `markAllReadLocal()` — optimistic local mutations before API call
 
 ### Admin Panel (`/admin/notifications`)
+
 Three tabs managed by `useNotificationAdmin` composable:
+
 1. **Event Catalog** — 22 platform-wide event types (read-only grid, no tooltips)
 2. **Notification Rules** — per-tenant rules: create, delete, toggle enabled/disabled, batch-create all remaining events
 3. **Templates** — per-tenant `{{placeholder}}`-based title + message templates
@@ -268,4 +272,3 @@ Pinia stores in `src/store/`:
 ## License
 
 Copyright © 2026 Kaseware. All rights reserved.
-

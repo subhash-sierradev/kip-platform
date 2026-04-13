@@ -118,10 +118,11 @@ const scheduleText = computed(() => {
     const [hhStr, mmStr] = rawTime.split(':');
     const hours = parseInt(hhStr ?? '0', 10);
     const minutes = parseInt(mmStr ?? '0', 10);
-    const today = new Date();
-    const utcDate = new Date(
-      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate(), hours, minutes, 0)
-    );
+    // executionTime is stored as UTC; anchor to today's UTC calendar date so the
+    // reconstructed instant is correct across midnight and DST boundaries.
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const [yy, mm, dd] = dateStr.split('-').map(v => parseInt(v, 10));
+    const utcDate = new Date(Date.UTC(yy, mm - 1, dd, hours, minutes, 0));
     const userTz = getUserTimezone();
     const displayTime = new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',

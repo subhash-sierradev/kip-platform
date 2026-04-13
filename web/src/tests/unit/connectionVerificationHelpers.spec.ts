@@ -165,7 +165,7 @@ describe('connectionVerificationHelpers', () => {
       const apiErrorLike = {
         message: 'Service Unavailable',
         body: {
-          message: 'External service is temporarily unavailable. Please try again later.',
+          message: 'Unable to reach the processing service. Please try again in a moment.',
         },
       };
 
@@ -179,7 +179,7 @@ describe('connectionVerificationHelpers', () => {
 
       expect(result).toEqual({
         success: false,
-        message: 'External service is temporarily unavailable. Please try again later.',
+        message: 'Unable to reach the processing service. Please try again in a moment.',
       });
 
       consoleSpy.mockRestore();

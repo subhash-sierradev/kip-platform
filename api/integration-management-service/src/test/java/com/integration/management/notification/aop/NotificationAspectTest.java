@@ -33,10 +33,14 @@ import static org.mockito.Mockito.when;
 @DisplayName("NotificationAspect")
 class NotificationAspectTest {
 
-    @Mock private NotificationEventPublisher notificationEventPublisher;
-    @Mock private ApplicationContext applicationContext;
-    @Mock private ProceedingJoinPoint joinPoint;
-    @Mock private MethodSignature methodSignature;
+    @Mock
+    private NotificationEventPublisher notificationEventPublisher;
+    @Mock
+    private ApplicationContext applicationContext;
+    @Mock
+    private ProceedingJoinPoint joinPoint;
+    @Mock
+    private MethodSignature methodSignature;
 
     @InjectMocks
     private NotificationAspect notificationAspect;
@@ -91,7 +95,7 @@ class NotificationAspectTest {
             assertThat(result).isEqualTo("result");
             ArgumentCaptor<NotificationEvent> captor =
                     ArgumentCaptor.forClass(NotificationEvent.class);
-            verify(notificationEventPublisher).publish(captor.capture());
+            verify(notificationEventPublisher).publishAfterCommit(captor.capture());
             assertThat(captor.getValue().getEventKey()).isEqualTo("SITE_CONFIG_UPDATED");
             assertThat(captor.getValue().getTenantId()).isEqualTo("tenant-1");
             assertThat(captor.getValue().getTriggeredByUserId()).isEqualTo("user-1");
@@ -117,7 +121,7 @@ class NotificationAspectTest {
 
             ArgumentCaptor<NotificationEvent> captor =
                     ArgumentCaptor.forClass(NotificationEvent.class);
-            verify(notificationEventPublisher).publish(captor.capture());
+            verify(notificationEventPublisher).publishAfterCommit(captor.capture());
             assertThat(captor.getValue().getMetadata())
                     .containsEntry("configKey", "my-config");
         }
@@ -137,7 +141,7 @@ class NotificationAspectTest {
                     .isInstanceOf(RuntimeException.class)
                     .hasMessage("service failed");
 
-            verify(notificationEventPublisher, never()).publish(any());
+            verify(notificationEventPublisher, never()).publishAfterCommit(any());
         }
     }
 
@@ -152,7 +156,7 @@ class NotificationAspectTest {
                     new Object[]{"tenant-1", "user-1"});
             PublishNotification ann = buildAnnotation();
             doThrow(new RuntimeException("rabbit down"))
-                    .when(notificationEventPublisher).publish(any());
+                    .when(notificationEventPublisher).publishAfterCommit(any());
 
             Object result = notificationAspect.around(joinPoint, ann);
 
@@ -181,7 +185,7 @@ class NotificationAspectTest {
 
             ArgumentCaptor<NotificationEvent> captor =
                     ArgumentCaptor.forClass(NotificationEvent.class);
-            verify(notificationEventPublisher).publish(captor.capture());
+            verify(notificationEventPublisher).publishAfterCommit(captor.capture());
             assertThat(captor.getValue().getMetadata()).isNull();
         }
     }
@@ -218,7 +222,7 @@ class NotificationAspectTest {
 
             ArgumentCaptor<NotificationEvent> captor =
                     ArgumentCaptor.forClass(NotificationEvent.class);
-            verify(notificationEventPublisher).publish(captor.capture());
+            verify(notificationEventPublisher).publishAfterCommit(captor.capture());
             assertThat(captor.getValue().getMetadata())
                     .containsEntry("configKey", "theme");
         }
@@ -249,7 +253,7 @@ class NotificationAspectTest {
             assertThat(result).isEqualTo("result");
             ArgumentCaptor<NotificationEvent> captor =
                     ArgumentCaptor.forClass(NotificationEvent.class);
-            verify(notificationEventPublisher).publish(captor.capture());
+            verify(notificationEventPublisher).publishAfterCommit(captor.capture());
             assertThat(captor.getValue().getMetadata()).isEmpty();
         }
     }

@@ -1,6 +1,6 @@
 <template>
   <div class="cs-section">
-    <div class="cs-section-title">New Connection</div>
+    <div v-if="showTitle" class="cs-section-title">New Connection</div>
 
     <!-- Credential Type Selector (for services with dynamic types) -->
     <div v-if="config.showCredentialTypeSelector" class="cs-field">
@@ -43,12 +43,7 @@
 
     <!-- Dynamic Credential Fields -->
     <div class="cs-credential-section" :class="{ 'cs-credential-grid': useTwoColCredentialGrid }">
-      <div
-        v-for="field in currentCredentialFields"
-        :key="field.key"
-        class="cs-field"
-        :class="{ 'cs-field-full': useTwoColCredentialGrid && isCredentialFieldFullWidth(field) }"
-      >
+      <div v-for="field in currentCredentialFields" :key="field.key" class="cs-field">
         <label class="cs-label">
           {{ field.label }}<span v-if="field.required" class="cs-required">*</span>
         </label>
@@ -138,14 +133,16 @@ const props = defineProps<{
   credentialTypes: CredentialTypeOption[];
   currentCredentialFields: CredentialField[];
   useTwoColCredentialGrid: boolean;
-  isCredentialFieldFullWidth: (field: CredentialField) => boolean;
   canTestConnection: boolean;
   isTesting: boolean;
   tested: boolean;
   testSuccess: boolean;
   testMessage: string;
   testButtonText: string;
+  showTitle?: boolean;
 }>();
+
+const showTitle = props.showTitle ?? true;
 
 const localData = reactive<ConnectionStepData>({ ...props.modelValue });
 const passwordVisibility = reactive<Record<string, boolean>>({});
