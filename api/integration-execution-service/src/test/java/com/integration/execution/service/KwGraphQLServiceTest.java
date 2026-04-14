@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.integration.execution.client.KwGraphqlClient;
+import com.integration.execution.config.properties.MonitoringDocumentConfig;
 import com.integration.execution.contract.rest.response.kaseware.KwDocField;
 import com.integration.execution.contract.rest.response.kaseware.KwDynamicDocType;
 import com.integration.execution.contract.rest.response.kaseware.KwItemSubtypeDto;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,7 +35,7 @@ class KwGraphQLServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new KwGraphQLService(kwGraphqlClient, new ObjectMapper());
+        service = new KwGraphQLService(kwGraphqlClient, new ObjectMapper(), new MonitoringDocumentConfig());
     }
 
     @Test
@@ -452,7 +454,10 @@ class KwGraphQLServiceTest {
     }
 
     @Test
-    void fetchMonitoringData_docWithNonArrayAttachments_skipsIt() {
+    void fetchMonitoringData_docWithNonArrayAttachments_capturesItAsScalar() {
+        // The old putArrayAttributeIfPresent silently dropped non-array values.
+        // The generic iterator now captures any non-null value regardless of type,
+        // making the report more flexible for clients with unexpected shapes.
         ObjectMapper mapper = new ObjectMapper();
 
         ArrayNode docs = mapper.createArrayNode();
@@ -468,7 +473,8 @@ class KwGraphQLServiceTest {
         List<KwMonitoringDocument> result = service.fetchMonitoringData("form-F", 0, 99999, 0, 500);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("attachments");
+        assertThat(result.get(0).getAttributes()).containsKey("attachments");
+        assertThat(result.get(0).getAttributes().get("attachments")).isEqualTo("not-an-array");
     }
 
     @Test
@@ -816,14 +822,14 @@ class KwGraphQLServiceTest {
     }
 
     @Test
-    void fetchMonitoringData_docWithNonTextualDocumentTypeField_doesNotPutIfPresent() {
+    void fetchMonitoringData_docWithNonTextualDocumentTypeField_includesNumericValue() {
         ObjectMapper mapper = new ObjectMapper();
 
         ArrayNode docs = mapper.createArrayNode();
         ObjectNode doc = mapper.createObjectNode();
         doc.put("id", "doc-nontext");
         doc.put("dynamicFormDefinitionId", "form-nontext");
-        doc.put("documentType", 123); // non-textual
+        doc.put("documentType", 123); // numeric — generic iterator must preserve it
         docs.add(doc);
 
         when(kwGraphqlClient.fetchMonitoringDocuments("form-nontext", 0, 99999, 0, 500)).thenReturn(docs);
@@ -831,7 +837,8 @@ class KwGraphQLServiceTest {
 
         List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nontext", 0, 99999, 0, 500);
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("documentType");
+        assertThat(result.get(0).getAttributes()).containsKey("documentType");
+        assertThat(result.get(0).getAttributes().get("documentType")).isEqualTo(123);
     }
 
     @Test
@@ -1178,5 +1185,71 @@ class KwGraphQLServiceTest {
 
         List<KwMonitoringDocument> result = service.fetchMonitoringData("form-arr-noopt", 0, 99999, 0, 500);
         assertThat(result).hasSize(1);
+    }
+
+    // -----------------------------------------------------------------------
+    // Generic / flexible attribute extraction tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    void fetchMonitoringData_unknownCustomClientField_isCapturedInAttributes() {
+        // Verifies that a field not in the hardcoded list (or stable-fields config)
+        // is captured automatically without requiring a code change.
+        ObjectMapper mapper = new ObjectMapper();
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-custom");
+        doc.put("dynamicFormDefinitionId", "form-custom");
+        doc.put("clientSpecificScore", 42);          // numeric custom field
+        doc.put("clientRegion", "EMEA");             // text custom field
+        ObjectNode customMeta = mapper.createObjectNode();
+        customMeta.put("department", "Finance");
+        doc.set("clientMeta", customMeta);           // object custom field
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-custom", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-custom")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-custom", 0, 99999, 0, 500);
+
+        assertThat(result).hasSize(1);
+        Map<String, Object> attributes = result.get(0).getAttributes();
+        assertThat(attributes).containsKey("clientSpecificScore");
+        assertThat(attributes.get("clientSpecificScore")).isEqualTo(42);
+        assertThat(attributes).containsKey("clientRegion");
+        assertThat(attributes.get("clientRegion")).isEqualTo("EMEA");
+        assertThat(attributes).containsKey("clientMeta");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> clientMeta = (Map<String, Object>) attributes.get("clientMeta");
+        assertThat(clientMeta.get("department")).isEqualTo("Finance");
+    }
+
+    @Test
+    void fetchMonitoringData_configOverrideRequireNonEmpty_retainsEmptyArrayForNonListedField() {
+        // When requireNonEmptyArrayFields does NOT include a field, an empty array is kept.
+        // This test verifies the config controls the behaviour, not hardcoded names.
+        ObjectMapper mapper = new ObjectMapper();
+
+        MonitoringDocumentConfig config = new MonitoringDocumentConfig();
+        // Remove "authors" from the require-non-empty set so empty authors array is retained
+        config.getRequireNonEmptyArrayFields().remove("authors");
+        KwGraphQLService flexService = new KwGraphQLService(kwGraphqlClient, mapper, config);
+
+        ArrayNode docs = mapper.createArrayNode();
+        ObjectNode doc = mapper.createObjectNode();
+        doc.put("id", "doc-cfg");
+        doc.put("dynamicFormDefinitionId", "form-cfg");
+        doc.set("authors", mapper.createArrayNode()); // empty — normally excluded
+        docs.add(doc);
+
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-cfg", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-cfg")).thenReturn(mapper.createObjectNode());
+
+        List<KwMonitoringDocument> result = flexService.fetchMonitoringData("form-cfg", 0, 99999, 0, 500);
+
+        assertThat(result).hasSize(1);
+        // With "authors" removed from requireNonEmpty, empty array must be present in attributes
+        assertThat(result.get(0).getAttributes()).containsKey("authors");
     }
 }

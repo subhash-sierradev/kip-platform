@@ -1,17 +1,16 @@
 package com.integration.execution.service.processor;
 
-import com.integration.execution.model.KwMonitoringDocument;
 import com.integration.execution.model.ConfluenceMonitoringReport;
+import com.integration.execution.model.ConfluenceMonitoringReport.ClientGroup;
 import com.integration.execution.model.ConfluenceMonitoringReport.DynamicField;
 import com.integration.execution.model.ConfluenceMonitoringReport.PrioritySummaryEntry;
 import com.integration.execution.model.ConfluenceMonitoringReport.ReportEntry;
+import com.integration.execution.model.KwMonitoringDocument;
 import freemarker.template.Configuration;
 import freemarker.template.Template;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
-import com.integration.execution.model.ConfluenceMonitoringReport.ClientGroup;
 
 import java.io.StringWriter;
 import java.time.Instant;
@@ -23,7 +22,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+
+import static com.integration.execution.constants.KasewareConstants.DYNAMIC_DATA_FIELD;
 
 /**
  * Renders Confluence Storage Format XHTML pages from monitoring data.
@@ -44,6 +46,8 @@ public class ConfluencePageRenderer {
     private static final DateTimeFormatter TIMESTAMP_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm 'UTC'", Locale.ENGLISH);
     private static final List<String> PRIORITY_ORDER = List.of("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO");
+    private static final String UNASSIGNED_CLIENT = "Unassigned";
+    private static final Set<String> VALID_PRIORITIES = Set.of("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO");
 
     private final Configuration freemarkerConfig;
     private ZoneId timezone = ZoneOffset.UTC;
@@ -70,45 +74,75 @@ public class ConfluencePageRenderer {
         String reportDate = now.format(REPORT_DATE_FMT);
         String reportDateLong = now.format(REPORT_DATE_LONG_FMT);
 
-        // Group items by Client (alphabetical via TreeMap)
-        Map<String, List<KwMonitoringDocument>> byClient = new TreeMap<>();
+        // Separate named clients (alphabetical) from unassigned
+        Map<String, List<KwMonitoringDocument>> namedClients = new TreeMap<>();
+        List<KwMonitoringDocument> unassignedDocs = new ArrayList<>();
+
         for (KwMonitoringDocument item : data) {
             String clientName = extractClientName(item);
-            byClient.computeIfAbsent(clientName, k -> new ArrayList<>()).add(item);
+            if (UNASSIGNED_CLIENT.equals(clientName)) {
+                unassignedDocs.add(item);
+            } else {
+                namedClients.computeIfAbsent(clientName, k -> new ArrayList<>()).add(item);
+            }
         }
 
-        // Build per-client groups
+        // Build groups: named clients first (alphabetical), unassigned appended last
         List<ClientGroup> clientGroups = new ArrayList<>();
         List<ReportEntry> allReports = new ArrayList<>();
-        for (Map.Entry<String, List<KwMonitoringDocument>> entry : byClient.entrySet()) {
+        int unrecognizedPriorityCount = 0;
+
+        for (Map.Entry<String, List<KwMonitoringDocument>> entry : namedClients.entrySet()) {
             List<ReportEntry> groupReports = entry.getValue().stream()
                     .map(this::toReportEntry).toList();
             allReports.addAll(groupReports);
+            unrecognizedPriorityCount += countUnrecognizedPriorities(groupReports);
             List<PrioritySummaryEntry> clientPriority = buildPrioritySummary(groupReports);
             clientGroups.add(new ClientGroup(
-                    entry.getKey(), groupReports.size(), clientPriority, groupReports));
+                    entry.getKey(), groupReports.size(), clientPriority, groupReports, false));
+        }
+
+        int unassignedCount = unassignedDocs.size();
+        if (!unassignedDocs.isEmpty()) {
+            List<ReportEntry> unassignedReports = unassignedDocs.stream()
+                    .map(this::toReportEntry).toList();
+            allReports.addAll(unassignedReports);
+            unrecognizedPriorityCount += countUnrecognizedPriorities(unassignedReports);
+            List<PrioritySummaryEntry> unassignedPriority = buildPrioritySummary(unassignedReports);
+            clientGroups.add(new ClientGroup(
+                    UNASSIGNED_CLIENT, unassignedReports.size(), unassignedPriority, unassignedReports, true));
+        }
+
+        if (unassignedCount > 0) {
+            log.warn("Confluence report: {} document(s) have no resolved Client field — grouped as Unassigned",
+                    unassignedCount);
+        }
+        if (unrecognizedPriorityCount > 0) {
+            log.warn("Confluence report: {} document(s) have unrecognized Priority values",
+                    unrecognizedPriorityCount);
         }
 
         List<PrioritySummaryEntry> prioritySummary = buildPrioritySummary(allReports);
         return new ConfluenceMonitoringReport(
                 reportDate, reportDateLong, generatedAt,
-                data.size(), byClient.size(), prioritySummary, clientGroups);
+                data.size(), namedClients.size(), prioritySummary, clientGroups,
+                unassignedCount, unrecognizedPriorityCount);
     }
 
     @SuppressWarnings("unchecked")
     private String extractClientName(KwMonitoringDocument item) {
         Map<String, Object> attributes = item.getAttributes() != null ? item.getAttributes() : Map.of();
-        Map<String, Object> dynamicData = attributes.containsKey("dynamicData")
-                ? (Map<String, Object>) attributes.get("dynamicData") : Map.of();
+        Map<String, Object> dynamicData = attributes.containsKey(DYNAMIC_DATA_FIELD)
+                ? (Map<String, Object>) attributes.get(DYNAMIC_DATA_FIELD) : Map.of();
         String client = resolveStringValue(dynamicData.get("Client"));
-        return (client != null && !client.isBlank()) ? client : "Unknown";
+        return (client != null && !client.isBlank()) ? client : UNASSIGNED_CLIENT;
     }
 
     @SuppressWarnings("unchecked")
     private ReportEntry toReportEntry(KwMonitoringDocument item) {
         Map<String, Object> attributes = item.getAttributes() != null ? item.getAttributes() : Map.of();
-        Map<String, Object> dynamicData = attributes.containsKey("dynamicData")
-                ? (Map<String, Object>) attributes.get("dynamicData") : Map.of();
+        Map<String, Object> dynamicData = attributes.containsKey(DYNAMIC_DATA_FIELD)
+                ? (Map<String, Object>) attributes.get(DYNAMIC_DATA_FIELD) : Map.of();
 
         String client = resolveStringValue(dynamicData.get("Client"));
         String priority = resolveStringValue(dynamicData.get("Priority"));
@@ -116,6 +150,16 @@ public class ConfluencePageRenderer {
             priority = "Info";
         }
         String normalizedPriority = priority.toUpperCase(Locale.ENGLISH);
+
+        boolean unrecognizedPriority = !VALID_PRIORITIES.contains(normalizedPriority);
+        if (unrecognizedPriority) {
+            log.debug("Unrecognized priority '{}' in document id={}", priority, item.getId());
+        }
+
+        String title = item.getTitle();
+        if (title == null || title.isBlank()) {
+            title = "[Untitled – " + item.getId() + "]";
+        }
 
         List<DynamicField> dynamicFields = buildDynamicFields(dynamicData);
         List<String> authors = extractAuthors(attributes);
@@ -126,8 +170,8 @@ public class ConfluencePageRenderer {
         String updatedAt = formatTimestamp(item.getUpdatedTimestamp());
 
         return new ReportEntry(
-                item.getTitle() != null ? item.getTitle() : "",
-                client != null ? client : "Unknown",
+                title,
+                client != null ? client : UNASSIGNED_CLIENT,
                 priority,
                 resolveLevelColour(normalizedPriority),
                 resolveLevelBgColour(normalizedPriority),
@@ -139,7 +183,8 @@ public class ConfluencePageRenderer {
                 dynamicFields,
                 authors,
                 serialNumbers,
-                tags
+                tags,
+                unrecognizedPriority
         );
     }
 
@@ -241,6 +286,10 @@ public class ConfluencePageRenderer {
                 .filter(e -> e.getValue() > 0)
                 .map(e -> new PrioritySummaryEntry(e.getKey(), resolveLevelColour(e.getKey()), e.getValue()))
                 .toList();
+    }
+
+    private int countUnrecognizedPriorities(List<ReportEntry> reports) {
+        return (int) reports.stream().filter(ReportEntry::unrecognizedPriority).count();
     }
 
     private String resolveLevelColour(String level) {

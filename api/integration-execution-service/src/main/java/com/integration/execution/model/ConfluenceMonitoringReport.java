@@ -9,7 +9,9 @@ public record ConfluenceMonitoringReport(
         int totalReports,
         int clientCount,
         List<PrioritySummaryEntry> prioritySummary,
-        List<ClientGroup> clientGroups
+        List<ClientGroup> clientGroups,
+        int unassignedCount,
+        int unrecognizedPriorityCount
 ) {
 
     public record PrioritySummaryEntry(String level, String colour, int count) {
@@ -19,7 +21,8 @@ public record ConfluenceMonitoringReport(
             String clientName,
             int totalReports,
             List<PrioritySummaryEntry> priorityCounts,
-            List<ReportEntry> reports
+            List<ReportEntry> reports,
+            boolean unassigned
     ) {
     }
 
@@ -37,7 +40,8 @@ public record ConfluenceMonitoringReport(
             List<DynamicField> dynamicFields,
             List<String> authors,
             List<String> serialNumbers,
-            List<String> tags
+            List<String> tags,
+            boolean unrecognizedPriority
     ) {
     }
 
