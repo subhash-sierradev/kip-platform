@@ -2,7 +2,6 @@ package com.integration.execution.config.properties;
 
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -22,7 +21,6 @@ import static com.integration.execution.constants.KasewareConstants.HIDDEN_FIELD
  * code changes.
  */
 @Data
-@Validated
 @ConfigurationProperties(prefix = "integration.monitoring.document")
 public class MonitoringDocumentConfig {
 

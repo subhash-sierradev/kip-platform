@@ -134,12 +134,29 @@ class KwToConfluenceOrchestratorTest {
         when(confluenceApiClient.createOrUpdatePage(any()))
                 .thenReturn(new ConfluencePublishResult("https://page.url", "99"));
 
-        ArgumentCaptor<ZoneId> timezoneCaptor = ArgumentCaptor.forClass(ZoneId.class);
-        verify(confluenceApiClient, org.mockito.Mockito.atMostOnce())
-                .getUserTimezone(anyString(), timezoneCaptor.capture());
-
         orchestrator.processExecution(cmd);
-        // verify no exception thrown and success path completes
+
+        ArgumentCaptor<ZoneId> timezoneCaptor = ArgumentCaptor.forClass(ZoneId.class);
+        verify(confluenceApiClient).getUserTimezone(anyString(), timezoneCaptor.capture());
+        assertThat(timezoneCaptor.getValue()).isEqualTo(ZoneId.of("America/New_York"));
+    }
+
+    @Test
+    void processExecution_allRecordsHaveUnknownClient_returnsSuccessWithZeroRecords() {
+        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "UTC");
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-unknown"));
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(List.of());
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.confluencePageUrl()).isNull();
+        verify(confluenceApiClient, never()).createOrUpdatePage(any());
+        verify(confluenceApiClient, never()).getUserTimezone(anyString(), any());
     }
 
     @Test

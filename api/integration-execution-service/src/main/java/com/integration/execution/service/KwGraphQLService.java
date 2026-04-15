@@ -1,5 +1,6 @@
 package com.integration.execution.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integration.execution.client.KwGraphqlClient;
@@ -271,7 +272,7 @@ public class KwGraphQLService {
             if (requireNonEmpty && node.isEmpty()) {
                 return;
             }
-            attributes.put(key, objectMapper.convertValue(node, List.class));
+            attributes.put(key, objectMapper.convertValue(node, new TypeReference<List<Object>>() {}));
             return;
         }
         attributes.put(key, objectMapper.convertValue(node, Object.class));
@@ -282,7 +283,7 @@ public class KwGraphQLService {
             String formDefId,
             Map<String, Object> attributes) {
         return KwMonitoringDocument.builder()
-                .id(doc.path("id").asText(null))
+                .id(doc.path(KW_FIELD_ID).asText(null))
                 .title(doc.path("title").asText(null))
                 .body(doc.path("body").asText(null))
                 .createdTimestamp(doc.path("createdTimestamp").asLong(0L))

@@ -94,7 +94,8 @@ class ConfluencePageRendererTest {
                 .attributes(null)
                 .build();
 
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
+        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(List.of(doc));
+        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
         assertThat(html).doesNotContain("Unknown");
@@ -204,7 +205,8 @@ class ConfluencePageRendererTest {
                 .attributes(Map.of("dynamicData", dynData))
                 .build();
 
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
+        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(List.of(doc));
+        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
         assertThat(html).doesNotContain("Unknown");
@@ -279,7 +281,8 @@ class ConfluencePageRendererTest {
                 docWithClient(null, "MEDIUM", "U1"),   // no client -> excluded
                 docWithClient("  ", "LOW", "U2"));      // blank client -> excluded
 
-        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
+        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(docs);
+        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
         assertThat(html).contains("Alpha Inc");

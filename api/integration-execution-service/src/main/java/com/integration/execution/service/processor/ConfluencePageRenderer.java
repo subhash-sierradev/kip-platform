@@ -17,7 +17,6 @@ import static com.integration.execution.constants.KasewareConstants.DYNAMIC_DATA
 import java.io.StringWriter;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -36,19 +35,14 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class ConfluencePageRenderer {
 
-    private static final DateTimeFormatter GENERATED_AT_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm 'UTC'", Locale.ENGLISH);
     private static final DateTimeFormatter REPORT_DATE_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter REPORT_DATE_LONG_FMT =
             DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
-    private static final DateTimeFormatter TIMESTAMP_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm 'UTC'", Locale.ENGLISH);
     private static final List<String> PRIORITY_ORDER = List.of("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO");
     private static final String UNKNOWN_CLIENT = "Unknown";
 
     private final Configuration freemarkerConfig;
-    private ZoneId timezone = ZoneOffset.UTC;
 
 
     public List<KwMonitoringDocument> filterNamedClients(List<KwMonitoringDocument> docs) {
@@ -57,7 +51,7 @@ public class ConfluencePageRenderer {
                 .toList();
     }
     public String buildPageContent(List<KwMonitoringDocument> data, ZoneId targetTimezone) {
-        ConfluenceMonitoringReport model = buildModel(filterNamedClients(data), targetTimezone);
+        ConfluenceMonitoringReport model = buildModel(data, targetTimezone);
         try {
             Template template = freemarkerConfig.getTemplate("monitoring_data_report.ftl");
             StringWriter writer = new StringWriter();
@@ -69,7 +63,6 @@ public class ConfluencePageRenderer {
     }
 
     private ConfluenceMonitoringReport buildModel(List<KwMonitoringDocument> data, ZoneId targetTimezone) {
-        this.timezone = targetTimezone;
         var now = Instant.now().atZone(targetTimezone);
         DateTimeFormatter generatedAtFmt = DateTimeFormatter.ofPattern(
                 "dd MMM yyyy 'at' HH:mm z", Locale.ENGLISH);
@@ -77,7 +70,7 @@ public class ConfluencePageRenderer {
         String reportDate = now.format(REPORT_DATE_FMT);
         String reportDateLong = now.format(REPORT_DATE_LONG_FMT);
 
-        // All incoming records are guaranteed to have a known client (filtered upstream in buildPageContent)
+        // Caller (KwToConfluenceOrchestrator) is responsible for pre-filtering unknown-client records.
         Map<String, List<KwMonitoringDocument>> namedClients = new TreeMap<>();
 
         for (KwMonitoringDocument item : data) {
@@ -89,7 +82,7 @@ public class ConfluencePageRenderer {
 
         for (Map.Entry<String, List<KwMonitoringDocument>> entry : namedClients.entrySet()) {
             List<ReportEntry> groupReports = entry.getValue().stream()
-                    .map(this::toReportEntry).toList();
+                    .map(item -> toReportEntry(item, targetTimezone)).toList();
             allReports.addAll(groupReports);
             List<PrioritySummaryEntry> clientPriority = buildPrioritySummary(groupReports);
             clientGroups.add(new ClientGroup(
@@ -112,7 +105,7 @@ public class ConfluencePageRenderer {
     }
 
     @SuppressWarnings("unchecked")
-    private ReportEntry toReportEntry(KwMonitoringDocument item) {
+    private ReportEntry toReportEntry(KwMonitoringDocument item, ZoneId targetTimezone) {
         Map<String, Object> attributes = item.getAttributes() != null ? item.getAttributes() : Map.of();
         Map<String, Object> dynamicData = attributes.containsKey(DYNAMIC_DATA_FIELD)
                 ? (Map<String, Object>) attributes.get(DYNAMIC_DATA_FIELD) : Map.of();
@@ -134,8 +127,8 @@ public class ConfluencePageRenderer {
         List<String> serialNumbers = extractSerials(attributes);
         List<String> tags = extractTags(attributes);
 
-        String createdAt = formatTimestamp(item.getCreatedTimestamp());
-        String updatedAt = formatTimestamp(item.getUpdatedTimestamp());
+        String createdAt = formatTimestamp(item.getCreatedTimestamp(), targetTimezone);
+        String updatedAt = formatTimestamp(item.getUpdatedTimestamp(), targetTimezone);
 
         return new ReportEntry(
                 title,
@@ -231,13 +224,13 @@ public class ConfluencePageRenderer {
         return List.of();
     }
 
-    private String formatTimestamp(long epochSeconds) {
+    private String formatTimestamp(long epochSeconds, ZoneId targetTimezone) {
         if (epochSeconds <= 0) {
             return "";
         }
         DateTimeFormatter timestampFmt = DateTimeFormatter.ofPattern(
                 "dd MMM yyyy HH:mm z", Locale.ENGLISH);
-        return Instant.ofEpochSecond(epochSeconds).atZone(timezone).format(timestampFmt);
+        return Instant.ofEpochSecond(epochSeconds).atZone(targetTimezone).format(timestampFmt);
     }
 
     private List<PrioritySummaryEntry> buildPrioritySummary(List<ReportEntry> reports) {
