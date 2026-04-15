@@ -357,7 +357,7 @@
 <ac:structured-macro ac:name="panel" ac:schema-version="1">
   <ac:parameter ac:name="title">Client Summary</ac:parameter>
   <ac:parameter ac:name="borderStyle">solid</ac:parameter>
-  <ac:parameter ac:name="borderColor"><#if group.unassigned>#DCDFE4<#else>#DCDFE4</#if></ac:parameter>
+  <ac:parameter ac:name="borderColor">#DCDFE4</ac:parameter>
   <ac:parameter ac:name="titleBGColor"><#if group.unassigned>#F4F5F7<#else>#F7F8F9</#if></ac:parameter>
   <ac:rich-text-body>
     <p><strong>Total Reports:</strong> ${group.totalReports}</p>

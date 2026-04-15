@@ -171,7 +171,7 @@ public class ConfluencePageRenderer {
 
         return new ReportEntry(
                 title,
-                client != null ? client : UNASSIGNED_CLIENT,
+                (client != null && !client.isBlank()) ? client : UNASSIGNED_CLIENT,
                 priority,
                 resolveLevelColour(normalizedPriority),
                 resolveLevelBgColour(normalizedPriority),
