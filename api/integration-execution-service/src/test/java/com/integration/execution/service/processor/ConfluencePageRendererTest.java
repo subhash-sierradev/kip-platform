@@ -87,7 +87,7 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_documentWithNullAttributes_usesUnassignedClient() {
+    void buildPageContent_documentWithNullAttributes_usesUnknownClient() {
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
                 .id("doc-no-attrs")
                 .title("No Attributes")
@@ -97,7 +97,7 @@ class ConfluencePageRendererTest {
         String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).contains("Unassigned");
+        assertThat(html).contains("Unknown");
     }
 
     @Test
@@ -196,7 +196,7 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_clientWithBlankName_groupedUnderUnassigned() {
+    void buildPageContent_clientWithBlankName_groupedUnderUnknown() {
         Map<String, Object> dynData = new HashMap<>();
         dynData.put("Client", "  ");
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
@@ -207,8 +207,7 @@ class ConfluencePageRendererTest {
         String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).contains("Unassigned");
-        assertThat(html).doesNotContain("Unknown");
+        assertThat(html).contains("Unknown");
     }
 
     @Test
@@ -272,58 +271,27 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_unassignedGroupAppearsAfterNamedClients() {
+    void buildPageContent_unknownGroupAppearsAfterNamedClients() {
         List<KwMonitoringDocument> docs = List.of(
                 docWithClient("Zeta Corp", "LOW", "Z"),
                 docWithClient("Alpha Inc", "HIGH", "A"),
-                docWithClient(null, "MEDIUM", "U1"),   // no client → Unassigned
-                docWithClient("  ", "LOW", "U2"));      // blank client → Unassigned
+                docWithClient(null, "MEDIUM", "U1"),   // no client → Unknown
+                docWithClient("  ", "LOW", "U2"));      // blank client → Unknown
 
         String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
         assertThat(html).contains("Alpha Inc");
         assertThat(html).contains("Zeta Corp");
-        assertThat(html).contains("Unassigned");
+        assertThat(html).contains("Unknown");
 
-        // Use the unassigned <h2> tag (unique to group body) as position anchor.
-        // The TOC also has color:#626F86 inside a <strong>, so we match <h2 specifically.
+        // Use the unknown <h2> heading as position anchor.
         int alphaIdx = html.indexOf(">Alpha Inc<");
         int zetaIdx = html.indexOf(">Zeta Corp<");
-        int unassignedHeadingIdx = html.indexOf("<h2 style=\"color:#626F86");
-        assertThat(unassignedHeadingIdx).isGreaterThan(-1);
-        assertThat(alphaIdx).isLessThan(unassignedHeadingIdx);
-        assertThat(zetaIdx).isLessThan(unassignedHeadingIdx);
-    }
-
-    @Test
-    void buildPageContent_unrecognizedPriority_htmlContainsWarningNote() {
-        Map<String, Object> dynData = new HashMap<>();
-        dynData.put("Client", "CorpX");
-        dynData.put("Priority", "HIGHT");  // typo — not a valid priority
-
-        KwMonitoringDocument doc = KwMonitoringDocument.builder()
-                .id("doc-bad-priority")
-                .title("Bad Priority Report")
-                .attributes(Map.of("dynamicData", dynData))
-                .build();
-
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
-
-        assertThat(html).isNotBlank();
-        assertThat(html).contains("HIGHT");
-        assertThat(html).contains("Data Quality Warning");
-        assertThat(html).contains("not a recognised value");
-    }
-
-    @Test
-    void buildPageContent_validPriority_noWarningNote() {
-        String html = renderer.buildPageContent(
-                List.of(docWithClient("CorpY", "HIGH", "Valid")), ZoneId.of("UTC"));
-
-        assertThat(html).isNotBlank();
-        assertThat(html).doesNotContain("Data Quality Warning");
-        assertThat(html).doesNotContain("not a recognised value");
+        int unknownHeadingIdx = html.indexOf(">Unknown<");
+        assertThat(unknownHeadingIdx).isGreaterThan(-1);
+        assertThat(alphaIdx).isLessThan(unknownHeadingIdx);
+        assertThat(zetaIdx).isLessThan(unknownHeadingIdx);
     }
 
     @Test
@@ -357,55 +325,15 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_dataQualityPanelPresent_whenUnassignedExists() {
-        List<KwMonitoringDocument> docs = List.of(
-                docWithClient("Corp", "HIGH", "T1"),
-                docWithClient(null, "LOW", "T2"));
-
-        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
-
-        assertThat(html).contains("Data Quality Issues Detected");
-        assertThat(html).contains("no Client");
-    }
-
-    @Test
-    void buildPageContent_dataQualityPanelPresent_whenUnrecognizedPriorityExists() {
-        Map<String, Object> dynData = new HashMap<>();
-        dynData.put("Client", "Corp");
-        dynData.put("Priority", "URGENT");  // unrecognized
-
-        KwMonitoringDocument doc = KwMonitoringDocument.builder()
-                .id("dqp-1").title("T")
-                .attributes(Map.of("dynamicData", dynData))
-                .build();
-
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
-
-        assertThat(html).contains("Data Quality Issues Detected");
-        assertThat(html).contains("unrecognized Priority");
-    }
-
-    @Test
-    void buildPageContent_dataQualityPanelAbsent_whenAllDataValid() {
-        List<KwMonitoringDocument> docs = List.of(
-                docWithClient("Alpha", "CRITICAL", "R1"),
-                docWithClient("Beta", "LOW", "R2"));
-
-        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
-
-        assertThat(html).doesNotContain("Data Quality Issues Detected");
-    }
-
-    @Test
-    void buildPageContent_onlyNamedClients_clientCountExcludesUnassigned() {
-        // Named clients only — unassigned group should NOT appear at all
+    void buildPageContent_onlyNamedClients_clientCountExcludesUnknown() {
+        // Named clients only — unknown group should NOT appear at all
         List<KwMonitoringDocument> docs = List.of(
                 docWithClient("Alpha", "HIGH", "A"),
                 docWithClient("Beta", "LOW", "B"));
 
         String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
 
-        assertThat(html).doesNotContain("Unassigned");
+        assertThat(html).doesNotContain("Unknown");
     }
 
     // -----------------------------------------------------------------------

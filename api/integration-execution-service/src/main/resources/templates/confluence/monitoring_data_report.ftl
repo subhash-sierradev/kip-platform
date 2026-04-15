@@ -222,11 +222,11 @@
 </#list>
 
 <ac:structured-macro ac:name="expand" ac:schema-version="1">
-  <ac:parameter ac:name="title">${model.clientCount} Client<#if model.clientCount != 1>s</#if>, ${tocTotal} Report<#if tocTotal != 1>s</#if><#if model.unassignedCount gt 0> (+ ${model.unassignedCount} Unassigned)</#if></ac:parameter>
+  <ac:parameter ac:name="title">${model.clientCount} Client<#if model.clientCount != 1>s</#if>, ${tocTotal} Report<#if tocTotal != 1>s</#if></ac:parameter>
   <ac:rich-text-body>
 <ul style="margin:4px 0;padding-left:16px;">
 <#list model.clientGroups as cg>
-  <li style="list-style-type:none;margin-top:10px;margin-bottom:4px;"><strong style="color:<#if cg.unassigned>#626F86<#else>#1B3A6B</#if>;"><#if cg.unassigned>⚠️<#else>📁</#if> <#if cg.unassigned><em>${cg.clientName?xml}</em><#else>${cg.clientName?xml}</#if></strong></li>
+  <li style="list-style-type:none;margin-top:10px;margin-bottom:4px;"><strong style="color:#1B3A6B;">📁 ${cg.clientName?xml}</strong></li>
   <li style="list-style-type:none;padding-left:0;margin:0;">
     <ul style="margin-top:2px;margin-bottom:4px;">
     <#list cg.reports as r>
@@ -236,7 +236,7 @@
       </#if>
       <#assign hl = r.title?xml/>
       <#if r.title?length gt 70><#assign hl = r.title[0..69]?xml + "…"/></#if>
-      <li style="margin-bottom:2px;">${priorityEmoji(r.priority)} <#if caseTitle?has_content>${caseTitle?xml} — </#if>${hl}<#if r.unrecognizedPriority> ⚠</#if></li>
+      <li style="margin-bottom:2px;">${priorityEmoji(r.priority)} <#if caseTitle?has_content>${caseTitle?xml} — </#if>${hl}</li>
     </#list>
     </ul>
   </li>
@@ -255,18 +255,10 @@
   <#if report.serialNumbers?? && report.serialNumbers?has_content>
     <#assign caseTitle = report.serialNumbers?join(", ")/>
   </#if>
-  <ac:parameter ac:name="title">${priorityEmoji(report.priority)} [${report.priority?upper_case?xml}]<#if report.unrecognizedPriority> ⚠</#if> ${(caseTitle?has_content)?then(caseTitle?xml + " — ", "")}${report.title?xml}</ac:parameter>
+  <ac:parameter ac:name="title">${priorityEmoji(report.priority)} [${report.priority?upper_case?xml}] ${(caseTitle?has_content)?then(caseTitle?xml + " — ", "")}${report.title?xml}</ac:parameter>
   <ac:rich-text-body>
 
     <h3>${report.title?xml}</h3>
-
-    <#if report.unrecognizedPriority>
-    <ac:structured-macro ac:name="note" ac:schema-version="1">
-      <ac:rich-text-body>
-        <p><strong>Data Quality Warning:</strong> Priority <code>${report.priority?xml}</code> is not a recognised value. Expected one of: CRITICAL, HIGH, MEDIUM, LOW, INFO. Please correct the source document in Kaseware.</p>
-      </ac:rich-text-body>
-    </ac:structured-macro>
-    </#if>
 
     <#-- Pull special fields out of dynamicFields to match reference row order -->
     <#assign dateValue = ""/>
@@ -342,23 +334,13 @@
      CLIENT GROUP BLOCK
      ══════════════════════════════════════════════════════════ -->
 <#macro renderClientGroup group>
-<#if group.unassigned>
-<ac:structured-macro ac:name="warning" ac:schema-version="1">
-  <ac:parameter ac:name="title">⚠ Unassigned — No Client Resolved (${group.totalReports} report<#if group.totalReports != 1>s</#if>)</ac:parameter>
-  <ac:rich-text-body>
-    <p>These reports could not be assigned to a client because the <strong>Client</strong> field was missing or blank in their Kaseware dynamic data. This typically means the document uses a form definition that has no <em>Client</em> field, or the form definition label could not be resolved at sync time.</p>
-  </ac:rich-text-body>
-</ac:structured-macro>
-<h2 style="color:#626F86;">⚠️ ${group.clientName?xml}</h2>
-<#else>
 <h2>${group.clientName?xml}</h2>
-</#if>
 
 <ac:structured-macro ac:name="panel" ac:schema-version="1">
   <ac:parameter ac:name="title">Client Summary</ac:parameter>
   <ac:parameter ac:name="borderStyle">solid</ac:parameter>
-  <ac:parameter ac:name="borderColor"><#if group.unassigned>#DCDFE4<#else>#DCDFE4</#if></ac:parameter>
-  <ac:parameter ac:name="titleBGColor"><#if group.unassigned>#F4F5F7<#else>#F7F8F9</#if></ac:parameter>
+  <ac:parameter ac:name="borderColor">#DCDFE4</ac:parameter>
+  <ac:parameter ac:name="titleBGColor">#F7F8F9</ac:parameter>
   <ac:rich-text-body>
     <p><strong>Total Reports:</strong> ${group.totalReports}</p>
     <p style="margin:0;line-height:1.8;">
@@ -381,26 +363,9 @@
 <ac:structured-macro ac:name="info" ac:schema-version="1">
   <ac:parameter ac:name="title">Aggregated Daily Report — ${model.reportDateLong?xml}</ac:parameter>
   <ac:rich-text-body>
-    <p><strong>Report Date:</strong> ${model.reportDate?xml} &nbsp;|&nbsp; <strong>Generated:</strong> ${model.generatedAt?xml} &nbsp;|&nbsp; <strong>Total Reports:</strong> ${model.totalReports} &nbsp;|&nbsp; <strong>Clients:</strong> ${model.clientCount}<#if model.unassignedCount gt 0> &nbsp;|&nbsp; <strong style="color:#974F0C;">Unassigned: ${model.unassignedCount}</strong></#if><#if model.unrecognizedPriorityCount gt 0> &nbsp;|&nbsp; <strong style="color:#AE2A19;">Invalid Priority: ${model.unrecognizedPriorityCount}</strong></#if></p>
+    <p><strong>Report Date:</strong> ${model.reportDate?xml} &nbsp;|&nbsp; <strong>Generated:</strong> ${model.generatedAt?xml} &nbsp;|&nbsp; <strong>Total Reports:</strong> ${model.totalReports} &nbsp;|&nbsp; <strong>Clients:</strong> ${model.clientCount}</p>
   </ac:rich-text-body>
 </ac:structured-macro>
-
-<#if (model.unassignedCount gt 0) || (model.unrecognizedPriorityCount gt 0)>
-<ac:structured-macro ac:name="warning" ac:schema-version="1">
-  <ac:parameter ac:name="title">⚠ Data Quality Issues Detected</ac:parameter>
-  <ac:rich-text-body>
-    <p>The following data quality issues were found in this report batch:</p>
-    <ul>
-      <#if model.unassignedCount gt 0>
-      <li><strong>${model.unassignedCount} report<#if model.unassignedCount != 1>s</#if> with no Client</strong> — the <em>Client</em> field was missing or blank. These are grouped at the bottom of the report under <em>Unassigned</em>. Check that the correct form definition is configured for this integration.</li>
-      </#if>
-      <#if model.unrecognizedPriorityCount gt 0>
-      <li><strong>${model.unrecognizedPriorityCount} report<#if model.unrecognizedPriorityCount != 1>s</#if> with unrecognized Priority</strong> — the <em>Priority</em> field contained a value not in the accepted set (CRITICAL / HIGH / MEDIUM / LOW / INFO). Affected reports are marked with ⚠. Please correct the source documents in Kaseware.</li>
-      </#if>
-    </ul>
-  </ac:rich-text-body>
-</ac:structured-macro>
-</#if>
 
 <ac:structured-macro ac:name="panel" ac:schema-version="1">
   <ac:parameter ac:name="title">Priority Summary</ac:parameter>
