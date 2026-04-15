@@ -55,6 +55,7 @@ class KwToConfluenceOrchestratorTest {
 
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
                 .thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>content</p>");
@@ -91,6 +92,7 @@ class KwToConfluenceOrchestratorTest {
 
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
                 .thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
@@ -125,6 +127,7 @@ class KwToConfluenceOrchestratorTest {
 
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
                 .thenReturn(ZoneId.of("America/New_York"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");

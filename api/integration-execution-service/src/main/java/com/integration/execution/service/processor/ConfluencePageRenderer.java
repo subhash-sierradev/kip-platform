@@ -51,8 +51,13 @@ public class ConfluencePageRenderer {
     private ZoneId timezone = ZoneOffset.UTC;
 
 
+    public List<KwMonitoringDocument> filterNamedClients(List<KwMonitoringDocument> docs) {
+        return docs.stream()
+                .filter(doc -> !UNKNOWN_CLIENT.equals(extractClientName(doc)))
+                .toList();
+    }
     public String buildPageContent(List<KwMonitoringDocument> data, ZoneId targetTimezone) {
-        ConfluenceMonitoringReport model = buildModel(data, targetTimezone);
+        ConfluenceMonitoringReport model = buildModel(filterNamedClients(data), targetTimezone);
         try {
             Template template = freemarkerConfig.getTemplate("monitoring_data_report.ftl");
             StringWriter writer = new StringWriter();
@@ -72,20 +77,13 @@ public class ConfluencePageRenderer {
         String reportDate = now.format(REPORT_DATE_FMT);
         String reportDateLong = now.format(REPORT_DATE_LONG_FMT);
 
-        // Separate named clients (alphabetical) from unknown
+        // All incoming records are guaranteed to have a known client (filtered upstream in buildPageContent)
         Map<String, List<KwMonitoringDocument>> namedClients = new TreeMap<>();
-        List<KwMonitoringDocument> unknownDocs = new ArrayList<>();
 
         for (KwMonitoringDocument item : data) {
-            String clientName = extractClientName(item);
-            if (UNKNOWN_CLIENT.equals(clientName)) {
-                unknownDocs.add(item);
-            } else {
-                namedClients.computeIfAbsent(clientName, k -> new ArrayList<>()).add(item);
-            }
+            namedClients.computeIfAbsent(extractClientName(item), k -> new ArrayList<>()).add(item);
         }
 
-        // Build groups: named clients first (alphabetical), unknown appended last
         List<ClientGroup> clientGroups = new ArrayList<>();
         List<ReportEntry> allReports = new ArrayList<>();
 
@@ -98,19 +96,10 @@ public class ConfluencePageRenderer {
                     entry.getKey(), groupReports.size(), clientPriority, groupReports));
         }
 
-        if (!unknownDocs.isEmpty()) {
-            List<ReportEntry> unknownReports = unknownDocs.stream()
-                    .map(this::toReportEntry).toList();
-            allReports.addAll(unknownReports);
-            List<PrioritySummaryEntry> unknownPriority = buildPrioritySummary(unknownReports);
-            clientGroups.add(new ClientGroup(
-                    UNKNOWN_CLIENT, unknownReports.size(), unknownPriority, unknownReports));
-        }
-
         List<PrioritySummaryEntry> prioritySummary = buildPrioritySummary(allReports);
         return new ConfluenceMonitoringReport(
                 reportDate, reportDateLong, generatedAt,
-                data.size(), namedClients.size(), prioritySummary, clientGroups);
+                allReports.size(), namedClients.size(), prioritySummary, clientGroups);
     }
 
     @SuppressWarnings("unchecked")

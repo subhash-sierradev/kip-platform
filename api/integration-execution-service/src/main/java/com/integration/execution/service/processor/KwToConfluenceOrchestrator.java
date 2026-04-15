@@ -55,6 +55,16 @@ public class KwToConfluenceOrchestrator {
                 return ConfluenceJobExecutionResult.success(0, null, null);
             }
 
+            List<KwMonitoringDocument> namedClientData = confluencePageRenderer.filterNamedClients(monitoringData);
+            log.info("Confluence integration {} \u2014 records after unknown-client filter: fetched={} included={}",
+                    cmd.getIntegrationId(), monitoringData.size(), namedClientData.size());
+
+            if (namedClientData.isEmpty()) {
+                log.info("Confluence integration {} \u2014 all fetched records have unknown client, no page published",
+                        cmd.getIntegrationId());
+                return ConfluenceJobExecutionResult.success(0, null, null);
+            }
+
             // Fetch Confluence user timezone and convert monitoring data timestamps
             ZoneId fallbackTimezone = cmd.getBusinessTimezone() != null && !cmd.getBusinessTimezone().isBlank()
                     ? ZoneId.of(cmd.getBusinessTimezone())
@@ -64,7 +74,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — using timezone: {}",
                     cmd.getIntegrationId(), confluenceTimezone.getId());
 
-            String pageContent = confluencePageRenderer.buildPageContent(monitoringData, confluenceTimezone);
+            String pageContent = confluencePageRenderer.buildPageContent(namedClientData, confluenceTimezone);
 
             ConfluenceApiClient.ConfluencePublishResult publishResult =
                     confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
@@ -77,7 +87,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — published monitoring page", cmd.getIntegrationId());
 
             return ConfluenceJobExecutionResult.success(
-                    monitoringData.size(),
+                    namedClientData.size(),
                     publishResult.confluencePageUrl(),
                     publishResult.confluencePageId());
 

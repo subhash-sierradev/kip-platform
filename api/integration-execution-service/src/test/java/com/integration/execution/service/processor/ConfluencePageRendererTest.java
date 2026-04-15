@@ -87,7 +87,7 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_documentWithNullAttributes_usesUnknownClient() {
+    void buildPageContent_documentWithNullAttributes_isExcludedFromReport() {
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
                 .id("doc-no-attrs")
                 .title("No Attributes")
@@ -97,7 +97,7 @@ class ConfluencePageRendererTest {
         String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).contains("Unknown");
+        assertThat(html).doesNotContain("Unknown");
     }
 
     @Test
@@ -196,7 +196,7 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_clientWithBlankName_groupedUnderUnknown() {
+    void buildPageContent_clientWithBlankName_isExcludedFromReport() {
         Map<String, Object> dynData = new HashMap<>();
         dynData.put("Client", "  ");
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
@@ -207,7 +207,7 @@ class ConfluencePageRendererTest {
         String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).contains("Unknown");
+        assertThat(html).doesNotContain("Unknown");
     }
 
     @Test
@@ -270,28 +270,21 @@ class ConfluencePageRendererTest {
         assertThat(html).isNotBlank();
     }
 
+
     @Test
-    void buildPageContent_unknownGroupAppearsAfterNamedClients() {
+    void buildPageContent_unknownClientsExcluded_onlyNamedClientsRendered() {
         List<KwMonitoringDocument> docs = List.of(
                 docWithClient("Zeta Corp", "LOW", "Z"),
                 docWithClient("Alpha Inc", "HIGH", "A"),
-                docWithClient(null, "MEDIUM", "U1"),   // no client → Unknown
-                docWithClient("  ", "LOW", "U2"));      // blank client → Unknown
+                docWithClient(null, "MEDIUM", "U1"),   // no client -> excluded
+                docWithClient("  ", "LOW", "U2"));      // blank client -> excluded
 
         String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
         assertThat(html).contains("Alpha Inc");
         assertThat(html).contains("Zeta Corp");
-        assertThat(html).contains("Unknown");
-
-        // Use the unknown <h2> heading as position anchor.
-        int alphaIdx = html.indexOf(">Alpha Inc<");
-        int zetaIdx = html.indexOf(">Zeta Corp<");
-        int unknownHeadingIdx = html.indexOf(">Unknown<");
-        assertThat(unknownHeadingIdx).isGreaterThan(-1);
-        assertThat(alphaIdx).isLessThan(unknownHeadingIdx);
-        assertThat(zetaIdx).isLessThan(unknownHeadingIdx);
+        assertThat(html).doesNotContain(">Unknown<");
     }
 
     @Test
