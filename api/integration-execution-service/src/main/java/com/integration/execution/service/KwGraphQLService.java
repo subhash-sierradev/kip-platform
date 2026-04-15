@@ -78,6 +78,7 @@ public class KwGraphQLService {
     private static final String KW_FIELD_LABEL               = "label";
     private static final String KW_FIELD_VALUES              = "values";
     private static final String KW_FIELD_OPTION_VALUE        = "value";
+    private static final String KW_FIELD_ID                  = "id";
     private static final String KW_FIELD_BASED_ON_DOC_TYPE   = "basedOnDocumentType";
     private static final String KW_FIELD_FORM_NAME           = "formName";
 
@@ -540,7 +541,7 @@ public class KwGraphQLService {
         if (definition == null || definition.isNull() || definition.isMissingNode()) {
             return null;
         }
-        String id = definition.path("id").asText(null);
+        String id = definition.path(KW_FIELD_ID).asText(null);
         if (id == null || id.isBlank()) {
             return null;
         }

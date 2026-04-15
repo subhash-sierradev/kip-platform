@@ -150,7 +150,7 @@ public class ConfluencePageRenderer {
 
         return new ReportEntry(
                 title,
-                client != null ? client : UNKNOWN_CLIENT,
+                (client != null && !client.isBlank()) ? client : UNKNOWN_CLIENT,
                 priority,
                 resolveLevelColour(normalizedPriority),
                 resolveLevelBgColour(normalizedPriority),
