@@ -42,6 +42,11 @@ export function getAssignee(webhook: JiraWebhook): string {
 export const sortByName = (a: JiraWebhook, b: JiraWebhook): number => a.name.localeCompare(b.name);
 export const sortByCreatedDate = (a: JiraWebhook, b: JiraWebhook): number =>
   new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime();
+export const sortByLastModifiedDate = (a: JiraWebhook, b: JiraWebhook): number => {
+  const aT = a.lastModifiedDate ? new Date(a.lastModifiedDate).getTime() : 0;
+  const bT = b.lastModifiedDate ? new Date(b.lastModifiedDate).getTime() : 0;
+  return bT - aT;
+};
 export const sortByStatus = (a: JiraWebhook, b: JiraWebhook): number => {
   // Sort enabled webhooks first (true > false)
   if (a.isEnabled === b.isEnabled) return 0;
@@ -65,6 +70,8 @@ export const getSortFunction = (sortType: string): ((a: JiraWebhook, b: JiraWebh
       return sortByName;
     case 'createdDate':
       return sortByCreatedDate;
+    case 'lastModifiedDate':
+      return sortByLastModifiedDate;
     case 'isEnabled':
       return sortByStatus;
     case 'lastTrigger':

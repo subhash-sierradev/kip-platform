@@ -25,15 +25,19 @@ describe('useCronOccurrenceEngine', () => {
   describe('parseQuartzCron', () => {
     it('rejects empty and malformed cron expressions', () => {
       expect(parseQuartzCron('').success).toBe(false);
-      expect(parseQuartzCron('0 0 10 *').error).toBe('Cron must have 5 or 6 fields');
-      expect(parseQuartzCron('0 0 10 * * ? extra').error).toBe('Cron must have 5 or 6 fields');
+      expect(parseQuartzCron('0 0 10 *').error).toBe('Cron must have 5, 6 or 7 fields');
+      expect(parseQuartzCron('0 0 10 * * ? * extra').error).toBe('Cron must have 5, 6 or 7 fields');
     });
 
-    it('parses 5-field and 6-field Quartz cron expressions', () => {
+    it('parses 5-field, 6-field, and 7-field Quartz cron expressions', () => {
       const fiveField = parseQuartzCron('0 10 * * ?');
       expect(fiveField.success).toBe(true);
       expect(fiveField.data?.fields.second).toBe('0');
       expect(fiveField.data?.fields.minute).toBe('0');
+
+      const sevenField = parseQuartzCron('0 0 10 * * ? *');
+      expect(sevenField.success).toBe(true);
+      expect(sevenField.data?.fields.year).toBe('*');
       expect(fiveField.data?.isQuartzSpecial).toBe(false);
 
       const sixField = parseQuartzCron('0 0 10 L * MON');

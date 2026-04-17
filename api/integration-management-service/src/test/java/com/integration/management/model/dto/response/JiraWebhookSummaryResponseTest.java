@@ -42,6 +42,7 @@ class JiraWebhookSummaryResponseTest {
                 .isDeleted(false)
                 .createdBy("admin")
                 .createdDate(Instant.parse("2026-03-06T00:00:00Z"))
+                .lastModifiedDate(Instant.parse("2026-03-07T00:00:00Z"))
                 .lastEventHistory(lastEvent)
                 .build();
 
@@ -50,5 +51,6 @@ class JiraWebhookSummaryResponseTest {
         assertThat(response.getLastEventHistory()).isNotNull();
         assertThat(response.getLastEventHistory().getStatus()).isEqualTo("SUCCESS");
         assertThat(response.getIsEnabled()).isTrue();
+        assertThat(response.getLastModifiedDate()).isEqualTo(Instant.parse("2026-03-07T00:00:00Z"));
     }
 }

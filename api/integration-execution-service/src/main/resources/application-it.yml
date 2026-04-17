@@ -1,0 +1,72 @@
+# Integration Test Profile for IES — RabbitMQ URL injected by @DynamicPropertySource
+spring:
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://mock-keycloak/auth/realms/test
+
+integration:
+  security:
+    jwt:
+      tenant-id-claim: 'tenant_id'
+      user-id-claim: 'preferred_username'
+    webhook:
+      tenant-id: 'kaseware-application-tn'
+      user-id: 'kaseware-app-user'
+      client-role: 'webhook_client'
+    error:
+      missing-auth: 'Missing or invalid Authorization header'
+      missing-fields: 'Missing tenantId or userId in token'
+      invalid-token: 'Invalid JWT token'
+
+  azure:
+    keyvault:
+      url: http://mock-keyvault
+      client-id: test-client-id
+      client-secret: test-client-secret
+      tenant-id: test-tenant-id
+
+  kaseware:
+    auth:
+      token-url: http://mock-kaseware/token
+      client-id: Kaseware
+      username: test-user
+      password: test-pass
+      grant-type: password
+      token-refresh-interval: PT55M
+      max-retries: 1
+    graphql:
+      endpoint: http://mock-kaseware/api
+
+  http-clients:
+    jira:
+      connection-pool:
+        max-total: 5
+        max-per-route: 5
+        ttl-minutes: 1
+        idle-evict-minutes: 1
+      timeouts:
+        connect-seconds: 5
+        socket-seconds: 10
+        response-seconds: 15
+        connection-request-seconds: 5
+      retry:
+        max-attempts: 1
+        interval-seconds: 1
+      redirects-enabled: false
+      max-redirects: 1
+
+logging:
+  level:
+    com.integration.execution: WARN
+    org.springframework.amqp: WARN
+    org.springframework: WARN
+

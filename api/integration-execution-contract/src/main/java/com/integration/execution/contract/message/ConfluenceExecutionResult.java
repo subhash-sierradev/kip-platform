@@ -26,9 +26,6 @@ public class ConfluenceExecutionResult {
     private Instant completedAt;
 
     private int totalRecords;
-    private int addedRecords;
-    private int updatedRecords;
-    private int failedRecords;
 
     /** Confluence page URL and page ID stored as generic key-value pairs. */
     private Map<String, String> executionMetadata;

@@ -17,6 +17,7 @@ export interface ParsedCron {
     dayOfMonth: string;
     month: string;
     dayOfWeek: string;
+    year: string;
   };
   secondTokens: number[] | string;
   minuteTokens: number[] | string;
@@ -24,6 +25,7 @@ export interface ParsedCron {
   domTokens: string[];
   monthTokens: string[];
   dowTokens: string[];
+  yearTokens: number[] | string;
   isQuartzSpecial: boolean;
   isSameDayOfWeekAndMonth: boolean;
 }
@@ -59,8 +61,8 @@ export function parseQuartzCron(cron: string): Result<ParsedCron> {
   }
 
   const parts = trimmed.split(/\s+/);
-  if (parts.length < 5 || parts.length > 6) {
-    return { success: false, error: 'Cron must have 5 or 6 fields' };
+  if (parts.length < 5 || parts.length > 7) {
+    return { success: false, error: 'Cron must have 5, 6 or 7 fields' };
   }
 
   const fields = normalizeQuartzParts(parts);
@@ -165,21 +167,37 @@ export function analyzeLocalPattern(occurrences: LocalOccurrence[]): PatternDesc
   };
 }
 
-function normalizeQuartzParts(
-  parts: string[]
-): { sec: string; min: string; hour: string; dom: string; mon: string; dow: string } | null {
-  const [sec, min, hour, dom, mon, dow] = parts.length === 6 ? parts : ['0', ...parts];
+function normalizeQuartzParts(parts: string[]): {
+  sec: string;
+  min: string;
+  hour: string;
+  dom: string;
+  mon: string;
+  dow: string;
+  year: string;
+} | null {
+  const normalizedParts =
+    parts.length === 7 ? parts : parts.length === 6 ? [...parts, '*'] : ['0', ...parts, '*'];
+  const [sec, min, hour, dom, mon, dow, year] = normalizedParts;
   if (!min || !hour || !dom || !mon || !dow) {
     return null;
   }
-  return { sec, min, hour, dom, mon, dow };
+  return { sec, min, hour, dom, mon, dow, year: year || '*' };
 }
 
 function buildParsedCron(
   cron: string,
-  fields: { sec: string; min: string; hour: string; dom: string; mon: string; dow: string }
+  fields: {
+    sec: string;
+    min: string;
+    hour: string;
+    dom: string;
+    mon: string;
+    dow: string;
+    year: string;
+  }
 ): ParsedCron {
-  const { sec, min, hour, dom, mon, dow } = fields;
+  const { sec, min, hour, dom, mon, dow, year } = fields;
   return {
     original: cron,
     fields: {
@@ -189,6 +207,7 @@ function buildParsedCron(
       dayOfMonth: dom,
       month: mon,
       dayOfWeek: dow,
+      year,
     },
     secondTokens: tokenizeFieldToNumbers(sec),
     minuteTokens: tokenizeFieldToNumbers(min),
@@ -196,9 +215,18 @@ function buildParsedCron(
     domTokens: dom.split(',').map(t => t.trim()),
     monthTokens: mon.split(',').map(t => t.trim()),
     dowTokens: dow.split(',').map(t => t.trim()),
+    yearTokens: tokenizeFieldToNumbers(year),
     isQuartzSpecial: /[LW#]/.test(dom) || /[L#]/.test(dow),
     isSameDayOfWeekAndMonth: dom !== '?' && dom !== '*' && dow !== '?' && dow !== '*',
   };
+}
+
+function matchesYear(year: number, yearField: string): boolean {
+  if (!yearField || yearField === '*' || yearField === '?') {
+    return true;
+  }
+
+  return parseNumericField(yearField, 1970, 2199).includes(year);
 }
 
 function tokenizeFieldToNumbers(field: string): number[] | string {
@@ -287,6 +315,7 @@ function generateUtcOccurrences(
     const month = current.getUTCMonth();
     const date = current.getUTCDate();
     const day = current.getUTCDay();
+    const matchesYearField = matchesYear(year, parsed.fields.year);
     const matchesMonth = months.includes(month + 1);
     const matchesDow = resolveDowMatch(date, day, month, year, parsed.fields.dayOfWeek);
     const matchesDom = matchesDayOfMonth(date, parsed.fields.dayOfMonth, year, month);
@@ -294,7 +323,7 @@ function generateUtcOccurrences(
       ? matchesDom || matchesDow
       : matchesDom && matchesDow;
 
-    if (matchesMonth && domDowLogic) {
+    if (matchesYearField && matchesMonth && domDowLogic) {
       addOccurrencesForDay(
         occurrences,
         year,

@@ -268,6 +268,7 @@ Pinia stores in `src/store/`:
 - Environment: jsdom, globals enabled, isolation per file
 
 ---
+## Web version Update-8
 
 ## License
 

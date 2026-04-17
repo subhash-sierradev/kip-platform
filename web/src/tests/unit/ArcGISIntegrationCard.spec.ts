@@ -10,6 +10,7 @@ function makeBaseIntegration(): ArcGISIntegrationSummaryResponse {
     id: 'int-1',
     name: 'Test Integration',
     createdDate: '2026-01-01T12:00:00Z',
+    lastModifiedDate: '2026-01-10T12:00:00Z',
     itemSubtype: 'ArcGIS',
     itemSubtypeLabel: 'ArcGIS',
     itemType: 'DOCUMENT',
@@ -154,11 +155,11 @@ describe('ArcGISIntegrationCard', () => {
 
   it.each([
     ['SUCCESS', 'dx-icon-check', 'Execution completed successfully'],
-    ['FAILED', 'dx-icon-close', 'Execution failed - check logs for details'],
+    ['FAILED', 'dx-icon-close', 'Execution failed \u2014 check logs for details'],
     ['RUNNING', 'dx-icon-refresh', 'Currently executing'],
     ['ABORTED', 'dx-icon-remove', 'Execution was manually aborted'],
-    ['SCHEDULED', 'dx-icon-clock', 'Scheduled for execution - waiting for executor to pick up'],
-  ])('renders status UI for %s', (status, iconClass, tooltipText) => {
+    ['SCHEDULED', 'dx-icon-clock', 'Scheduled — waiting for executor to pick up'],
+  ])('renders status UI for %s', async (status, iconClass, tooltipText) => {
     const integration = makeBaseIntegration() as unknown as ArcGISIntegrationSummaryResponse &
       ArcGISIntegrationExecutionSummary;
     integration.execution = {
@@ -172,7 +173,7 @@ describe('ArcGISIntegrationCard', () => {
     });
 
     expect(wrapper.find(`i.${iconClass}`).exists()).toBe(true);
-    expect((wrapper.vm as any).statusTooltip).toBe(tooltipText);
+    expect(wrapper.findComponent({ name: 'CommonTooltip' }).props('text')).toBe(tooltipText);
   });
 
   it('uses last attempt time when no successful execution exists', () => {
@@ -241,11 +242,11 @@ describe('ArcGISIntegrationCard', () => {
       props: { integration, menuItems: [] },
     });
 
+    // Unknown status: IntegrationStatusIcon renders nothing
     expect(wrapper.find('i.dx-icon-check').exists()).toBe(false);
     expect(wrapper.find('i.dx-icon-close').exists()).toBe(false);
-    expect((wrapper.vm as any).statusIcon).toBe('');
-    expect((wrapper.vm as any).statusColor).toBe('#6c757d');
-    expect((wrapper.vm as any).statusTooltip).toBe('PAUSED');
+    expect(wrapper.find('.custom-tooltip').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain('Never Run');
   });
 
   it('shows and hides the status tooltip while hovering the status icon', async () => {
@@ -265,16 +266,18 @@ describe('ArcGISIntegrationCard', () => {
     expect(statusIcon.exists()).toBe(true);
 
     await statusIcon.trigger('mouseenter', { clientX: 10, clientY: 20 });
-    expect((wrapper.vm as any).statusTooltipVisible).toBe(true);
-    expect((wrapper.vm as any).statusTooltipX).toBe(22);
-    expect((wrapper.vm as any).statusTooltipY).toBe(32);
+    let tooltip = wrapper.find('.custom-tooltip');
+    expect(tooltip.exists()).toBe(true);
+    expect(tooltip.attributes('style')).toContain('left: 22px;');
+    expect(tooltip.attributes('style')).toContain('top: 32px;');
 
     await statusIcon.trigger('mousemove', { clientX: 30, clientY: 40 });
-    expect((wrapper.vm as any).statusTooltipX).toBe(42);
-    expect((wrapper.vm as any).statusTooltipY).toBe(52);
+    tooltip = wrapper.find('.custom-tooltip');
+    expect(tooltip.attributes('style')).toContain('left: 42px;');
+    expect(tooltip.attributes('style')).toContain('top: 52px;');
 
     await statusIcon.trigger('mouseleave');
-    expect((wrapper.vm as any).statusTooltipVisible).toBe(false);
+    expect(wrapper.find('.custom-tooltip').exists()).toBe(false);
   });
 
   it('emits open and action events from the card shell', async () => {
@@ -301,5 +304,12 @@ describe('ArcGISIntegrationCard', () => {
 
     expect(wrapper.emitted('action')).toEqual([['delete']]);
     expect(wrapper.emitted('open')).toEqual([['int-1']]);
+  });
+
+  it('renders Updated label in card view', () => {
+    const wrapper = mount(ArcGISIntegrationCard, {
+      props: { integration: makeBaseIntegration(), menuItems: [] },
+    });
+    expect(wrapper.text()).toContain('Updated:');
   });
 });

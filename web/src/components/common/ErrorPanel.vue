@@ -5,7 +5,7 @@
 defineProps<{ message: string }>();
 </script>
 <style scoped>
-/* TODO: Move alert styles to global theme; leaving temporary */
+/* TODO: Move alert styles to global theme; leaving temporary test -1 */
 .error-panel {
   background: #fdecea;
   color: #86181d;

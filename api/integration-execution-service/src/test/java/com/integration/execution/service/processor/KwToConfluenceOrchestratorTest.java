@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,7 +59,9 @@ class KwToConfluenceOrchestratorTest {
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
                 .thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>content</p>");
-        when(confluenceApiClient.createOrUpdatePage(any(ConfluencePublishRequest.class)))
+        ArgumentCaptor<ConfluencePublishRequest> requestCaptor =
+                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
+        when(confluenceApiClient.createOrUpdatePage(requestCaptor.capture()))
                 .thenReturn(new ConfluencePublishResult("https://example.com/page/42", "42"));
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
@@ -67,6 +70,10 @@ class KwToConfluenceOrchestratorTest {
         assertThat(result.totalRecords()).isEqualTo(2);
         assertThat(result.confluencePageUrl()).isEqualTo("https://example.com/page/42");
         assertThat(result.confluencePageId()).isEqualTo("42");
+        // Title date must reflect windowEnd (2026-01-31) formatted in UTC, not system clock
+        String expectedDate = DateTimeFormatter.ofPattern("yyyy/MM/dd")
+                .format(Instant.parse("2026-01-31T23:59:59Z").atZone(ZoneId.of("UTC")));
+        assertThat(requestCaptor.getValue().pageTitle()).isEqualTo("2025-" + expectedDate);
     }
 
     @Test
@@ -119,8 +126,21 @@ class KwToConfluenceOrchestratorTest {
     }
 
     @Test
-    void processExecution_businessTimezoneUsed_whenProvided() {
-        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "America/New_York");
+    void processExecution_pageTitleUsesWindowEndInConfluenceTimezone() {
+        // windowEnd 2026-02-01T03:00:00Z is 2026-01-31 in America/New_York (UTC-5)
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}-Report")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("folder-id")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-01T03:00:00Z"))
+                .businessTimeZone("America/New_York")
+                .tenantId("tenant-1")
+                .build();
         List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
 
         when(kwGraphQLService.fetchMonitoringData(
@@ -128,15 +148,35 @@ class KwToConfluenceOrchestratorTest {
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
                 .thenReturn(ZoneId.of("America/New_York"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
-        when(confluenceApiClient.createOrUpdatePage(any()))
+        ArgumentCaptor<ConfluencePublishRequest> requestCaptor =
+                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
+        when(confluenceApiClient.createOrUpdatePage(requestCaptor.capture()))
                 .thenReturn(new ConfluencePublishResult("https://page.url", "99"));
 
-        ArgumentCaptor<ZoneId> timezoneCaptor = ArgumentCaptor.forClass(ZoneId.class);
-        verify(confluenceApiClient, org.mockito.Mockito.atMostOnce())
-                .getUserTimezone(anyString(), timezoneCaptor.capture());
+        orchestrator.processExecution(cmd);
+
+        // 2026-02-01T03:00:00Z = 2026-01-31T22:00:00 in America/New_York
+        assertThat(requestCaptor.getValue().pageTitle()).isEqualTo("2026/01/31-Report");
+    }
+
+    @Test
+    void processExecution_businessTimeZoneUsedAsFallback_whenConfluenceTimezoneUnavailable() {
+        ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "America/Chicago");
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+
+        ArgumentCaptor<ZoneId> fallbackCaptor = ArgumentCaptor.forClass(ZoneId.class);
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), fallbackCaptor.capture()))
+                .thenReturn(ZoneId.of("America/Chicago"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
 
         orchestrator.processExecution(cmd);
-        // verify no exception thrown and success path completes
+
+        // fallback ZoneId passed to getUserTimezone must match businessTimeZone on the command
+        assertThat(fallbackCaptor.getValue()).isEqualTo(ZoneId.of("America/Chicago"));
     }
 
     @Test
@@ -150,7 +190,7 @@ class KwToConfluenceOrchestratorTest {
                 .confluenceSpaceKey("SPACE")
                 .windowStart(null)
                 .windowEnd(null)
-                .businessTimezone("UTC")
+                .businessTimeZone("UTC")
                 .build();
 
         when(kwGraphQLService.fetchMonitoringData(
@@ -174,7 +214,7 @@ class KwToConfluenceOrchestratorTest {
                 .confluenceSpaceKeyFolderKey("folder-id")
                 .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
                 .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
-                .businessTimezone(timezone)
+                .businessTimeZone(timezone)
                 .tenantId("tenant-1")
                 .build();
     }

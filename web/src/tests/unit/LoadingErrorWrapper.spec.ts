@@ -29,6 +29,18 @@ describe('LoadingErrorWrapper', () => {
     expect(wrapper.exists()).toBe(true);
   });
 
+  it('hides the loading panel when data already exists', () => {
+    const wrapper = mount(LoadingErrorWrapper, {
+      props: {
+        loading: true,
+        error: null,
+        hasData: true,
+      },
+    });
+
+    expect(wrapper.find('.load-panel-stub').exists()).toBe(false);
+  });
+
   it('shows error state', () => {
     const wrapper = mount(LoadingErrorWrapper, {
       props: {
@@ -88,6 +100,18 @@ describe('LoadingErrorWrapper', () => {
     expect(wrapper.find('.error-title').text()).toBe('Custom error title');
     expect(wrapper.find('.error-message').text()).toBe('Request failed');
     expect(wrapper.find('.error-container').attributes('role')).toBe('alert');
+  });
+
+  it('hides the retry button when showRetry is false', () => {
+    const wrapper = mount(LoadingErrorWrapper, {
+      props: {
+        loading: false,
+        error: 'Request failed',
+        showRetry: false,
+      },
+    });
+
+    expect(wrapper.find('.retry-button').exists()).toBe(false);
   });
 
   it('emits retry when the retry button is clicked', async () => {

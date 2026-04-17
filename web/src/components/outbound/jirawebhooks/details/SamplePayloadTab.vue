@@ -111,9 +111,10 @@ export default defineComponent({
 
 <style scoped>
 .sample-payload-tab {
-  padding: 1.5rem;
+  padding: 0.5rem;
   background: #f8fafc;
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -288,8 +289,8 @@ export default defineComponent({
   tab-size: 2;
   box-sizing: border-box;
   flex: 1;
-  min-height: 500px;
-  height: auto;
+  min-height: 0;
+  height: 100%;
 }
 
 /* JSON Syntax Highlighting (Light Theme) */

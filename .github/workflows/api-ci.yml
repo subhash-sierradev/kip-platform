@@ -4,7 +4,7 @@ on:
   pull_request:
     branches:
       - main
-      - release
+      - main-2  # Added main-2 to trigger frontend CI for PRs targeting main-2 branch
       - 'release/**'
     types: [opened, synchronize, reopened, ready_for_review]
 

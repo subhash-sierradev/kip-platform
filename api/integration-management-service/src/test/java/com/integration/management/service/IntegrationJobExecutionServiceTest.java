@@ -454,9 +454,6 @@ class IntegrationJobExecutionServiceTest {
         result.setJobExecutionId(executionId);
         result.setStatus(JobExecutionStatus.SUCCESS);
         result.setTotalRecords(5);
-        result.setAddedRecords(3);
-        result.setUpdatedRecords(2);
-        result.setFailedRecords(0);
         result.setExecutionMetadata(Map.of("pageId", "123456"));
         result.setCompletedAt(Instant.parse("2026-03-03T10:00:00Z"));
 

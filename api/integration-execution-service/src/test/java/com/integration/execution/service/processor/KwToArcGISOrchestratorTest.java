@@ -168,6 +168,92 @@ class KwToArcGISOrchestratorTest {
         );
     }
 
+    @Test
+    void processExecution_noFeatures_noLocations_returnsZeroResult() {
+        ArcGISExecutionCommand command = command("secret");
+        // Document has null locations so totalLocationCount == 0
+        List<KwDocumentDto> documents = List.of(new KwDocumentDto("doc-null", "Doc", "DOCUMENT", 1L, 2L, null));
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.errorMessage()).isNull();
+        verify(mappingResolver, never()).partitionFeaturesForAddOrUpdate(any(), anyString(), anyString());
+    }
+
+    @Test
+    void processExecution_urlWithoutTrailingSlashOrNumber_usesUrlAsIs() {
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 1));
+
+        ArrayNode features = objectMapper.createArrayNode();
+        features.add(objectMapper.createObjectNode());
+
+        List<RecordMetadata> successMetadata = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 3L, 4L));
+        ApplyEditsPartition partition = new ApplyEditsPartition(
+                objectMapper.createArrayNode(), objectMapper.createArrayNode());
+        PublishingResult publishResult = new PublishingResult(
+                1, 0, 0, successMetadata, List.of(), List.of());
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(features, successMetadata, List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+        // URL has no trailing slash and does not end with a number
+        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer"));
+        when(mappingResolver.partitionFeaturesForAddOrUpdate(features, "secret", "https://example.com/FeatureServer"))
+                .thenReturn(partition);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMetadata))
+                .thenReturn(publishResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.addedRecords()).isEqualTo(1);
+        assertThat(result.errorMessage()).isNull();
+    }
+
+    @Test
+    void processExecution_partialTransformFailures_emptyErrors_usesDefaultErrorMessage() {
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 2));
+
+        ArrayNode features = objectMapper.createArrayNode();
+        features.add(objectMapper.createObjectNode()); // 1 success, 1 failure
+
+        List<RecordMetadata> successMetadata = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 3L, 4L));
+        List<FailedRecordMetadata> failedMetadata = List.of(
+                new FailedRecordMetadata("doc-1", "Doc", "loc-1", 1L, 2L, 3L, 4L, "err"));
+        ApplyEditsPartition partition = new ApplyEditsPartition(
+                objectMapper.createArrayNode(), objectMapper.createArrayNode());
+        PublishingResult publishResult = new PublishingResult(
+                1, 0, 0, successMetadata, List.of(), List.of());
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(features, successMetadata, failedMetadata));
+        // empty transformation errors list triggers "Check application logs" fallback
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer/0"));
+        when(mappingResolver.partitionFeaturesForAddOrUpdate(
+                features, "secret", "https://example.com/FeatureServer"))
+                .thenReturn(partition);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMetadata))
+                .thenReturn(publishResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.errorMessage()).contains("Check application logs");
+        assertThat(result.failedRecords()).isEqualTo(1);
+    }
+
     private ArcGISExecutionCommand command(String secretName) {
         return ArcGISExecutionCommand.builder()
                 .integrationId(UUID.randomUUID())

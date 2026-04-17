@@ -3,7 +3,7 @@ plugins {
     checkstyle
 }
 
-version = providers.gradleProperty("contractVersion").get()
+version = "0.0.1-rc.1"
 description = "Pure contract module - DTOs, enums, and models"
 
 dependencies {

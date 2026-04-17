@@ -2,19 +2,25 @@
   <div class="integration-card" @click="onOpen">
     <div class="card-top-row">
       <div class="icon-box">
-        <i class="dx-icon-map" style="font-size: 24px"></i>
+        <i class="dx-icon-map integration-type-icon"></i>
       </div>
-      <div class="title-box" style="flex: 1">
+      <div class="title-box">
         <div class="title-text">{{ integration.name || 'Unnamed Integration' }}</div>
-        <div class="created-text">
-          <span class="label">Created:</span> {{ formatMetadataDate(integration.createdDate) }}
+        <div class="created-updated-row">
+          <div class="created-text">
+            <span class="label">Created:</span> {{ formatMetadataDate(integration.createdDate) }}
+          </div>
+          <div class="created-text">
+            <span class="label">Updated:</span>
+            {{ formatMetadataDate(integration.lastModifiedDate) }}
+          </div>
         </div>
       </div>
 
       <ActionMenu :items="menuItems" @action="onAction" trigger-aria-label="Integration options" />
     </div>
 
-    <div class="chips-row" style="margin-bottom: 10px">
+    <div class="chips-row integration-chips-row">
       <span
         class="status-chip"
         :class="(integration.isEnabled ?? true) ? 'status-active' : 'status-disabled'"
@@ -39,26 +45,7 @@
     <div class="info-row">
       <div class="info-cell">
         <span class="label">Last Run:</span>
-        <Tooltip
-          :visible="statusTooltipVisible"
-          :x="statusTooltipX"
-          :y="statusTooltipY"
-          :text="statusTooltip"
-        />
-        <i
-          v-if="statusIcon"
-          :class="statusIcon"
-          :style="{
-            color: statusColor,
-            marginLeft: '4px',
-            marginRight: '4px',
-            fontSize: '13px',
-            verticalAlign: 'middle',
-          }"
-          @mouseenter="onStatusIconEnter"
-          @mousemove="onStatusIconMove"
-          @mouseleave="onStatusIconLeave"
-        ></i>
+        <IntegrationStatusIcon v-if="executionStatus" :status="executionStatus" />
         <span class="value">{{ lastRunText }}</span>
       </div>
       <div class="info-cell align-right">
@@ -70,9 +57,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed } from 'vue';
 import ActionMenu, { type ActionMenuItem } from '@/components/common/ActionMenu.vue';
-import Tooltip from '@/components/common/Tooltip.vue';
+import IntegrationStatusIcon from '@/components/common/IntegrationStatusIcon.vue';
 import type { ArcGISIntegrationSummaryResponse } from '@/api/models/ArcGISIntegrationSummaryResponse';
 import {
   type ScheduleInfo,
@@ -93,26 +80,6 @@ const props = defineProps<{
   integration: ArcGISIntegrationSummaryResponse;
   menuItems: ActionMenuItem[];
 }>();
-
-// Tooltip state for status icon
-const statusTooltipVisible = ref(false);
-const statusTooltipX = ref(0);
-const statusTooltipY = ref(0);
-
-function onStatusIconEnter(e: MouseEvent) {
-  statusTooltipVisible.value = true;
-  statusTooltipX.value = e.clientX + 12;
-  statusTooltipY.value = e.clientY + 12;
-}
-
-function onStatusIconMove(e: MouseEvent) {
-  statusTooltipX.value = e.clientX + 12;
-  statusTooltipY.value = e.clientY + 12;
-}
-
-function onStatusIconLeave() {
-  statusTooltipVisible.value = false;
-}
 
 const scheduleText = computed(() => {
   const info = props.integration as unknown as ScheduleInfo & {
@@ -188,70 +155,9 @@ const lastRunText = computed(() => {
   return 'Never Run';
 });
 
-const statusIcon = computed(() => {
+const executionStatus = computed(() => {
   const exec = props.integration as unknown as ArcGISIntegrationExecutionSummary;
-  const status = (exec.execution?.lastStatus ?? exec.lastStatus) as JobExecutionStatus | undefined;
-
-  if (!status) return '';
-
-  switch (status) {
-    case 'SUCCESS':
-      return 'dx-icon-check';
-    case 'FAILED':
-      return 'dx-icon-close';
-    case 'RUNNING':
-      return 'dx-icon-refresh';
-    case 'ABORTED':
-      return 'dx-icon-remove';
-    case 'SCHEDULED':
-      return 'dx-icon-clock';
-    default:
-      return '';
-  }
-});
-
-const statusColor = computed(() => {
-  const exec = props.integration as unknown as ArcGISIntegrationExecutionSummary;
-  const status = (exec.execution?.lastStatus ?? exec.lastStatus) as JobExecutionStatus | undefined;
-
-  if (!status) return '';
-
-  switch (status) {
-    case 'SUCCESS':
-      return '#28a745'; // Green
-    case 'FAILED':
-      return '#dc3545'; // Red
-    case 'RUNNING':
-      return '#007bff'; // Blue
-    case 'ABORTED':
-      return '#ff9800'; // Orange
-    case 'SCHEDULED':
-      return '#6c757d'; // Gray
-    default:
-      return '#6c757d';
-  }
-});
-
-const statusTooltip = computed(() => {
-  const exec = props.integration as unknown as ArcGISIntegrationExecutionSummary;
-  const status = (exec.execution?.lastStatus ?? exec.lastStatus) as JobExecutionStatus | undefined;
-
-  if (!status) return '';
-
-  switch (status) {
-    case 'SUCCESS':
-      return 'Execution completed successfully';
-    case 'FAILED':
-      return 'Execution failed - check logs for details';
-    case 'RUNNING':
-      return 'Currently executing';
-    case 'ABORTED':
-      return 'Execution was manually aborted';
-    case 'SCHEDULED':
-      return 'Scheduled for execution - waiting for executor to pick up';
-    default:
-      return status;
-  }
+  return (exec.execution?.lastStatus ?? exec.lastStatus) as JobExecutionStatus | undefined;
 });
 
 function onAction(id: string) {

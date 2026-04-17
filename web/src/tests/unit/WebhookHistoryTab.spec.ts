@@ -61,7 +61,7 @@ vi.mock('@/components/common/GenericDataGrid.vue', () => ({
     name: 'GenericDataGrid',
     props: ['data'],
     template:
-      '<div class="grid-stub"><div v-for="row in (data||[])" :key="row.id" class="grid-row"><slot name="statusTemplate" :data="row" /><slot name="actionsTemplate" :data="row" /></div></div>',
+      '<div class="grid-stub"><div v-for="row in (data||[])" :key="row.id" class="grid-row"><slot name="triggeredAtTemplate" :data="row" /><slot name="statusTemplate" :data="row" /><slot name="actionsTemplate" :data="row" /></div></div>',
   },
 }));
 vi.mock('devextreme-vue/button', () => ({
@@ -276,5 +276,89 @@ describe('WebhookHistoryTab', () => {
     await buttons[1].trigger('click');
     expect(retryWebhookExecution).not.toHaveBeenCalled();
     expect(closeTroubleshootDialog).not.toHaveBeenCalled();
+  });
+
+  it('keeps the troubleshoot dialog open when retry execution fails', async () => {
+    selectedExecution.value = { id: 'e10', status: 'FAILED' } as any;
+    retryWebhookExecution.mockResolvedValueOnce(false);
+
+    const wrapper = mount(WebhookHistoryTab, {
+      props: { webhookId: 'w1' },
+      global: {
+        stubs: {
+          AppModal: {
+            props: ['open'],
+            emits: ['update:open'],
+            template: '<div class="app-modal-stub"><slot /><slot name="footer" /></div>',
+          },
+          StatusChipForDataTable: true,
+          Bug: true,
+        },
+      },
+    });
+
+    const buttons = wrapper.findAll('.dx-btn');
+    await buttons[1].trigger('click');
+
+    expect(retryWebhookExecution).toHaveBeenCalledWith(selectedExecution.value);
+    expect(closeTroubleshootDialog).not.toHaveBeenCalled();
+    expect(fetchWebhookHistory).not.toHaveBeenCalledTimes(2);
+  });
+
+  it('formats triggered dates and exposes jira ticket fallbacks from helper methods', () => {
+    historyData = [
+      {
+        id: 'exec-42',
+        triggeredAt: '2024-02-03T10:00:00Z',
+        triggeredBy: 'alice',
+        status: 'SUCCESS',
+        jiraIssueUrl: 'https://jira.example.com/issues/not-a-ticket',
+        retryAttempt: 0,
+      },
+    ];
+
+    const wrapper = mount(WebhookHistoryTab, {
+      props: { webhookId: 'w1' },
+      global: {
+        stubs: {
+          AppModal: true,
+          StatusChipForDataTable: true,
+          Bug: true,
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain('2024');
+    expect((wrapper.vm as any).getJiraTicket(historyData[0])).toBe('KPC-42');
+    expect((wrapper.vm as any).getJiraTicket({ id: 'exec-77', jiraIssueUrl: '' })).toBe('KPC-77');
+  });
+
+  it('formats troubleshoot content for parsed and raw payloads', () => {
+    currentExecution.value = {
+      responseStatusCode: 422,
+      responseBody: '{"error":"bad request"}',
+      incomingPayload: 'plain text payload',
+    } as any;
+    troubleshootDialogVisible.value = true;
+
+    const wrapper = mount(WebhookHistoryTab, {
+      props: { webhookId: 'w1' },
+      global: {
+        stubs: {
+          AppModal: {
+            props: ['open'],
+            emits: ['update:open'],
+            template: '<div class="app-modal-stub"><slot /><slot name="footer" /></div>',
+          },
+          StatusChipForDataTable: true,
+          Bug: true,
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain('HTTP 422');
+    expect(wrapper.text()).toContain('"error": "bad request"');
+    expect(wrapper.text()).toContain('plain text payload');
+    expect((wrapper.vm as any).formatErrorContent('raw content')).toBe('raw content');
   });
 });

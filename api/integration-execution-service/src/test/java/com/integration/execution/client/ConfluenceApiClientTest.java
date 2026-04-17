@@ -483,6 +483,189 @@ class ConfluenceApiClientTest {
         assertThat(pages).isEmpty();
     }
 
+    @Test
+    void createPage_withNonDigitParentPageId_omitsAncestors() throws Exception {
+        // parentPageId contains non-digit characters -> ancestors not added to payload
+        String body = """
+                {"id":"created-1"}
+                """;
+        mockHttp(200, body);
+
+        String pageId = client.createPage("https://site.atlassian.net", "SPACE",
+                "non-numeric-parent", "Title", "<p/>", "u@e.com", "token");
+
+        assertThat(pageId).isEqualTo("created-1");
+    }
+
+    @Test
+    void createPage_withBlankParentPageId_omitsAncestors() throws Exception {
+        String body = """
+                {"id":"created-2"}
+                """;
+        mockHttp(200, body);
+
+        String pageId = client.createPage("https://site.atlassian.net", "SPACE",
+                "   ", "Title", "<p/>", "u@e.com", "token");
+
+        assertThat(pageId).isEqualTo("created-2");
+    }
+
+    @Test
+    void updatePage_withNonDigitParentPageId_omitsAncestors() throws Exception {
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenAnswer(invocation -> {
+                    HttpClientResponseHandler<?> handler = invocation.getArgument(1);
+                    return handler.handleResponse(classicHttpResponse);
+                });
+
+        // Should not throw; non-digit parentPageId simply omits ancestors from payload
+        client.updatePage("https://site.atlassian.net", "page-1", "non-numeric",
+                "Title", "<p/>", 2, "u@e.com", "token");
+    }
+
+    @Test
+    void getUserTimezone_bulkApiReturnsEmptyResults_returnsFallback() throws Exception {
+        when(classicHttpResponse.getCode()).thenReturn(200).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("""
+                        {"accountId":"user-x"}
+                        """))
+                .thenReturn(new StringEntity("""
+                        {"results":[]}
+                        """));
+        mockHttpMulti();
+
+        ZoneId tz = client.getUserTimezone(
+                "https://site.atlassian.net", "u@e.com", "token", ZoneId.of("Asia/Seoul"));
+
+        assertThat(tz).isEqualTo(ZoneId.of("Asia/Seoul"));
+    }
+
+    @Test
+    void getUserTimezone_bulkApiReturnsBlankTimezone_returnsFallback() throws Exception {
+        when(classicHttpResponse.getCode()).thenReturn(200).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("""
+                        {"accountId":"user-y"}
+                        """))
+                .thenReturn(new StringEntity("""
+                        {"results":[{"timeZone":"   "}]}
+                        """));
+        mockHttpMulti();
+
+        ZoneId tz = client.getUserTimezone(
+                "https://site.atlassian.net", "u@e.com", "token", ZoneId.of("UTC"));
+
+        assertThat(tz).isEqualTo(ZoneId.of("UTC"));
+    }
+
+    @Test
+    void createPage_withNumericParentPageId_includesAncestors() throws Exception {
+        String body = """
+                {"id":"page-numeric-parent"}
+                """;
+        mockHttp(200, body);
+
+        String pageId = client.createPage("https://site.atlassian.net", "SPACE",
+                "12345", "Title", "<p/>", "u@e.com", "token");
+
+        assertThat(pageId).isEqualTo("page-numeric-parent");
+    }
+
+    @Test
+    void updatePage_withNumericParentPageId_includesAncestors() throws Exception {
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenAnswer(invocation -> {
+                    HttpClientResponseHandler<?> handler = invocation.getArgument(1);
+                    return handler.handleResponse(classicHttpResponse);
+                });
+
+        // Numeric parentPageId → ancestors added to payload
+        client.updatePage("https://site.atlassian.net", "page-1", "67890",
+                "Title", "<p/>", 2, "u@e.com", "token");
+    }
+
+    @Test
+    void searchPage_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("connection reset"));
+
+        assertThatThrownBy(() -> client.searchPage(
+                "https://site.atlassian.net", "SPACE", "Page", "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to search Confluence page");
+    }
+
+    @Test
+    void createPage_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("connection reset"));
+
+        assertThatThrownBy(() -> client.createPage(
+                "https://site.atlassian.net", "SPACE", "123", "Title", "<p/>", "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to create Confluence page");
+    }
+
+    @Test
+    void updatePage_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("connection reset"));
+
+        assertThatThrownBy(() -> client.updatePage(
+                "https://site.atlassian.net", "page-1", "123", "Title", "<p/>", 2, "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to update Confluence page");
+    }
+
+    @Test
+    void getCurrentUser_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("network failure"));
+
+        assertThatThrownBy(() -> client.getCurrentUser("https://site.atlassian.net", "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to test Confluence connection");
+    }
+
+    @Test
+    void getSpaces_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("network failure"));
+
+        assertThatThrownBy(() -> client.getSpaces("https://site.atlassian.net", "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to fetch Confluence spaces");
+    }
+
+    @Test
+    void getPages_ioExceptionDuringHttpExecution_throwsRuntimeException() throws Exception {
+        when(confluenceHttpClient.execute(any(), any(HttpClientResponseHandler.class)))
+                .thenThrow(new java.io.IOException("network failure"));
+
+        assertThatThrownBy(() -> client.getPages("https://site.atlassian.net", "SPACE", "u@e.com", "token"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Failed to fetch Confluence folders");
+    }
+
+    @Test
+    void getUserTimezone_bulkApiReturnsErrorStatus_returnsFallback() throws Exception {
+        when(classicHttpResponse.getCode()).thenReturn(200).thenReturn(500);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("""
+                        {"accountId":"user-z"}
+                        """))
+                .thenReturn(new StringEntity("Server Error"));
+        mockHttpMulti();
+
+        ZoneId tz = client.getUserTimezone(
+                "https://site.atlassian.net", "u@e.com", "token", ZoneId.of("UTC"));
+
+        assertThat(tz).isEqualTo(ZoneId.of("UTC"));
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

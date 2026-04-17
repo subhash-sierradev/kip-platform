@@ -12,5 +12,6 @@ import java.util.UUID;
 @Repository
 public interface NotificationEventCatalogRepository extends JpaRepository<NotificationEventCatalog, UUID> {
 
-    List<NotificationEventCatalog> findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(Collection<NotificationEntityType> entityTypes);
+    List<NotificationEventCatalog> findByIsEnabledTrueAndEntityTypeInOrderByEventKeyAsc(
+            Collection<NotificationEntityType> entityTypes);
 }

@@ -79,4 +79,26 @@ class JiraFieldMappingMapperTest {
         assertThat(back.getId()).isEqualTo("00000000-0000-0000-0000-000000000021");
         assertThat(back.getMetadata()).containsEntry("x", "y");
     }
+
+    @Test
+    @DisplayName("toEntity(List) with non-empty list covers for-loop branches")
+    void toEntityList_nonEmptyList_convertsAllItems() {
+        JiraFieldMappingMapper mapper = new JiraFieldMappingMapperImpl();
+
+        JiraFieldMappingDto dto1 = JiraFieldMappingDto.builder()
+                .id("00000000-0000-0000-0000-000000000030")
+                .jiraFieldId("f1").jiraFieldName("Field1").displayLabel("L1")
+                .dataType(JiraDataType.STRING).required(true).build();
+        JiraFieldMappingDto dto2 = JiraFieldMappingDto.builder()
+                .id(null)
+                .jiraFieldId("f2").jiraFieldName("Field2").displayLabel("L2")
+                .dataType(JiraDataType.NUMBER).required(false).build();
+
+        List<JiraFieldMapping> result = mapper.toEntity(List.of(dto1, dto2));
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).getJiraFieldId()).isEqualTo("f1");
+        assertThat(result.get(1).getJiraFieldId()).isEqualTo("f2");
+        assertThat(result.get(1).getId()).isNull();
+    }
 }

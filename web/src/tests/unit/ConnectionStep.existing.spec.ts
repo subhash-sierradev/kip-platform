@@ -8,8 +8,9 @@ import NewConnectionForm from '@/components/common/connectionstep/NewConnectionF
 import type { ConnectionStepData } from '@/types/ConnectionStepData';
 import { JIRA_CONNECTION_CONFIG } from '@/utils/connectionStepConfig';
 
-const { hasAdminAccess } = vi.hoisted(() => ({
+const { hasAdminAccess, mockRoles } = vi.hoisted(() => ({
   hasAdminAccess: { value: true },
+  mockRoles: { value: undefined as string[] | undefined },
 }));
 
 vi.mock('@/api/services/IntegrationConnectionService', () => ({
@@ -24,7 +25,7 @@ vi.mock('@/composables/useAuth', () => ({
   useAuth: () => ({
     userInfo: {
       get value() {
-        return { roles: hasAdminAccess.value ? ['tenant_admin'] : ['user'] };
+        return { roles: mockRoles.value ?? (hasAdminAccess.value ? ['tenant_admin'] : ['user']) };
       },
     },
   }),
@@ -34,6 +35,7 @@ describe('ConnectionStep (existing connection)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     hasAdminAccess.value = true;
+    mockRoles.value = undefined;
     vi.mocked(IntegrationConnectionService.getAllConnections).mockResolvedValue([] as any);
   });
 
@@ -286,5 +288,261 @@ describe('ConnectionStep (existing connection)', () => {
     expect(wrapper.findAll('input[type="radio"]')).toHaveLength(1);
     expect(wrapper.findComponent(ExistingConnectionPanel).exists()).toBe(true);
     expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(false);
+  });
+
+  it('forces new-mode state back to existing for non-admin users on mount', async () => {
+    hasAdminAccess.value = false;
+
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: 'https://example.test',
+          credentialType: 'BASIC_AUTH',
+          username: 'user',
+          password: 'pass',
+          connectionName: 'Restricted connection',
+          connected: false,
+          createdConnectionId: 'created-1',
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    const updates = wrapper.emitted() as Record<string, unknown[][]>;
+    expect(updates['update:modelValue']).toBeTruthy();
+    const forcedState = (updates['update:modelValue'] ?? []).find(
+      args => (args[0] as ConnectionStepData).connectionMethod === 'existing'
+    )?.[0] as ConnectionStepData | undefined;
+
+    expect(forcedState).toBeTruthy();
+    expect(forcedState?.connectionMethod).toBe('existing');
+    expect(forcedState?.createdConnectionId).toBeUndefined();
+    expect(wrapper.findComponent(ExistingConnectionPanel).exists()).toBe(true);
+    expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(false);
+  });
+
+  it('updates the model when an existing connection is selected', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'existing',
+          baseUrl: '',
+          credentialType: 'BASIC_AUTH',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+          existingConnectionId: undefined,
+          createdConnectionId: undefined,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.findComponent(ExistingConnectionPanel).vm.$emit('select-existing', {
+      id: 'conn-22',
+      baseUrl: 'https://selected.example.test',
+    });
+    await flushPromises();
+
+    const updates = wrapper.emitted() as Record<string, unknown[][]>;
+    const lastUpdate = updates['update:modelValue']?.at(-1)?.[0] as ConnectionStepData;
+
+    expect(lastUpdate.existingConnectionId).toBe('conn-22');
+    expect(lastUpdate.baseUrl).toBe('https://selected.example.test');
+  });
+
+  it('ignores verify requests when no existing connection has been selected', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'existing',
+          baseUrl: '',
+          credentialType: 'BASIC_AUTH',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+          existingConnectionId: undefined,
+          createdConnectionId: undefined,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.findComponent(ExistingConnectionPanel).vm.$emit('verify-existing');
+    await flushPromises();
+
+    expect(IntegrationConnectionService.testExistingConnection).not.toHaveBeenCalled();
+    expect(wrapper.emitted('connection-success')).toBeUndefined();
+  });
+
+  it('clears credential-specific fields when the credential type changes', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: 'https://example.test',
+          credentialType: 'BASIC_AUTH',
+          username: 'user',
+          password: 'pass',
+          clientId: 'client-id',
+          clientSecret: 'client-secret',
+          tokenUrl: 'https://token.example.test',
+          scope: 'read write',
+          connectionName: 'Example',
+          connected: false,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    wrapper.findComponent(NewConnectionForm).vm.$emit('credential-type-change');
+    await flushPromises();
+
+    const updates = wrapper.emitted() as Record<string, unknown[][]>;
+    const lastUpdate = updates['update:modelValue']?.at(-1)?.[0] as ConnectionStepData;
+
+    expect(lastUpdate.username).toBe('');
+    expect(lastUpdate.password).toBe('');
+    expect(lastUpdate.clientId).toBe('');
+    expect(lastUpdate.clientSecret).toBe('');
+    expect(lastUpdate.tokenUrl).toBe('');
+    expect(lastUpdate.scope).toBe('');
+  });
+
+  it('does not refetch existing connections when switching from existing to new', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'existing',
+          baseUrl: '',
+          credentialType: 'BASIC_AUTH',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+          existingConnectionId: 'conn-1',
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+    expect(IntegrationConnectionService.getAllConnections).toHaveBeenCalledTimes(1);
+
+    const newRadio = wrapper.findAll('input[type="radio"]')[0];
+    await newRadio.setValue(true);
+    await flushPromises();
+
+    expect(IntegrationConnectionService.getAllConnections).toHaveBeenCalledTimes(1);
+    expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(true);
+  });
+
+  it('defaults the credential type from config on mount when missing', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: '',
+          credentialType: '',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    const form = wrapper.findComponent(NewConnectionForm);
+    expect(form.exists()).toBe(true);
+    expect((form.props('modelValue') as ConnectionStepData).credentialType).toBe('BASIC_AUTH');
+  });
+
+  it('leaves the credential type empty when config has no default', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: '',
+          credentialType: '',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+        },
+        config: {
+          ...JIRA_CONNECTION_CONFIG,
+          defaultCredentialType: undefined,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const form = wrapper.findComponent(NewConnectionForm);
+    expect(form.exists()).toBe(true);
+    expect((form.props('modelValue') as ConnectionStepData).credentialType).toBe('');
+  });
+
+  it('handles users without a roles array by hiding the create-new option', async () => {
+    mockRoles.value = undefined;
+    hasAdminAccess.value = false;
+
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'existing',
+          baseUrl: '',
+          credentialType: 'UNKNOWN_TYPE',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    expect(wrapper.findAll('input[type="radio"]')).toHaveLength(1);
+    expect(wrapper.findComponent(NewConnectionForm).exists()).toBe(false);
+  });
+
+  it('passes empty credential fields to the form when the credential type is unknown', async () => {
+    const wrapper = mount(ConnectionStep, {
+      props: {
+        modelValue: {
+          connectionMethod: 'new',
+          baseUrl: '',
+          credentialType: 'UNKNOWN_TYPE',
+          username: '',
+          password: '',
+          connectionName: '',
+          connected: false,
+        },
+        config: JIRA_CONNECTION_CONFIG,
+      },
+    });
+
+    await flushPromises();
+
+    const form = wrapper.findComponent(NewConnectionForm);
+    expect(form.exists()).toBe(true);
+    expect(form.props('currentCredentialFields')).toEqual([]);
+    expect(form.props('useTwoColCredentialGrid')).toBe(false);
   });
 });

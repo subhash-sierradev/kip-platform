@@ -16,7 +16,6 @@ import com.integration.execution.model.ConfluenceMonitoringReport.ClientGroup;
 import java.io.StringWriter;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,18 +34,17 @@ import java.util.TreeMap;
 @RequiredArgsConstructor
 public class ConfluencePageRenderer {
 
-    private static final DateTimeFormatter GENERATED_AT_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm 'UTC'", Locale.ENGLISH);
     private static final DateTimeFormatter REPORT_DATE_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.ENGLISH);
     private static final DateTimeFormatter REPORT_DATE_LONG_FMT =
             DateTimeFormatter.ofPattern("MMMM d, yyyy", Locale.ENGLISH);
+    private static final DateTimeFormatter GENERATED_AT_FMT =
+            DateTimeFormatter.ofPattern("dd MMM yyyy 'at' HH:mm z", Locale.ENGLISH);
     private static final DateTimeFormatter TIMESTAMP_FMT =
-            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm 'UTC'", Locale.ENGLISH);
+            DateTimeFormatter.ofPattern("dd MMM yyyy HH:mm z", Locale.ENGLISH);
     private static final List<String> PRIORITY_ORDER = List.of("CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO");
 
     private final Configuration freemarkerConfig;
-    private ZoneId timezone = ZoneOffset.UTC;
 
 
     public String buildPageContent(List<KwMonitoringDocument> data, ZoneId targetTimezone) {
@@ -62,11 +60,8 @@ public class ConfluencePageRenderer {
     }
 
     private ConfluenceMonitoringReport buildModel(List<KwMonitoringDocument> data, ZoneId targetTimezone) {
-        this.timezone = targetTimezone;
         var now = Instant.now().atZone(targetTimezone);
-        DateTimeFormatter generatedAtFmt = DateTimeFormatter.ofPattern(
-                "dd MMM yyyy 'at' HH:mm z", Locale.ENGLISH);
-        String generatedAt = now.format(generatedAtFmt);
+        String generatedAt = now.format(GENERATED_AT_FMT);
         String reportDate = now.format(REPORT_DATE_FMT);
         String reportDateLong = now.format(REPORT_DATE_LONG_FMT);
 
@@ -82,7 +77,7 @@ public class ConfluencePageRenderer {
         List<ReportEntry> allReports = new ArrayList<>();
         for (Map.Entry<String, List<KwMonitoringDocument>> entry : byClient.entrySet()) {
             List<ReportEntry> groupReports = entry.getValue().stream()
-                    .map(this::toReportEntry).toList();
+                    .map(item -> toReportEntry(item, targetTimezone)).toList();
             allReports.addAll(groupReports);
             List<PrioritySummaryEntry> clientPriority = buildPrioritySummary(groupReports);
             clientGroups.add(new ClientGroup(
@@ -95,20 +90,18 @@ public class ConfluencePageRenderer {
                 data.size(), byClient.size(), prioritySummary, clientGroups);
     }
 
-    @SuppressWarnings("unchecked")
     private String extractClientName(KwMonitoringDocument item) {
         Map<String, Object> attributes = item.getAttributes() != null ? item.getAttributes() : Map.of();
-        Map<String, Object> dynamicData = attributes.containsKey("dynamicData")
-                ? (Map<String, Object>) attributes.get("dynamicData") : Map.of();
+        Object rawDynamic = attributes.get("dynamicData");
+        Map<?, ?> dynamicData = rawDynamic instanceof Map<?, ?> m ? m : Map.of();
         String client = resolveStringValue(dynamicData.get("Client"));
         return (client != null && !client.isBlank()) ? client : "Unknown";
     }
 
-    @SuppressWarnings("unchecked")
-    private ReportEntry toReportEntry(KwMonitoringDocument item) {
+    private ReportEntry toReportEntry(KwMonitoringDocument item, ZoneId timezone) {
         Map<String, Object> attributes = item.getAttributes() != null ? item.getAttributes() : Map.of();
-        Map<String, Object> dynamicData = attributes.containsKey("dynamicData")
-                ? (Map<String, Object>) attributes.get("dynamicData") : Map.of();
+        Object rawDynamic = attributes.get("dynamicData");
+        Map<?, ?> dynamicData = rawDynamic instanceof Map<?, ?> m ? m : Map.of();
 
         String client = resolveStringValue(dynamicData.get("Client"));
         String priority = resolveStringValue(dynamicData.get("Priority"));
@@ -122,8 +115,8 @@ public class ConfluencePageRenderer {
         List<String> serialNumbers = extractSerials(attributes);
         List<String> tags = extractTags(attributes);
 
-        String createdAt = formatTimestamp(item.getCreatedTimestamp());
-        String updatedAt = formatTimestamp(item.getUpdatedTimestamp());
+        String createdAt = formatTimestamp(item.getCreatedTimestamp(), timezone);
+        String updatedAt = formatTimestamp(item.getUpdatedTimestamp(), timezone);
 
         return new ReportEntry(
                 item.getTitle() != null ? item.getTitle() : "",
@@ -143,10 +136,13 @@ public class ConfluencePageRenderer {
         );
     }
 
-    private List<DynamicField> buildDynamicFields(Map<String, Object> dynamicData) {
+    private List<DynamicField> buildDynamicFields(Map<?, ?> dynamicData) {
         List<DynamicField> fields = new ArrayList<>();
-        for (Map.Entry<String, Object> entry : dynamicData.entrySet()) {
-            String key = entry.getKey();
+        for (Map.Entry<?, ?> entry : dynamicData.entrySet()) {
+            Object rawKey = entry.getKey();
+            if (!(rawKey instanceof String key)) {
+                continue;
+            }
             if ("Client".equals(key) || "Priority".equals(key)) {
                 continue;
             }
@@ -180,28 +176,32 @@ public class ConfluencePageRenderer {
         return raw.toString();
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> extractAuthors(Map<String, Object> attributes) {
         Object raw = attributes.get("authors");
         if (raw instanceof List<?> list) {
             return list.stream()
-                    .filter(Map.class::isInstance)
-                    .map(o -> (Map<String, Object>) o)
-                    .map(m -> String.valueOf(m.getOrDefault("displayFullName", "")))
+                    .filter(o -> o instanceof Map<?, ?>)
+                    .map(o -> (Map<?, ?>) o)
+                    .map(m -> {
+                        Object v = m.get("displayFullName");
+                        return v != null ? String.valueOf(v) : "";
+                    })
                     .filter(s -> !s.isBlank())
                     .toList();
         }
         return List.of();
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> extractSerials(Map<String, Object> attributes) {
         Object raw = attributes.get("serials");
         if (raw instanceof List<?> list) {
             return list.stream()
-                    .filter(Map.class::isInstance)
-                    .map(o -> (Map<String, Object>) o)
-                    .map(m -> String.valueOf(m.getOrDefault("filingNumberDisplay", "")))
+                    .filter(o -> o instanceof Map<?, ?>)
+                    .map(o -> (Map<?, ?>) o)
+                    .map(m -> {
+                        Object v = m.get("filingNumberDisplay");
+                        return v != null ? String.valueOf(v) : "";
+                    })
                     .filter(s -> !s.isBlank())
                     .toList();
         }
@@ -219,13 +219,11 @@ public class ConfluencePageRenderer {
         return List.of();
     }
 
-    private String formatTimestamp(long epochSeconds) {
+    private String formatTimestamp(long epochSeconds, ZoneId timezone) {
         if (epochSeconds <= 0) {
             return "";
         }
-        DateTimeFormatter timestampFmt = DateTimeFormatter.ofPattern(
-                "dd MMM yyyy HH:mm z", Locale.ENGLISH);
-        return Instant.ofEpochSecond(epochSeconds).atZone(timezone).format(timestampFmt);
+        return Instant.ofEpochSecond(epochSeconds).atZone(timezone).format(TIMESTAMP_FMT);
     }
 
     private List<PrioritySummaryEntry> buildPrioritySummary(List<ReportEntry> reports) {

@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = providers.gradleProperty("projectVersion").get()
+version = "0.0.1-rc.7"
 description = "Integration Execution Service - Processing Engine (port 8081)"
 
 dependencyManagement {
@@ -25,8 +25,9 @@ dependencies {
     implementation(libs.spring.boot.starter.web)
     implementation(libs.spring.boot.starter.validation)
     implementation(libs.spring.boot.starter.cache)
+    implementation(libs.spring.boot.starter.actuator)
     implementation(libs.spring.boot.starter.amqp)
-    implementation(libs.spring.boot.starter.aop)
+    implementation(libs.spring.boot.starter.aspectj)
     implementation(libs.spring.boot.starter.oauth2.resource.server)
 
     // Validation
@@ -94,6 +95,7 @@ dependencies {
 // ---- Spring Boot Fat JAR ----
 springBoot {
     mainClass.set("com.integration.execution.IntegrationExecutionServiceApplication")
+    buildInfo()
 }
 
 tasks.bootJar {
@@ -110,6 +112,7 @@ checkstyle {
 
 tasks.withType<Checkstyle> {
     enabled = !project.hasProperty("checkstyle.skip")
+    maxWarnings = 0
     reports {
         xml.required.set(true)
         html.required.set(false)
@@ -148,6 +151,24 @@ tasks.test {
     jvmArgs("-Xmx1024m", "-XX:+EnableDynamicAgentLoading")
     modularity.inferModulePath.set(false)
     exclude("**/*IT.class")
+}
+
+// ---- Integration Tests (run separately — requires Docker for Testcontainers) ----
+val integrationTest by tasks.registering(Test::class) {
+    description = "Runs integration tests against real infrastructure (RabbitMQ via Testcontainers)."
+    group = "verification"
+    useJUnitPlatform()
+    jvmArgs("-Xmx1024m", "-XX:+EnableDynamicAgentLoading")
+    modularity.inferModulePath.set(false)
+    include("**/*IT.class")
+    shouldRunAfter(tasks.test)
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    // Pass through DOCKER_HOST if explicitly set (CI / Linux socket override)
+    val dockerHost = System.getenv("DOCKER_HOST") ?: ""
+    if (dockerHost.isNotBlank()) {
+        environment("DOCKER_HOST", dockerHost)
+    }
 }
 
 // Wire verify -> coverage check

@@ -58,6 +58,12 @@ describe('JiraWebhookService', () => {
     expect(res3.responseCode).toBe(500);
     expect(res3.errorMessage).toMatch(/network error/);
 
+    (api.post as any).mockRejectedValueOnce({});
+    const resFallback = await JiraWebhookService.testWebhook('id', '{ }');
+    expect(resFallback.success).toBe(false);
+    expect(resFallback.responseCode).toBe(500);
+    expect(resFallback.errorMessage).toBe('Webhook execution failed');
+
     // Test with default sample payload
     (api.post as any).mockResolvedValueOnce({ data: {} });
     const res4 = await JiraWebhookService.testWebhook('id');
@@ -74,6 +80,11 @@ describe('JiraWebhookService', () => {
       message: 'oops',
     });
     await expect(JiraWebhookService.getWebhookExecutions('id')).rejects.toThrow(/fail|oops/);
+
+    (api.get as any).mockRejectedValueOnce({ message: 'network down' });
+    await expect(JiraWebhookService.getWebhookExecutions('id')).rejects.toThrow(
+      /Failed to fetch executions: network down/
+    );
   });
 
   it('listJiraWebhooks requests GET /webhooks/jira', async () => {
@@ -141,6 +152,16 @@ describe('JiraWebhookService', () => {
         samplePayload: '{}',
       })
     ).rejects.toThrow(/network failure/);
+
+    (api.post as any).mockRejectedValueOnce({ message: 'request timeout' });
+    await expect(
+      JiraWebhookService.createWebhook({
+        name: 'w',
+        connectionId: 'c',
+        fieldsMapping: [],
+        samplePayload: '{}',
+      })
+    ).rejects.toThrow(/Failed to create webhook: request timeout/);
   });
 
   it('toggleWebhookActive hits POST /webhooks/jira/{id}/active and retryWebhookEvent hits retry path', async () => {

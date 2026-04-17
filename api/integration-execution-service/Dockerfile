@@ -8,9 +8,6 @@ FROM eclipse-temurin:25-jre AS production
 
 WORKDIR /app
 
-# Install curl for healthcheck (wget not available in temurin-jre)
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-
 # Create non-root user (Debian syntax)
 RUN groupadd -r spring && useradd -r -g spring spring
 
@@ -22,15 +19,29 @@ RUN mkdir -p /app/logs && chown -R spring:spring /app
 
 USER spring:spring
 
-EXPOSE 8081
+EXPOSE 8080
 
 # JVM flags:
-#   -XX:MaxRAMPercentage=75.0  — use up to 75% of container memory limit
-#   -Djava.security.egd        — faster startup with non-blocking random
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+#   -XX:MaxRAMPercentage=75.0    — use up to 75% of container memory limit
+#   -XX:+ExitOnOutOfMemoryError  — crash fast on OOM so orchestrator can restart
+#   -XX:+UseZGC                  — low-latency GC (sub-ms pauses, Generational ZGC default in Java 25)
+#   -Xss512k                     — reduce thread stack size (saves memory under load)
+#   -XX:MetaspaceSize=128m       — initial metaspace size (avoids early resize GC cycles)
+#   -XX:MaxMetaspaceSize=256m    — cap off-heap metaspace (unbounded by default, can OOM kill pod)
+#   -XX:+HeapDumpOnOutOfMemoryError — write heap dump on OOM for post-mortem analysis
+#   -XX:HeapDumpPath             — dump to mounted log volume
+ENV JAVA_OPTS="-XX:MaxRAMPercentage=75.0 \
+              -XX:+ExitOnOutOfMemoryError \
+              -XX:+UseZGC \
+              -Xss512k \
+              -XX:MetaspaceSize=128m \
+              -XX:MaxMetaspaceSize=256m \
+              -XX:+HeapDumpOnOutOfMemoryError \
+              -XX:HeapDumpPath=/app/logs/heapdump.hprof"
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD curl -sf http://localhost:8081/actuator/health || exit 1
+HEALTHCHECK NONE
+# Health probing is handled by Kubernetes liveness and readiness probes via
+# Spring Boot Actuator: GET /actuator/health/liveness and /actuator/health/readiness
 
 # Use exec form with sh -c to allow $JAVA_OPTS expansion
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar app.jar"]

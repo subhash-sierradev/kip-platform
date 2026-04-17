@@ -16,17 +16,22 @@ COPY web/ .
 RUN npm run build:docker
 
 # ============================================================
-# Stage 2: Serve — lightweight Nginx to serve the SPA
+# Stage 2: Serve — static file server (nginx handled by infrastructure)
 # ============================================================
-FROM nginx:1.27-alpine AS production
+FROM node:20-alpine AS production
 
-# Remove default nginx config and static files
-RUN rm -rf /etc/nginx/conf.d/default.conf /usr/share/nginx/html/*
+WORKDIR /app
+
+# Install serve for static file serving with SPA fallback
+RUN npm install -g serve
 
 # Copy built assets from build stage
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/dist ./dist
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://127.0.0.1/ || exit 1
+
+# -s enables SPA routing fallback (all routes → index.html)
+CMD ["serve", "-s", "dist", "-l", "80"]

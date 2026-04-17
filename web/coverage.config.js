@@ -23,7 +23,7 @@
 const coverageConfig = {
   threshold: {
     statements: 90,
-    branches: 89,
+    branches: 90,
     functions: 90,
     lines: 90,
   },

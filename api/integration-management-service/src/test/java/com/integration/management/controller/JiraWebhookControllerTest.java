@@ -468,6 +468,7 @@ class JiraWebhookControllerTest {
                 .webhookUrl("https://example.com/webhooks/" + id)
                 .isEnabled(true)
                 .createdDate(Instant.now())
+                .lastModifiedDate(Instant.now())
                 .build();
     }
 }

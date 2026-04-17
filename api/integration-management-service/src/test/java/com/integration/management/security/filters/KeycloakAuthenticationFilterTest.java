@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integration.management.security.config.SecurityProperties;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -76,6 +77,23 @@ class KeycloakAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("tenant_id string with leading slashes should be stripped")
+    void tenantIdStringWithLeadingSlash_isStripped() throws Exception {
+        setAuthContext(Map.of(
+                props.getJwt().getTenantIdClaim(), "//tenantX",
+                props.getJwt().getUserIdClaim(), "userX"
+        ));
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertThat(request.getAttribute(props.getJwt().getTenantIdClaim())).isEqualTo("tenantX");
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
     @DisplayName("webhook client role should set system tenant/user and continue")
     void webhookClientRole_setsSystemTenantUser() throws Exception {
         setAuthContext(Map.of(
@@ -127,7 +145,6 @@ class KeycloakAuthenticationFilterTest {
     @Test
     @DisplayName("realm_access malformed values should not be treated as webhook client")
     void malformedRealmAccess_doesNotAllowWebhookClient() throws Exception {
-        // Case 1: realm_access is a string, not a map
         setAuthContext(Map.of("realm_access", "not-a-map"));
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
         MockHttpServletResponse response = new MockHttpServletResponse();
@@ -139,7 +156,6 @@ class KeycloakAuthenticationFilterTest {
         assertThat(response.getContentAsString()).contains(props.getError().getMissingFields());
         verify(chain, never()).doFilter(request, response);
 
-        // Case 2: roles is not a list
         setAuthContext(Map.of("realm_access", Map.of("roles", "not-a-list")));
         MockHttpServletRequest request2 = new MockHttpServletRequest("GET", "/x");
         MockHttpServletResponse response2 = new MockHttpServletResponse();
@@ -149,4 +165,44 @@ class KeycloakAuthenticationFilterTest {
         assertThat(response2.getStatus()).isEqualTo(403);
         assertThat(response2.getContentAsString()).contains(props.getError().getMissingFields());
     }
+
+    @Nested
+    @DisplayName("getTenant edge cases")
+    class GetTenantEdgeCases {
+
+        @Test
+        @DisplayName("tenantId list with all blank items falls back to webhook check → 403")
+        void tenantIdListAllBlank_returns403() throws Exception {
+            setAuthContext(Map.of(
+                    props.getJwt().getTenantIdClaim(), List.of("  ", ""),
+                    props.getJwt().getUserIdClaim(), "user"
+            ));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(response.getStatus()).isEqualTo(403);
+            verify(chain, never()).doFilter(request, response);
+        }
+
+        @Test
+        @DisplayName("tenantId as list uses second item when first is blank")
+        void tenantIdList_secondItemUsed_whenFirstIsBlank() throws Exception {
+            setAuthContext(Map.of(
+                    props.getJwt().getTenantIdClaim(), List.of("", "tenantB"),
+                    props.getJwt().getUserIdClaim(), "user"
+            ));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(request.getAttribute(props.getJwt().getTenantIdClaim())).isEqualTo("tenantB");
+            verify(chain).doFilter(request, response);
+        }
+    }
 }
+

@@ -115,6 +115,8 @@ import type { CacheStat, AggregatedStats } from '@/types/CacheTypes';
 
 type Stats = CacheStat | AggregatedStats;
 
+const NO_RATIO_AVAILABLE = 'N/A';
+
 const statsData = ref<Record<string, CacheStat> | null>(null);
 const isStatsLoading = ref(true);
 const isStatsError = ref(false);
@@ -230,11 +232,17 @@ function getRequestCount(statsObj: CacheStat | AggregatedStats): number {
 }
 
 function getHitRateValue(statsObj: CacheStat | AggregatedStats): string {
+  if (getRequestCount(statsObj) === 0) {
+    return NO_RATIO_AVAILABLE;
+  }
   const value = (statsObj as AggregatedStats).avgHitRate ?? (statsObj as CacheStat).hitRate ?? 0;
   return `${(value * 100).toFixed(1)}%`;
 }
 
 function getMissRateValue(statsObj: CacheStat | AggregatedStats): string {
+  if (getRequestCount(statsObj) === 0) {
+    return NO_RATIO_AVAILABLE;
+  }
   const value = (statsObj as AggregatedStats).avgMissRate ?? (statsObj as CacheStat).missRate ?? 0;
   return `${(value * 100).toFixed(1)}%`;
 }

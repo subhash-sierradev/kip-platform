@@ -139,6 +139,29 @@ describe('NotificationPanel', () => {
     expect(markAsRead).toHaveBeenCalledWith(['n1']);
   });
 
+  it('refreshes notifications when marking a single notification as read fails', async () => {
+    storeState.notifications = [
+      {
+        id: 'n1',
+        isRead: false,
+        severity: 'INFO',
+        title: 'Title',
+        message: 'Message',
+        createdDate: new Date().toISOString(),
+      },
+    ] as any;
+    storeState.unreadCount = 1;
+    markAsRead.mockRejectedValueOnce(new Error('mark failed'));
+
+    const wrapper = mount(NotificationPanel);
+    await wrapper.find('.notification-item-row').trigger('click');
+    await Promise.resolve();
+
+    expect(storeState.markReadLocal).toHaveBeenCalledWith(['n1']);
+    expect(markAsRead).toHaveBeenCalledWith(['n1']);
+    expect(storeState.refreshNotifications).toHaveBeenCalled();
+  });
+
   it('does not mark notifications as read when the selected row is already read', async () => {
     storeState.notifications = [
       {
@@ -277,5 +300,33 @@ describe('NotificationPanel', () => {
 
     expect(messageText).toContain('Processed at ');
     expect(messageText).not.toContain('2026-03-05T09:52:44.922361300Z');
+  });
+
+  it('renders short messages without truncation and blank messages as empty text', () => {
+    storeState.notifications = [
+      {
+        id: 'n1',
+        isRead: true,
+        severity: 'INFO',
+        title: 'Short',
+        message: 'Short message',
+        createdDate: new Date().toISOString(),
+      },
+      {
+        id: 'n2',
+        isRead: true,
+        severity: 'INFO',
+        title: 'Blank',
+        message: '',
+        createdDate: new Date().toISOString(),
+      },
+    ] as any;
+
+    const wrapper = mount(NotificationPanel);
+    const messages = wrapper.findAll('.notification-row-message');
+
+    expect(messages[0].text()).toBe('Short message');
+    expect(messages[0].text().endsWith('...')).toBe(false);
+    expect(messages[1].text()).toBe('');
   });
 });

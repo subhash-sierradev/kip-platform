@@ -12,6 +12,7 @@ describe('JiraWebhookCard', () => {
       webhookUrl: overrides.webhookUrl ?? 'http://example.com',
       createdBy: overrides.createdBy ?? 'user',
       createdDate: overrides.createdDate ?? '2024-01-01T00:00:00Z',
+      lastModifiedDate: overrides.lastModifiedDate ?? '2024-01-15T00:00:00Z',
       updatedDate: overrides.updatedDate ?? undefined,
       isEnabled: overrides.isEnabled ?? true,
       jiraFieldMappings: overrides.jiraFieldMappings ?? [],
@@ -76,5 +77,29 @@ describe('JiraWebhookCard', () => {
 
     await wrapper.find('.action-menu-stub').trigger('click');
     expect(wrapper.emitted('action')).toEqual([['edit', baseWebhook()]]);
+  });
+
+  it('renders Updated label in grid view', () => {
+    const wrapper = mount(JiraWebhookCard, {
+      props: {
+        loading: false,
+        search: '',
+        webhooks: [baseWebhook()],
+        totalCount: 1,
+        viewMode: 'grid',
+        getProjectLabel: () => '',
+        getIssueTypeLabel: () => '',
+        getAssignee: () => '',
+        formatMetadataDate: (d: string | undefined) => d ?? '',
+      },
+      global: {
+        stubs: {
+          WebhookIcon: { template: '<span class="icon-stub" />' },
+          ActionMenu: { template: '<button class="action-menu-stub" />' },
+          IntegrationStatusIcon: { template: '<span />' },
+        },
+      },
+    });
+    expect(wrapper.text()).toContain('Updated:');
   });
 });

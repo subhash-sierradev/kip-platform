@@ -4,12 +4,8 @@ on:
   pull_request:
     branches:
       - main
-      - release
       - 'release/**'
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'e2e/**'
-      - '.github/workflows/e2e-code-validation.yml'
 
 jobs:
   playwright-code-check:

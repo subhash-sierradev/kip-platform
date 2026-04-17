@@ -168,6 +168,16 @@ describe('NotificationsRecipientsTab', () => {
     expect(hideTooltip).toHaveBeenCalled();
   });
 
+  it('opens the policy modal from the edit action button', async () => {
+    const fetchUsers = vi.fn(async () => undefined);
+    const wrapper = mountTab({ fetchUsers });
+
+    await wrapper.findAll('.dx-button')[0].trigger('click');
+
+    expect(wrapper.find('.policy-modal').exists()).toBe(true);
+    expect(fetchUsers).not.toHaveBeenCalled();
+  });
+
   it('deletes policy via confirmation flow', async () => {
     const deletePolicy = vi.fn(async () => undefined);
     const wrapper = mountTab({ deletePolicy });
@@ -253,6 +263,33 @@ describe('NotificationsRecipientsTab', () => {
     expect(showTooltip).toHaveBeenCalled();
   });
 
+  it('uses chip fallbacks for nullish user ids and display names in visible user chips', () => {
+    const wrapper = mountTab({
+      filteredPolicies: [
+        {
+          id: 'p4',
+          ruleId: 'r4',
+          recipientType: 'SELECTED_USERS',
+          users: [
+            { userId: null, displayName: 'Alpha' } as any,
+            { userId: 'u2', displayName: null } as any,
+            { userId: 'u3', displayName: 'Gamma' },
+          ],
+          lastModifiedBy: 'admin',
+          lastModifiedDate: new Date().toISOString(),
+        },
+      ],
+      policies: [{ id: 'p4', ruleId: 'r4', recipientType: 'SELECTED_USERS', users: [] }],
+      rules: [{ id: 'r4', eventKey: 'D', severity: NotificationSeverity.INFO }],
+    });
+
+    const chipNames = wrapper.findAll('.user-chip__name').map(node => node.text());
+    expect(chipNames).toEqual(['Alpha', 'u2']);
+
+    const avatars = wrapper.findAll('.user-chip__avatar');
+    expect(avatars[0].attributes('style')).toContain('background');
+  });
+
   it('opens a blank policy modal and includes the preselected rule when already present', async () => {
     const wrapper = mountTab({
       availableRulesForPolicy: [{ id: 'r1', eventKey: 'A', severity: NotificationSeverity.INFO }],
@@ -316,6 +353,28 @@ describe('NotificationsRecipientsTab', () => {
 
     expect(showTooltip).toHaveBeenCalled();
     expect(wrapper.text()).toContain('Selected Users (3)');
+  });
+
+  it('covers tooltip helper fallbacks for empty users and missing focus targets', () => {
+    const wrapper = mountTab();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.onUsersTooltipEnter(new MouseEvent('mouseenter'), {
+      id: 'p5',
+      ruleId: 'r5',
+      recipientType: 'SELECTED_USERS',
+      users: [],
+    });
+    expect(showTooltip).toHaveBeenCalledWith(expect.any(MouseEvent), 'Selected Users (1)');
+
+    const previousCalls = showTooltip.mock.calls.length;
+    setupState.onUsersTooltipFocus(new FocusEvent('focus'), {
+      id: 'p5',
+      ruleId: 'r5',
+      recipientType: 'SELECTED_USERS',
+      users: [],
+    });
+    expect(showTooltip.mock.calls.length).toBe(previousCalls);
   });
 
   it('closes the delete dialog without deleting when cancellation is requested', async () => {

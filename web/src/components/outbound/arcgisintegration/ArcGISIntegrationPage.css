@@ -25,7 +25,8 @@ textarea:focus::placeholder {
 }
 
 /* Integration Grid Layout */
-.integration-grid {
+.arcgis-integration-dashboard .integration-grid,
+.confluence-integration-dashboard .integration-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 1.3rem;
@@ -38,33 +39,38 @@ textarea:focus::placeholder {
 
 /* Responsive grid layout */
 @media (min-width: 1400px) {
-  .integration-grid {
+  .arcgis-integration-dashboard .integration-grid,
+  .confluence-integration-dashboard .integration-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
   }
 }
 
 @media (min-width: 1200px) and (max-width: 1399px) {
-  .integration-grid {
+  .arcgis-integration-dashboard .integration-grid,
+  .confluence-integration-dashboard .integration-grid {
     grid-template-columns: repeat(3, 1fr);
     gap: 0.5rem;
   }
 }
 
 @media (min-width: 768px) and (max-width: 1199px) {
-  .integration-grid {
+  .arcgis-integration-dashboard .integration-grid,
+  .confluence-integration-dashboard .integration-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 767px) {
-  .integration-grid {
+  .arcgis-integration-dashboard .integration-grid,
+  .confluence-integration-dashboard .integration-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
 }
 
-.integration-list {
+.arcgis-integration-dashboard .integration-list,
+.confluence-integration-dashboard .integration-list {
   display: flex;
   flex-direction: column;
   gap: 15px;
@@ -73,7 +79,8 @@ textarea:focus::placeholder {
 }
 
 /* Integration Card Styles */
-.integration-card {
+.arcgis-integration-dashboard .integration-card,
+.confluence-integration-dashboard .integration-card {
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
@@ -88,29 +95,39 @@ textarea:focus::placeholder {
   cursor: pointer;
 }
 
-.integration-card:hover {
+.arcgis-integration-dashboard .integration-card:hover,
+.confluence-integration-dashboard .integration-card:hover {
   box-shadow: 0 4px 18px rgba(0, 121, 193, 0.18);
 }
 
-.card-top-row {
+.arcgis-integration-dashboard .card-top-row,
+.confluence-integration-dashboard .card-top-row {
   display: flex;
   align-items: flex-start;
   margin-bottom: 9px;
 }
 
-.icon-box {
+.arcgis-integration-dashboard .icon-box,
+.confluence-integration-dashboard .icon-box {
   margin-right: 12px;
   display: flex;
   align-items: center;
   color: var(--kw-secondary-dark);
 }
 
-.title-box {
+.arcgis-integration-dashboard .integration-type-icon,
+.confluence-integration-dashboard .integration-type-icon {
+  font-size: 24px;
+}
+
+.arcgis-integration-dashboard .title-box,
+.confluence-integration-dashboard .title-box {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.title-text {
+.arcgis-integration-dashboard .title-text,
+.confluence-integration-dashboard .title-text {
   font-weight: 600;
   font-size: 15px;
   color: #2c3e50;
@@ -118,18 +135,28 @@ textarea:focus::placeholder {
   word-break: break-word;
 }
 
-.title-row-list {
+.arcgis-integration-dashboard .title-row-list,
+.confluence-integration-dashboard .title-row-list {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
 
-.created-text {
+.arcgis-integration-dashboard .created-text,
+.confluence-integration-dashboard .created-text {
   color: var(--chip-grey-text);
   font-size: 11px;
 }
 
-.created-text .label {
+.arcgis-integration-dashboard .created-updated-row,
+.confluence-integration-dashboard .created-updated-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.arcgis-integration-dashboard .created-text .label,
+.confluence-integration-dashboard .created-text .label {
   font-weight: 600;
   color: var(--label-text);
 }
@@ -189,11 +216,17 @@ textarea:focus::placeholder {
   white-space: nowrap;
 }
 
-.chips-row {
+.arcgis-integration-dashboard .chips-row,
+.confluence-integration-dashboard .chips-row {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+}
+
+.arcgis-integration-dashboard .integration-chips-row,
+.confluence-integration-dashboard .integration-chips-row {
+  margin-bottom: 10px;
 }
 
 /* Sync Status */
@@ -213,31 +246,44 @@ textarea:focus::placeholder {
 }
 
 /* Info Row */
-.info-row {
+.arcgis-integration-dashboard .info-row,
+.confluence-integration-dashboard .info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
 }
 
-.info-cell {
+.arcgis-integration-dashboard .info-cell,
+.confluence-integration-dashboard .info-cell {
   font-size: 11px;
   color: #6b7280;
   flex: 1;
 }
 
-.info-cell.align-right {
+.arcgis-integration-dashboard .info-cell.align-right,
+.confluence-integration-dashboard .info-cell.align-right {
   text-align: right;
 }
 
-.info-cell .label {
+.arcgis-integration-dashboard .info-cell .label,
+.confluence-integration-dashboard .info-cell .label {
   font-weight: 600;
   color: var(--label-text);
   margin-right: 4px;
 }
 
-.info-cell .value {
+.arcgis-integration-dashboard .info-cell .value,
+.confluence-integration-dashboard .info-cell .value {
   font-weight: 500;
+}
+
+.arcgis-integration-dashboard .integration-status-icon,
+.confluence-integration-dashboard .integration-status-icon {
+  margin-left: 4px;
+  margin-right: 4px;
+  font-size: 13px;
+  vertical-align: middle;
 }
 
 /* URL Row */

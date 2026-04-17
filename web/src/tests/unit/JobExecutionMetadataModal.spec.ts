@@ -181,6 +181,19 @@ describe('JobExecutionMetadataModal', () => {
       expect(document.body.textContent).toContain('Failed Records - 1 total');
     });
 
+    it('displays correct modal title for all records', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: {
+          ...defaultProps,
+          recordType: 'all',
+        },
+      });
+
+      mountedWrappers.push(wrapper);
+
+      expect(document.body.textContent).toContain('All Records - 2 total');
+    });
+
     it('displays job ID correctly', () => {
       const wrapper = mount(JobExecutionMetadataModal, {
         props: defaultProps,
@@ -420,6 +433,44 @@ describe('JobExecutionMetadataModal', () => {
       expect(hoisted.showSuccess).toHaveBeenCalledWith('Exported 2 records successfully');
     });
 
+    it('customizes exported row indexes and timestamps when values are available', async () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      await wrapper.vm.onExporting({ cancel: false, component: { id: 'grid' } });
+
+      const exportCall = hoisted.exportDataGrid.mock.calls.at(-1)?.[0];
+      expect(exportCall).toBeTruthy();
+
+      const indexCell = { value: null as unknown };
+      exportCall.customizeCell({
+        gridCell: { rowType: 'data', column: { caption: '#' }, data: mockRecords[0] },
+        excelCell: indexCell,
+      });
+      expect(indexCell.value).toBe(1);
+
+      const timestampCell = { value: null as unknown };
+      exportCall.customizeCell({
+        gridCell: {
+          rowType: 'data',
+          column: { dataField: 'documentCreatedAt' },
+          value: mockRecords[0].documentCreatedAt,
+        },
+        excelCell: timestampCell,
+      });
+      expect(timestampCell.value).toBeTypeOf('string');
+
+      const untouchedCell = { value: 'keep' as unknown };
+      exportCall.customizeCell({
+        gridCell: { rowType: 'header', column: { caption: 'Title' }, value: 'Document 1' },
+        excelCell: untouchedCell,
+      });
+      expect(untouchedCell.value).toBe('keep');
+    });
+
     it('shows an error toast when export generation fails', async () => {
       hoisted.exportDataGrid.mockRejectedValueOnce(new Error('export failed'));
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -465,6 +516,43 @@ describe('JobExecutionMetadataModal', () => {
       mountedWrappers.push(wrapper);
 
       expect(document.body.textContent).toContain('Added Records - 100 total');
+    });
+
+    it('uses the first matching index for duplicate record keys and zero for missing rows', () => {
+      const duplicateRecords: RecordMetadata[] = [
+        createMockRecord('doc-dup', 'Document 1', 'loc-dup'),
+        createMockRecord('doc-dup', 'Document 2', 'loc-dup'),
+      ];
+
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: {
+          ...defaultProps,
+          records: duplicateRecords,
+        },
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.getRowIndex(duplicateRecords[0])).toBe(1);
+      expect(wrapper.vm.getRowIndex(duplicateRecords[1])).toBe(1);
+      expect(wrapper.vm.getRowIndex({ documentId: 'missing-doc', locationId: 'missing-loc' })).toBe(
+        0
+      );
+    });
+
+    it('formats timestamp and id fallbacks for nullish and zero values', () => {
+      const wrapper = mount(JobExecutionMetadataModal, {
+        props: defaultProps,
+      }) as any;
+
+      mountedWrappers.push(wrapper);
+
+      expect(wrapper.vm.formatTimestamp(null)).toBe('N/A');
+      expect(wrapper.vm.formatTimestamp(undefined)).toBe('N/A');
+      expect(wrapper.vm.formatTimestamp(0)).toBe('');
+      expect(wrapper.vm.truncateId('abcdefghi')).toBe('abcdefg...');
+      expect(wrapper.vm.truncateId('')).toBe('N/A');
+      expect(wrapper.vm.truncateId(undefined)).toBe('N/A');
     });
   });
 

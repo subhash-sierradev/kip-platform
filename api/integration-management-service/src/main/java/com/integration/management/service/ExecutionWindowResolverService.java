@@ -65,7 +65,7 @@ public class ExecutionWindowResolverService {
                 .minus(1, ChronoUnit.MILLIS)
                 .toInstant();
 
-        // Validate window: skip job run if start is after end
+        // Validate window: throw error if start is after end
         if (alignedStart.isAfter(alignedEnd)) {
             log.warn("Skipping job run for schedule {}: alignedStart ({}) is after alignedEnd ({}). "
                     + "This typically means the job was triggered on the same day as the last execution. "

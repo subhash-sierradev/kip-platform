@@ -1015,4 +1015,223 @@ class JiraWebhookProcessorTest {
 
         assertThat(result.isSuccess()).isTrue();
     }
+
+    // -----------------------------------------------------------------------
+    // Additional hasValidParent branch coverage tests
+    // -----------------------------------------------------------------------
+
+    @Test
+    void processWebhookExecution_subtaskWithParentMapNonStringKeyAndNonStringId_removesParentAndFails() {
+        // Covers hasValidParent: parentMap.get("key") not instanceof String
+        //                        parentMap.get("id") not instanceof String  => returns false
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent").jiraFieldName("Parent").dataType(JiraDataType.STRING).build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype").jiraFieldName("Issue Type").dataType(JiraDataType.STRING).build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-map-nonstring")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        // parent Map with numeric (non-String) key and id
+        Map<String, Object> parentMap = new java.util.HashMap<>();
+        parentMap.put("key", 12345);   // Integer, not String
+        parentMap.put("id", 99999);    // Integer, not String
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-map-nonstring"), any()))
+                .thenReturn(Map.of("issuetype", "Sub-task", "parent", parentMap, "summary", "Sub"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("Parent field is required");
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithParentStringNotKeyAndNotNumeric_hasValidParentFalse() {
+        // Covers hasValidParent: parentValue instanceof String where
+        //   extractJiraIssueKey returns null AND isValidJiraIssueId returns false
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent").jiraFieldName("Parent").dataType(JiraDataType.STRING).build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype").jiraFieldName("Issue Type").dataType(JiraDataType.STRING).build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-str-invalid")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-str-invalid"), any()))
+                .thenReturn(Map.of("issuetype", "Sub-task", "parent", "not-a-key-or-id", "summary", "Sub"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("Parent field is required");
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithParentNonStringNonMap_hasValidParentFalse() {
+        // Covers hasValidParent: parentValue not instanceof Map and not instanceof String => return false
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent").jiraFieldName("Parent").dataType(JiraDataType.STRING).build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype").jiraFieldName("Issue Type").dataType(JiraDataType.STRING).build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-parent-int")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        Map<String, Object> fields = new java.util.HashMap<>();
+        fields.put("issuetype", "Sub-task");
+        fields.put("parent", 42);   // Integer passed through normalizeParentField then stored as-is (non-String/Map)
+        fields.put("summary", "Sub");
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-parent-int"), any()))
+                .thenReturn(fields);
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("Parent field is required");
+    }
+
+    @Test
+    void processWebhookExecution_subtaskWithEmptyFieldMappings_hasSubtaskMetadataFalse() {
+        // Covers hasSubtaskMetadata: fieldMappings is empty => returns false
+        // Then checks issueTypeValue which is a string "Sub-task" => isSubtaskName => true
+        // But no parent mapping, so validateSubtaskParent short-circuits with null
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-subtask-empty-mappings")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-subtask-empty-mappings"), any()))
+                .thenReturn(Map.of("issuetype", "Sub-task", "summary", "No parent mapping"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_parentMapWithNullKeyAndNullId_removesParentAndFails() {
+        // Covers normalizeParentField: parentValue instanceof Map, key not String, id not String
+        //   => processedFields.remove(PARENT_FIELD_ID) at end of Map block
+        // Then covers hasValidParent: parentValue is null (removed) => returns false in validateSubtaskParent
+        JiraFieldMappingDto parentMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("parent").jiraFieldName("Parent").dataType(JiraDataType.STRING).build();
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype").jiraFieldName("Issue Type").dataType(JiraDataType.STRING).build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-parent-map-null-kv")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(parentMapping, issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        // Map where key and id are not Strings => normalizeParentField removes parent
+        Map<String, Object> parentMap = new java.util.HashMap<>();
+        // no "key" or "id" entries at all
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-parent-map-null-kv"), any()))
+                .thenReturn(Map.of("issuetype", "Sub-task", "parent", parentMap, "summary", "Sub"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isFalse();
+        assertThat(result.getErrorMessage()).contains("Parent field is required");
+    }
+
+    @Test
+    void processWebhookExecution_isValidJiraIssueId_blankId_returnsFalse() {
+        // Covers isValidJiraIssueId: id is blank => return false
+        // parent "   " is blank string after trim; extractJiraIssueKey returns null; isValidJiraIssueId("") = false
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-blank-id")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-blank-id"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", "   "));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        // blank parent string is removed; no failure since no parent mapping for non-subtask
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_extractJiraIssueKey_blankInput_returnsNull() {
+        // Covers extractJiraIssueKey: !StringUtils.hasText(input) => return null
+        // parent "  " in Map["key"] path: keyObj is String but blank => extractJiraIssueKey returns null
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-blank-key-in-map")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of())
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-blank-key-in-map"), any()))
+                .thenReturn(Map.of("summary", "Test", "parent", Map.of("key", "   ", "id", "99999")));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
+
+    @Test
+    void processWebhookExecution_hasSubtaskMetadata_mappingHasNullMetadata_notDetectedAsSubtask() {
+        // Covers hasSubtaskMetadata lambda: metadata is null => filtered out => anyMatch returns false
+        JiraFieldMappingDto issuetypeMapping = JiraFieldMappingDto.builder()
+                .jiraFieldId("issuetype")
+                .jiraFieldName("Issue Type")
+                .dataType(JiraDataType.STRING)
+                .metadata(null)   // null metadata
+                .build();
+
+        JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                .webhookId("webhook-null-metadata")
+                .connectionSecretName("secret")
+                .incomingPayload("{\"a\":1}")
+                .fieldMappings(List.of(issuetypeMapping))
+                .triggerEventId(UUID.randomUUID())
+                .build();
+
+        when(jiraFieldMappingResolver.processAllFieldMappings(any(), eq("webhook-null-metadata"), any()))
+                .thenReturn(Map.of("issuetype", "Story", "summary", "Non-subtask by null metadata"));
+        when(jiraApiClient.sendToJira(eq("secret"), any(String.class)))
+                .thenReturn(new ApiResponse(201, true,
+                        "{\"self\":\"https://jira.example.com/rest/api/3/issue/1\",\"key\":\"PRJ-1\"}"));
+
+        JiraWebhookExecutionResult result = processor.processWebhookExecution(command);
+
+        assertThat(result.isSuccess()).isTrue();
+    }
 }

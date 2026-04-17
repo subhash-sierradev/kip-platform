@@ -1,5 +1,6 @@
 package com.integration.management.model.dto.response;
 
+import com.integration.execution.contract.rest.response.IntegrationScheduleResponse;
 import com.integration.management.entity.Language;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

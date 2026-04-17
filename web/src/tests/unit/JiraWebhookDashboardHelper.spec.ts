@@ -11,6 +11,7 @@ import {
   getProjectLabel,
   getSortFunction,
   sortByCreatedDate,
+  sortByLastModifiedDate,
   sortByLastTrigger,
   sortByName,
   sortByStatus,
@@ -24,6 +25,7 @@ function makeWebhook(overrides: Partial<JiraWebhook> = {}): JiraWebhook {
     webhookUrl: overrides.webhookUrl ?? 'https://example.com/hook',
     createdBy: overrides.createdBy ?? 'tester',
     createdDate: overrides.createdDate ?? '2024-01-01T00:00:00Z',
+    lastModifiedDate: overrides.lastModifiedDate,
     updatedDate: overrides.updatedDate ?? undefined,
     isEnabled: overrides.isEnabled ?? true,
     jiraFieldMappings: overrides.jiraFieldMappings ?? [],
@@ -106,6 +108,22 @@ describe('JiraWebhookDashboardHelper', () => {
       expect(arr.map(x => x.id)).toEqual(['b', 'a']);
     });
 
+    it('sortByLastModifiedDate sorts newest first', () => {
+      const older = makeWebhook({ id: 'x', lastModifiedDate: '2024-01-01T00:00:00Z' });
+      const newer = makeWebhook({ id: 'y', lastModifiedDate: '2024-06-01T00:00:00Z' });
+      const arr = [older, newer];
+      arr.sort(sortByLastModifiedDate);
+      expect(arr.map(x => x.id)).toEqual(['y', 'x']);
+    });
+
+    it('sortByLastModifiedDate treats missing lastModifiedDate as oldest', () => {
+      const withDate = makeWebhook({ id: 'p', lastModifiedDate: '2024-01-01T00:00:00Z' });
+      const noDate = makeWebhook({ id: 'q', lastModifiedDate: undefined });
+      const arr = [noDate, withDate];
+      arr.sort(sortByLastModifiedDate);
+      expect(arr[0].id).toBe('p');
+    });
+
     it('sortByStatus sorts enabled first', () => {
       const arr = [b, a];
       arr.sort(sortByStatus);
@@ -143,6 +161,10 @@ describe('JiraWebhookDashboardHelper', () => {
 
     it('returns sortByCreatedDate for "createdDate"', () => {
       expect(getSortFunction('createdDate')).toBe(sortByCreatedDate);
+    });
+
+    it('returns sortByLastModifiedDate for "lastModifiedDate"', () => {
+      expect(getSortFunction('lastModifiedDate')).toBe(sortByLastModifiedDate);
     });
 
     it('returns sortByStatus for "isEnabled"', () => {

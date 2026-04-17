@@ -17,6 +17,19 @@ vi.mock('devextreme-vue/load-indicator', () => ({
     name: 'DxLoadIndicator',
     template: '<div class="dx-load-indicator-stub"></div>',
   },
+  DxButton: {
+    name: 'DxButton',
+    template: '<button :disabled="disabled" @click="$emit(\'click\')">{{ text }}<slot /></button>',
+    props: ['text', 'disabled', 'type', 'stylingMode'],
+    emits: ['click'],
+  },
+}));
+
+vi.mock('devextreme-vue/load-indicator', () => ({
+  default: {
+    name: 'DxLoadIndicator',
+    template: '<div class="dx-load-indicator-stub"></div>',
+  },
 }));
 
 vi.mock('@/api/services/SettingsService', () => ({
@@ -71,6 +84,7 @@ describe('CacheStatisticsPage', () => {
     expect(wrapper.text()).toContain('Aggregated Cache Size');
     expect(wrapper.text()).toContain('Request Count');
     expect(wrapper.text()).toContain('5');
+    expect(wrapper.findAll('.stats-card-modern')).toHaveLength(3);
     expect(wrapper.findAll('.stats-card-modern')).toHaveLength(3);
   });
 
@@ -160,7 +174,7 @@ describe('CacheStatisticsPage', () => {
     expect(wrapper.vm.cacheOptions).toEqual(['All']);
   });
 
-  it('keeps zero percent values when all caches have zero requests', async () => {
+  it('shows NA rates when all caches have zero requests', async () => {
     getAllCacheStatsMock.mockResolvedValueOnce({
       CacheA: { size: 5, requestCount: 0, hitRate: 0, missRate: 0 },
       CacheB: { size: 10, requestCount: 0, hitRate: 0, missRate: 0 },
@@ -170,8 +184,8 @@ describe('CacheStatisticsPage', () => {
     await settle();
 
     const cards = wrapper.findAll('.stats-card-modern');
-    expect(cards[2].text()).toContain('Hit Rate: 0.0%');
-    expect(cards[2].text()).toContain('Miss Rate: 0.0%');
+    expect(cards[2].text()).toContain('Hit Rate: N/A');
+    expect(cards[2].text()).toContain('Miss Rate: N/A');
   });
 
   it('shows the empty state when stats are empty', async () => {
@@ -216,6 +230,22 @@ describe('CacheStatisticsPage', () => {
     expect(wrapper.vm.getCacheKey('User Cache')).toBeNull();
   });
 
+  it('shows NA rates when the selected cache has zero requests', async () => {
+    getAllCacheStatsMock.mockResolvedValueOnce({
+      EmptyCache: { size: 5, requestCount: 0, hitRate: 1, missRate: 0 },
+    });
+
+    const wrapper = mountPage();
+    await settle();
+
+    await wrapper.vm.handleCacheSelection('Empty Cache');
+    await nextTick();
+
+    const cards = wrapper.findAll('.stats-card-modern');
+    expect(cards[2].text()).toContain('Hit Rate: N/A');
+    expect(cards[2].text()).toContain('Miss Rate: N/A');
+  });
+
   it('shows zero rates for a selected cache with missing hit and miss fields', async () => {
     getAllCacheStatsMock.mockResolvedValueOnce({
       IncompleteCache: { size: 10, requestCount: 5 },
@@ -232,7 +262,7 @@ describe('CacheStatisticsPage', () => {
     expect(cards[2].text()).toContain('Miss Rate: 0.0%');
   });
 
-  it('falls back to zero values when selecting a missing cache', async () => {
+  it('shows NA rates when selecting a missing cache', async () => {
     const wrapper = mountPage();
     await settle();
 
@@ -242,8 +272,8 @@ describe('CacheStatisticsPage', () => {
     const cards = wrapper.findAll('.stats-card-modern');
     expect(cards[0].text()).toContain('0');
     expect(cards[1].text()).toContain('0');
-    expect(cards[2].text()).toContain('Hit Rate: 0.0%');
-    expect(cards[2].text()).toContain('Miss Rate: 0.0%');
+    expect(cards[2].text()).toContain('Hit Rate: N/A');
+    expect(cards[2].text()).toContain('Miss Rate: N/A');
   });
 
   it('returns defaults from statsValue when stats are unavailable', async () => {

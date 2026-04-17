@@ -327,19 +327,17 @@
       </div>
     </div>
 
-    <!-- Footer Branding -->
+    <!-- Footer: Branding + Version -->
     <div v-if="!isSidebarCollapsed" class="sidebar-footer">
-      <div class="powered-by">
+      <div class="footer-brand">
         <span class="powered-text">POWERED BY</span>
         <div class="kaseware-brand">
           <img src="/kaseware.png" alt="Kaseware" class="brand-logo" />
           <span class="brand-text">KASEWARE</span>
         </div>
       </div>
+      <AppVersion />
     </div>
-
-    <!-- Version Information -->
-    <AppVersion v-if="!isSidebarCollapsed" />
   </aside>
 </template>
 

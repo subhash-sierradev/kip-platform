@@ -1,0 +1,109 @@
+# Integration Test Profile — properties are further overridden by DynamicPropertySource
+spring:
+  # RabbitMQ & DB URLs are injected at test runtime via @DynamicPropertySource
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/kip_it
+    username: kip_user
+    password: kip_pass
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      idle-timeout: 10000
+      max-lifetime: 30000
+      connection-timeout: 10000
+
+  jpa:
+    database: postgresql
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        default_schema: integration_platform
+
+  flyway:
+    enabled: true
+    default-schema: integration_platform
+    schemas:
+      - integration_platform
+      - notifications
+    create-schemas: true
+    validate-on-migrate: false
+    clean-disabled: true
+    locations:
+      - classpath:db/migration
+    table: flyway_schema_history
+    sql-migration-prefix: V
+    sql-migration-separator: __
+    sql-migration-suffixes: .sql
+    connect-retries: 3
+    baseline-on-migrate: true
+    baseline-version: 0
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://mock-keycloak/auth/realms/test
+
+  quartz:
+    auto-startup: false
+    job-store-type: jdbc
+    overwrite-existing-jobs: true
+    jdbc:
+      initialize-schema: never
+    properties:
+      org.quartz.scheduler.instanceName: IntegrationPlatformSchedulerIT
+      org.quartz.scheduler.instanceId: IT
+      org.quartz.jobStore.class: org.springframework.scheduling.quartz.LocalDataSourceJobStore
+      org.quartz.jobStore.driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+      org.quartz.jobStore.tablePrefix: integration_platform.qrtz_
+      org.quartz.jobStore.isClustered: false
+      org.quartz.threadPool.class: org.quartz.simpl.SimpleThreadPool
+      org.quartz.threadPool.threadCount: 2
+
+integration:
+  execution:
+    base-url: http://localhost:8081
+
+integration-platform:
+  job-reload:
+    enabled: false
+
+  security:
+    jwt:
+      tenant-id-claim: 'tenant_id'
+      user-id-claim: 'preferred_username'
+    webhook:
+      tenant-id: 'kaseware-application-tn'
+      user-id: 'kaseware-app-user'
+      client-role: 'webhook_client'
+    error:
+      missing-auth: 'Missing or invalid Authorization header'
+      missing-fields: 'Missing tenantId or userId in token'
+      invalid-token: 'Invalid JWT token'
+
+  jira:
+    webhook:
+      id-length: 12
+      max-retries: 5
+      url-template: 'https://kaseware.sierradev.com/backend/api/webhooks/jira/execute/{webhookId}'
+
+logging:
+  level:
+    com.integration.management: WARN
+    org.flywaydb: WARN
+    org.quartz: WARN
+    org.hibernate.SQL: WARN
+    org.springframework: WARN
+

@@ -36,3 +36,14 @@ VALUES
     ('ARCGIS_INITIAL_SYNC_START_TIMESTAMP','2025-01-01T00:00:00Z','TIMESTAMP','Initial sync start timestamp for ArcGIS integrations on first execution','GLOBAL','system','system',0,false,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP),
     ('CONFLUENCE_INITIAL_SYNC_START_TIMESTAMP','2025-01-01T00:00:00Z','TIMESTAMP','Initial sync start timestamp for Confluence integrations on first execution','GLOBAL','system','system',0,false,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP);
 
+-- ===========================================================================
+-- Insert Master Data: Languages
+-- ===========================================================================
+INSERT INTO integration_platform.languages (code, name, native_name, sort_order) VALUES
+    ('en', 'English',  'English',   1),
+    ('fr', 'French',   'Français',  2),
+    ('de', 'German',   'Deutsch',   3),
+    ('ja', 'Japanese', '日本語',    4),
+    ('es', 'Spanish',  'Español',   5)
+ON CONFLICT (code) DO NOTHING;
+

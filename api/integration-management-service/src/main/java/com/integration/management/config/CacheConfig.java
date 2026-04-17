@@ -31,6 +31,7 @@ public class CacheConfig {
         caches.addAll(createSiteConfigCaches());
         caches.addAll(createNotificationCaches());
         caches.addAll(createSecurityCaches());
+        caches.addAll(createVersionCaches());
         cacheManager.setCaches(caches);
         return cacheManager;
     }
@@ -120,9 +121,13 @@ public class CacheConfig {
     private List<CaffeineCache> createSecurityCaches() {
         return List.of(
                 // IP validation cache - high traffic, 2h TTL for IP address changes
-                // Only caches VALID IPs to prevent cache pollution from attacks
-                // Max 10,000 entries (typical deployments see < 1,000 unique IPs)
                 createCache("ipValidationCache", 10_000, 2, TimeUnit.HOURS)
+        );
+    }
+
+    private List<CaffeineCache> createVersionCaches() {
+        return List.of(
+                createCache("iesVersionCache", 1, 24, TimeUnit.HOURS)
         );
     }
 

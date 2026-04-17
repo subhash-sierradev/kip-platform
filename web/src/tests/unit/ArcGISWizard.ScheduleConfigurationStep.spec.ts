@@ -8,6 +8,7 @@ const { hideTooltipSpy } = vi.hoisted(() => ({
 }));
 
 import ScheduleConfigurationStep from '@/components/outbound/arcgisintegration/wizard/steps/ScheduleConfigurationStep.vue';
+import type { ScheduleConfigurationData } from '@/types/ArcGISFormData';
 
 vi.mock('@/utils/timezoneUtils', async importOriginal => {
   const actual = await importOriginal<typeof import('@/utils/timezoneUtils')>();
@@ -334,7 +335,7 @@ describe('ArcGIS Wizard - ScheduleConfigurationStep', () => {
     expect(tzChip.text()).toContain('UTC');
   });
 
-  it('uses browser timezone for custom cron descriptions regardless of business timezone', async () => {
+  it('uses the selected business timezone for fixed-day-boundary custom cron descriptions', async () => {
     const wrapper = mount(ScheduleConfigurationStep, {
       props: {
         modelValue: {
@@ -352,8 +353,7 @@ describe('ArcGIS Wizard - ScheduleConfigurationStep', () => {
 
     const tzChip = wrapper.find('.sc-cron-timezone-chip');
     expect(tzChip.exists()).toBe(true);
-    // Browser timezone is mocked as 'UTC' — business timezone is not used
-    expect(tzChip.text()).toContain('UTC');
+    expect(tzChip.text()).toContain('America/Anchorage');
   });
 
   it('hides execution date and time when CRON pattern is selected', async () => {
@@ -773,6 +773,33 @@ describe('ArcGIS Wizard - ScheduleConfigurationStep', () => {
     expect(lastPayload.businessTimeZone).toBe('UTC');
   });
 
+  it('preserves an existing business timezone when switching back to daily window mode', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '24',
+          timeCalculationMode: 'FLEXIBLE_INTERVAL',
+          businessTimeZone: 'America/Chicago',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const dataWindowSelect = wrapper.findAll('select.sc-input')[0];
+    await dataWindowSelect.setValue('FIXED_DAY_BOUNDARY');
+    await nextTick();
+
+    const updates = wrapper.emitted('update:modelValue');
+    expect(updates).toBeTruthy();
+    const lastPayload = updates![updates!.length - 1][0] as any;
+    expect(lastPayload.timeCalculationMode).toBe('FIXED_DAY_BOUNDARY');
+    expect(lastPayload.businessTimeZone).toBe('America/Chicago');
+  });
+
   it('toggles weekdays only between the weekday set and no selected days', async () => {
     const wrapper = mount(ScheduleConfigurationStep, {
       props: {
@@ -960,6 +987,99 @@ describe('ArcGIS Wizard - ScheduleConfigurationStep', () => {
     expect(lastPayload.dailyFrequency).toBe('6');
   });
 
+  it('defaults the daily frequency select to 24 hours when the value is missing', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const selects = wrapper.findAll('select.sc-input');
+    const dailyFrequencySelect = selects.find(selectWrapper => {
+      const options = selectWrapper.findAll('option');
+      return options.some(option => (option.element as HTMLOptionElement).value === '24');
+    });
+
+    expect(dailyFrequencySelect).toBeTruthy();
+    expect((dailyFrequencySelect!.element as HTMLSelectElement).value).toBe('24');
+  });
+
+  it('does not copy cron model changes into the payload outside custom mode', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '24',
+          cronExpression: '',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const setupState = (wrapper.vm as any).$?.setupState;
+    setupState.cronModel = '0 0 9 * * ?';
+    await nextTick();
+
+    const updates = wrapper.emitted('update:modelValue') ?? [];
+    const lastPayload = updates[updates.length - 1]?.[0] as any;
+    expect(lastPayload.frequencyPattern).toBe('DAILY');
+    expect(lastPayload.cronExpression || '').toBe('');
+  });
+
+  it('becomes invalid in full mode when execution time is missing for non-custom schedules', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '24',
+          timeCalculationMode: 'FLEXIBLE_INTERVAL',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const validationEvents = wrapper.emitted('validation-change');
+    expect(validationEvents).toBeTruthy();
+    expect(validationEvents![validationEvents!.length - 1][0]).toBe(false);
+  });
+
+  it('does not resync local state when the incoming model value is unchanged', async () => {
+    const modelValue: ScheduleConfigurationData = {
+      executionDate: '2025-12-19',
+      executionTime: '12:00',
+      frequencyPattern: 'DAILY',
+      dailyFrequency: '24',
+      timeCalculationMode: 'FLEXIBLE_INTERVAL',
+    };
+
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: { modelValue },
+    });
+
+    await nextTick();
+
+    const setupState = (wrapper.vm as any).$?.setupState;
+    const originalLocalData = setupState.localData;
+
+    await wrapper.setProps({ modelValue: { ...modelValue } });
+    await nextTick();
+
+    expect(setupState.localData).toBe(originalLocalData);
+  });
+
   it('requires a non-whitespace business timezone when daily window mode is selected', async () => {
     const wrapper = mount(ScheduleConfigurationStep, {
       props: {
@@ -1115,5 +1235,112 @@ describe('ArcGIS Wizard - ScheduleConfigurationStep', () => {
     wrapper.unmount();
 
     expect(hideTooltipSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('defaults to UTC in full mode when daily-window scheduling omits the business timezone', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '24',
+          timeCalculationMode: 'FIXED_DAY_BOUNDARY',
+          businessTimeZone: '',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const validationEvents = wrapper.emitted('validation-change');
+    expect(validationEvents).toBeTruthy();
+    expect(validationEvents![validationEvents!.length - 1][0]).toBe(true);
+
+    const updates = wrapper.emitted('update:modelValue');
+    expect(updates).toBeTruthy();
+    const lastPayload = updates![updates!.length - 1][0] as any;
+    expect(lastPayload.businessTimeZone).toBe('UTC');
+  });
+
+  it('defaults the timezone to UTC when switching back to daily-window mode without a saved timezone', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'DAILY',
+          dailyFrequency: '24',
+          timeCalculationMode: 'FLEXIBLE_INTERVAL',
+          businessTimeZone: '',
+        },
+      },
+    });
+
+    await nextTick();
+
+    const dataWindowSelect = wrapper.findAll('select.sc-input')[0];
+    await dataWindowSelect.setValue('FIXED_DAY_BOUNDARY');
+    await nextTick();
+
+    const updates = wrapper.emitted('update:modelValue');
+    expect(updates).toBeTruthy();
+    const lastPayload = updates![updates!.length - 1][0] as any;
+    expect(lastPayload.timeCalculationMode).toBe('FIXED_DAY_BOUNDARY');
+    expect(lastPayload.businessTimeZone).toBe('UTC');
+  });
+
+  it('keeps the execution date empty when month-end mode is disabled without a saved manual date', async () => {
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '',
+          executionTime: '12:00',
+          frequencyPattern: 'MONTHLY',
+          dailyFrequency: '',
+          selectedMonths: [1],
+          isExecuteOnMonthEnd: true,
+        },
+      },
+    });
+
+    await nextTick();
+
+    const monthEndToggle = wrapper.find('#execute-on-month-end');
+    await monthEndToggle.setValue(false);
+    await nextTick();
+
+    const updates = wrapper.emitted('update:modelValue');
+    expect(updates).toBeTruthy();
+    const lastPayload = updates![updates!.length - 1][0] as any;
+    expect(lastPayload.executionDate).toBe('');
+  });
+
+  it('wires the month-end tooltip mouse handlers and hides the tooltip on unmount', async () => {
+    hideTooltipSpy.mockClear();
+
+    const wrapper = mount(ScheduleConfigurationStep, {
+      props: {
+        modelValue: {
+          executionDate: '2025-12-19',
+          executionTime: '12:00',
+          frequencyPattern: 'MONTHLY',
+          dailyFrequency: '',
+          selectedMonths: [1],
+          isExecuteOnMonthEnd: false,
+        },
+      },
+    });
+
+    await nextTick();
+
+    const monthEndLabel = wrapper.findAll('label.sc-label')[1];
+    await monthEndLabel.trigger('mouseenter');
+    await monthEndLabel.trigger('mousemove');
+    await monthEndLabel.trigger('mouseleave');
+
+    wrapper.unmount();
+
+    expect(hideTooltipSpy).toHaveBeenCalled();
   });
 });

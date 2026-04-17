@@ -7,7 +7,6 @@ on:
       - 'release/**'
     paths:
       - 'api/**'
-      - 'version.json'
       - '.github/workflows/api-deploy.yml'
 
 concurrency:
@@ -93,12 +92,12 @@ jobs:
           name: ims-jar
           path: api/integration-management-service/build/libs
 
-      - name: Read version
+      - name: Read IMS version
         id: version
         run: |
-          VERSION=$(jq -r '.version' version.json)
-          echo "Resolved version: $VERSION"
-          [ -z "$VERSION" ] && echo "ERROR: version is empty!" && exit 1
+          VERSION=$(grep '^imsVersion=' api/gradle.properties | cut -d= -f2)
+          echo "Resolved IMS version: $VERSION"
+          [ -z "$VERSION" ] && echo "ERROR: IMS version is empty!" && exit 1
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
@@ -140,12 +139,12 @@ jobs:
           name: ies-jar
           path: api/integration-execution-service/build/libs
 
-      - name: Read version
+      - name: Read IES version
         id: version
         run: |
-          VERSION=$(jq -r '.version' version.json)
-          echo "Resolved version: $VERSION"
-          [ -z "$VERSION" ] && echo "ERROR: version is empty!" && exit 1
+          VERSION=$(grep '^iesVersion=' api/gradle.properties | cut -d= -f2)
+          echo "Resolved IES version: $VERSION"
+          [ -z "$VERSION" ] && echo "ERROR: IES version is empty!" && exit 1
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
