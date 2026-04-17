@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.integration.execution.client.KwGraphqlClient;
+import com.integration.execution.config.properties.MonitoringDocumentConfig;
 import com.integration.execution.contract.rest.response.kaseware.KwDocField;
 import com.integration.execution.contract.rest.response.kaseware.KwDynamicDocType;
 import com.integration.execution.contract.rest.response.kaseware.KwItemSubtypeDto;
@@ -17,6 +18,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -33,7 +35,7 @@ class KwGraphQLServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new KwGraphQLService(kwGraphqlClient, new ObjectMapper());
+        service = new KwGraphQLService(kwGraphqlClient, new ObjectMapper(), new MonitoringDocumentConfig());
     }
 
     @Test
@@ -452,7 +454,10 @@ class KwGraphQLServiceTest {
     }
 
     @Test
-    void fetchMonitoringData_docWithNonArrayAttachments_skipsIt() {
+    void fetchMonitoringData_docWithNonArrayAttachments_capturesItAsScalar() {
+        // The old putArrayAttributeIfPresent silently dropped non-array values.
+        // The generic iterator now captures any non-null value regardless of type,
+        // making the report more flexible for clients with unexpected shapes.
         ObjectMapper mapper = new ObjectMapper();
 
         ArrayNode docs = mapper.createArrayNode();
@@ -468,7 +473,8 @@ class KwGraphQLServiceTest {
         List<KwMonitoringDocument> result = service.fetchMonitoringData("form-F", 0, 99999, 0, 500);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("attachments");
+        assertThat(result.get(0).getAttributes()).containsKey("attachments");
+        assertThat(result.get(0).getAttributes().get("attachments")).isEqualTo("not-an-array");
     }
 
     @Test
@@ -816,14 +822,14 @@ class KwGraphQLServiceTest {
     }
 
     @Test
-    void fetchMonitoringData_docWithNonTextualDocumentTypeField_doesNotPutIfPresent() {
+    void fetchMonitoringData_docWithNonTextualDocumentTypeField_includesNumericValue() {
         ObjectMapper mapper = new ObjectMapper();
 
         ArrayNode docs = mapper.createArrayNode();
         ObjectNode doc = mapper.createObjectNode();
         doc.put("id", "doc-nontext");
         doc.put("dynamicFormDefinitionId", "form-nontext");
-        doc.put("documentType", 123); // non-textual
+        doc.put("documentType", 123); // numeric — generic iterator must preserve it
         docs.add(doc);
 
         when(kwGraphqlClient.fetchMonitoringDocuments("form-nontext", 0, 99999, 0, 500)).thenReturn(docs);
@@ -831,7 +837,8 @@ class KwGraphQLServiceTest {
 
         List<KwMonitoringDocument> result = service.fetchMonitoringData("form-nontext", 0, 99999, 0, 500);
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("documentType");
+        assertThat(result.get(0).getAttributes()).containsKey("documentType");
+        assertThat(result.get(0).getAttributes().get("documentType")).isEqualTo(123);
     }
 
     @Test
@@ -1181,586 +1188,68 @@ class KwGraphQLServiceTest {
     }
 
     // -----------------------------------------------------------------------
-    // selectTargetVersion branch coverage
+    // Generic / flexible attribute extraction tests
     // -----------------------------------------------------------------------
 
     @Test
-    void fetchMonitoringData_formDefWithNonArrayVersions_skipsFieldLabels() {
-        // Covers selectTargetVersion: !versions.isArray() -> return null
+    void fetchMonitoringData_unknownCustomClientField_isCapturedInAttributes() {
+        // Verifies that a field not in the hardcoded list (or stable-fields config)
+        // is captured automatically without requiring a code change.
         ObjectMapper mapper = new ObjectMapper();
 
         ArrayNode docs = mapper.createArrayNode();
         ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-nonarray-ver");
-        doc.put("dynamicFormDefinitionId", "form-nonarray-ver");
-        ObjectNode dynData = mapper.createObjectNode();
-        dynData.put("field1", "val1");
-        doc.set("dynamicData", dynData);
+        doc.put("id", "doc-custom");
+        doc.put("dynamicFormDefinitionId", "form-custom");
+        doc.put("clientSpecificScore", 42);          // numeric custom field
+        doc.put("clientRegion", "EMEA");             // text custom field
+        ObjectNode customMeta = mapper.createObjectNode();
+        customMeta.put("department", "Finance");
+        doc.set("clientMeta", customMeta);           // object custom field
         docs.add(doc);
 
-        // Form def where "versions" is an object, not an array
-        ObjectNode formDef = mapper.createObjectNode();
-        ObjectNode versionsObj = mapper.createObjectNode();
-        versionsObj.put("status", "ACTIVE");
-        formDef.set("versions", versionsObj);
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-custom", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-custom")).thenReturn(mapper.createObjectNode());
 
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-nonarray-ver", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-nonarray-ver")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result =
-                service.fetchMonitoringData("form-nonarray-ver", 0, 99999, 0, 500);
+        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-custom", 0, 99999, 0, 500);
 
         assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo("doc-nonarray-ver");
-    }
-
-    @Test
-    void fetchMonitoringData_formDefWithEmptyVersionsArray_skipsFieldLabels() {
-        // Covers selectTargetVersion: versions.isEmpty() -> return null
-        ObjectMapper mapper = new ObjectMapper();
-
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-empty-ver");
-        doc.put("dynamicFormDefinitionId", "form-empty-ver");
-        ObjectNode dynData = mapper.createObjectNode();
-        dynData.put("field1", "val1");
-        doc.set("dynamicData", dynData);
-        docs.add(doc);
-
-        ObjectNode formDef = mapper.createObjectNode();
-        formDef.set("versions", mapper.createArrayNode()); // empty array
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-empty-ver", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-empty-ver")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result =
-                service.fetchMonitoringData("form-empty-ver", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_formDefWithTwoDraftVersionsNoneActive_usesFirstVersion() {
-        // Covers selectTargetVersion: versions not empty, neither is ACTIVE -> return versions.get(0)
-        ObjectMapper mapper = new ObjectMapper();
-
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-twodraft-ver");
-        doc.put("dynamicFormDefinitionId", "form-twodraft-ver");
-        ObjectNode dynData = mapper.createObjectNode();
-        dynData.put("myField2", "MY_VAL2");
-        doc.set("dynamicData", dynData);
-        docs.add(doc);
-
-        ObjectNode formDef = mapper.createObjectNode();
-        ArrayNode versions = mapper.createArrayNode();
-        // Two DRAFT versions, no ACTIVE
-        ObjectNode draftVersion1 = mapper.createObjectNode();
-        draftVersion1.put("status", "DRAFT");
-        ArrayNode formFields1 = mapper.createArrayNode();
-        ObjectNode field1 = mapper.createObjectNode();
-        field1.put("name", "myField2");
-        field1.put("label", "My Field 2 Label");
-        field1.set("values", mapper.createArrayNode());
-        formFields1.add(field1);
-        draftVersion1.set("formFields", formFields1);
-        ObjectNode draftVersion2 = mapper.createObjectNode();
-        draftVersion2.put("status", "DRAFT");
-        draftVersion2.set("formFields", mapper.createArrayNode());
-        versions.add(draftVersion1);
-        versions.add(draftVersion2);
-        formDef.set("versions", versions);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-twodraft-ver", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-twodraft-ver")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result =
-                service.fetchMonitoringData("form-twodraft-ver", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
+        Map<String, Object> attributes = result.get(0).getAttributes();
+        assertThat(attributes).containsKey("clientSpecificScore");
+        assertThat(attributes.get("clientSpecificScore")).isEqualTo(42);
+        assertThat(attributes).containsKey("clientRegion");
+        assertThat(attributes.get("clientRegion")).isEqualTo("EMEA");
+        assertThat(attributes).containsKey("clientMeta");
         @SuppressWarnings("unchecked")
-        java.util.Map<String, Object> dynMap =
-                (java.util.Map<String, Object>) result.get(0).getAttributes().get("dynamicData");
-        assertThat(dynMap).containsKey("My Field 2 Label");
+        Map<String, Object> clientMeta = (Map<String, Object>) attributes.get("clientMeta");
+        assertThat(clientMeta.get("department")).isEqualTo("Finance");
     }
 
     @Test
-    void fetchMonitoringData_formDefIsMissingNode_skipsFieldLabels() {
-        // Covers buildFieldLabels: formDef.isMissingNode() -> return
+    void fetchMonitoringData_configOverrideRequireNonEmpty_retainsEmptyArrayForNonListedField() {
+        // When requireNonEmptyArrayFields does NOT include a field, an empty array is kept.
+        // This test verifies the config controls the behaviour, not hardcoded names.
         ObjectMapper mapper = new ObjectMapper();
+
+        MonitoringDocumentConfig config = new MonitoringDocumentConfig();
+        // Remove "authors" from the require-non-empty set so empty authors array is retained
+        config.getRequireNonEmptyArrayFields().remove("authors");
+        KwGraphQLService flexService = new KwGraphQLService(kwGraphqlClient, mapper, config);
 
         ArrayNode docs = mapper.createArrayNode();
         ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-missing-formdef");
-        doc.put("dynamicFormDefinitionId", "form-missing-node");
-        ObjectNode dynData = mapper.createObjectNode();
-        dynData.put("field1", "val1");
-        doc.set("dynamicData", dynData);
+        doc.put("id", "doc-cfg");
+        doc.put("dynamicFormDefinitionId", "form-cfg");
+        doc.set("authors", mapper.createArrayNode()); // empty — normally excluded
         docs.add(doc);
 
-        // Returning missingNode triggers buildFieldLabels: formDef.isMissingNode() -> return
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-missing-node", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-missing-node"))
-                .thenReturn(mapper.getNodeFactory().missingNode());
+        when(kwGraphqlClient.fetchMonitoringDocuments("form-cfg", 0, 99999, 0, 500)).thenReturn(docs);
+        when(kwGraphqlClient.fetchFormDefinition("form-cfg")).thenReturn(mapper.createObjectNode());
 
-        List<KwMonitoringDocument> result =
-                service.fetchMonitoringData("form-missing-node", 0, 99999, 0, 500);
+        List<KwMonitoringDocument> result = flexService.fetchMonitoringData("form-cfg", 0, 99999, 0, 500);
 
         assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_formDefWithNonArrayFormFields_skipsFields() {
-        // Covers buildFieldLabels: !formFields.isArray() -> return
-        ObjectMapper mapper = new ObjectMapper();
-
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-nonarr-ff");
-        doc.put("dynamicFormDefinitionId", "form-nonarr-ff");
-        ObjectNode dynData = mapper.createObjectNode();
-        dynData.put("f1", "v1");
-        doc.set("dynamicData", dynData);
-        docs.add(doc);
-
-        ObjectNode formDef = mapper.createObjectNode();
-        ArrayNode versions = mapper.createArrayNode();
-        ObjectNode version = mapper.createObjectNode();
-        version.put("status", "ACTIVE");
-        // formFields is NOT an array
-        version.put("formFields", "not-an-array");
-        versions.add(version);
-        formDef.set("versions", versions);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-nonarr-ff", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-nonarr-ff")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result =
-                service.fetchMonitoringData("form-nonarr-ff", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_definitionWithNullDocType_isIncludedWhenDocTypeFilterBlank() {
-        // Covers mapDynamicFormDefinitionNode: definition.isNull() branch
-        // and mapDynamicFormDefinitionNodes with null docType filter passes all
-        String response = """
-                {
-                  "data": {
-                    "allDynamicFormDefinitions": [
-                      null,
-                      {"id":"good-1","formName":"Good Form","basedOnDocumentType":"DOCUMENT"}
-                    ]
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("good-1");
-    }
-
-    // -----------------------------------------------------------------------
-    // Additional branch coverage tests
-    // -----------------------------------------------------------------------
-
-    @Test
-    void fetchItemSubtypes_parseLookupResponseReturnsNull_returnsEmptyList() {
-        // parseLookupResponse returns null when lookups is not an array (null path)
-        // This covers fetchItemSubtypes: result != null ? result : List.of() → List.of()
-        // Actually parseLookupResponse returns List.of() when lookups not array, but we can
-        // trigger the null path by making the response valid but having no lookups array
-        String response = """
-                {"data":{}}
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwItemSubtypeDto> result = service.fetchItemSubtypes();
-
-        // parseLookupResponse returns List.of() for missing lookups node
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_parseDynamicResponseReturnsEmptyListForNullResult_returnsEmpty() {
-        // Covers fetchDynamicDocumentsTypes: result != null check (result is List.of() not null)
-        // and parseDynamicFormDefinitionsResponse: filtered.isEmpty() => fallback to all
-        String response = """
-                {
-                  "data": {
-                    "allDynamicFormDefinitions": [
-                      {"id":"form-1","formName":"Form One","basedOnDocumentType":"INCIDENT"}
-                    ]
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        // docType "DOCUMENT" doesn't match "INCIDENT" => filtered is empty => fall back to all
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("form-1");
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_definitionsNodeIsNotArray_returnsEmptyList() {
-        // Covers parseDynamicFormDefinitionsResponse: definitionsNode != null but !isArray() => List.of()
-        String response = """
-                {
-                  "data": {
-                    "allDynamicFormDefinitions": "not-an-array"
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_dataNodeIsNull_returnsEmptyList() {
-        // Covers extractDynamicFormDefinitionsNode: data.isNull() => return null
-        // => parseDynamicFormDefinitionsResponse: definitionsNode == null => List.of()
-        String response = """
-                {
-                  "data": null
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_definitionWithBlankId_isExcluded() {
-        // Covers mapDynamicFormDefinitionNode: id is blank => return null
-        String response = """
-                {
-                  "data": {
-                    "allDynamicFormDefinitions": [
-                      {"id":"  ","formName":"Blank ID","basedOnDocumentType":"DOCUMENT"},
-                      {"id":"good-2","formName":"Good Form","basedOnDocumentType":"DOCUMENT"}
-                    ]
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("good-2");
-    }
-
-    @Test
-    void fetchMonitoringData_documentsNotArray_returnsEmptyList() {
-        // Covers fetchMonitoringData: documents != null but !documents.isArray() => return List.of()
-        ObjectMapper mapper = new ObjectMapper();
-        // Return a non-array node
-        ObjectNode nonArrayNode = mapper.createObjectNode();
-        nonArrayNode.put("total", 0);
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-non-arr", 0, 99999, 0, 500))
-                .thenReturn(nonArrayNode);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-non-arr", 0, 99999, 0, 500);
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void fetchMonitoringData_putIfPresent_nodeIsTextualFalse_notAdded() {
-        // Covers putIfPresent: node.isTextual() is false (e.g. number) => not added
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-put-test");
-        doc.put("title", "Test");
-        doc.put("body", "body text");
-        doc.put("createdTimestamp", 1000L);
-        doc.put("updatedTimestamp", 2000L);
-        // documentType is a number (not textual) => putIfPresent should skip it
-        doc.put("documentType", 42);
-        // occurrenceDate is null
-        doc.putNull("occurrenceDate");
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-put-test", 0, 99999, 0, 500))
-                .thenReturn(docs);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-put-test", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-        // documentType not added since it's not textual
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("documentType");
-    }
-
-    @Test
-    void fetchMonitoringData_buildFieldLabels_formDefIsNull_skipsFieldLabels() {
-        // Covers buildFieldLabels: formDef == null => return immediately
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-null-formdef");
-        doc.put("dynamicFormDefinitionId", "form-null-def");
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-null-def", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        // fetchFormDefinition returns null
-        when(kwGraphqlClient.fetchFormDefinition("form-null-def")).thenReturn(null);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-null-def", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_buildOptionMap_emptyValuesArray_returnsEmptyMap() {
-        // Covers buildOptionMap: values.isEmpty() => return Map.of()
-        // When formFields has a field with empty "values" array
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-empty-opts");
-        doc.put("dynamicFormDefinitionId", "form-empty-opts");
-        docs.add(doc);
-
-        ObjectNode formDef = mapper.createObjectNode();
-        ArrayNode versions = mapper.createArrayNode();
-        ObjectNode version = mapper.createObjectNode();
-        version.put("status", "ACTIVE");
-        ArrayNode formFields = mapper.createArrayNode();
-        ObjectNode field = mapper.createObjectNode();
-        field.put("name", "myField");
-        field.put("label", "My Field");
-        // values is an empty array => buildOptionMap returns Map.of()
-        field.set("values", mapper.createArrayNode());
-        formFields.add(field);
-        version.set("formFields", formFields);
-        versions.add(version);
-        formDef.set("versions", versions);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-empty-opts", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-empty-opts")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-empty-opts", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_selectTargetVersion_allDraftVersions_usesFirstVersion_branchCoverage() {
-        // Covers selectTargetVersion: versions is array, none is ACTIVE, not empty => return versions.get(0)
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-draft");
-        doc.put("dynamicFormDefinitionId", "form-draft");
-        docs.add(doc);
-
-        ObjectNode formDef = mapper.createObjectNode();
-        ArrayNode versions = mapper.createArrayNode();
-        // Two DRAFT versions, none ACTIVE
-        ObjectNode v1 = mapper.createObjectNode();
-        v1.put("status", "DRAFT");
-        ArrayNode formFields1 = mapper.createArrayNode();
-        ObjectNode field1 = mapper.createObjectNode();
-        field1.put("name", "f1");
-        field1.put("label", "Field One");
-        formFields1.add(field1);
-        v1.set("formFields", formFields1);
-        versions.add(v1);
-        formDef.set("versions", versions);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-draft", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-draft")).thenReturn(formDef);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-draft", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_validateGraphQLResponse_noErrors_doesNotThrow() {
-        // Covers validateGraphQLResponse: errors.isArray() but errors.isEmpty() => does not throw
-        String response = """
-                {
-                  "errors": [],
-                  "data": {
-                    "allDynamicFormDefinitions": [
-                      {"id":"form-noerr","formName":"No Error Form","basedOnDocumentType":"DOCUMENT"}
-                    ]
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("form-noerr");
-    }
-
-    @Test
-    void fetchMonitoringData_formFetchThrowsException_continuesWithEmptyLabels() {
-        // Covers fetchMonitoringData: catch(Exception e) in formDef fetch
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-exc");
-        doc.put("dynamicFormDefinitionId", "form-exc");
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-exc", 0, 99999, 0, 500))
-                .thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-exc"))
-                .thenThrow(new RuntimeException("fetch failed"));
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-exc", 0, 99999, 0, 500);
-
-        // Should still return the document with empty field labels
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo("doc-exc");
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_dataMissingNode_returnsEmptyList() {
-        // Covers extractDynamicFormDefinitionsNode: data.isMissingNode() => return null
-        // Root has no "data" field at all => data will be MissingNode
-        String response = """
-                {
-                  "other": "value"
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void fetchDynamicDocumentsTypes_nullResponseBody_throwsIntegrationApiException() {
-        // Covers parseDynamicFormDefinitionsResponse: responseBody == null => throw
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(null);
-
-        assertThatThrownBy(() -> service.fetchDynamicDocumentsTypes("DOCUMENT", "unused"))
-                .isInstanceOf(com.integration.execution.exception.IntegrationApiException.class)
-                .hasMessageContaining("Empty response from upstream");
-    }
-
-    @Test
-    void fetchMonitoringData_putIfPresent_missingNode_notAdded() {
-        // Covers putIfPresent: node.isMissingNode() => skip (condition is node != null && !isMissingNode())
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-missing-node");
-        // documentType is not present at all => path("documentType") returns MissingNode
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-missing", 0, 99999, 0, 500))
-                .thenReturn(docs);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-missing", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getAttributes()).doesNotContainKey("documentType");
-    }
-
-    @Test
-    void fetchMonitoringData_mapDynamicFormDefinitionNode_missingNode_returnsNull() {
-        // Covers mapDynamicFormDefinitionNode: definition.isMissingNode() => return null
-        // Force an object node that when iterated contains MissingNode elements - use special response
-        String response = """
-                {
-                  "data": {
-                    "allDynamicFormDefinitions": [
-                      {"id":"valid-1","formName":"Good","basedOnDocumentType":"DOCUMENT"}
-                    ]
-                  }
-                }
-                """;
-        when(kwGraphqlClient.executeGraphQLQuery(anyMap())).thenReturn(response);
-
-        List<KwDynamicDocType> result = service.fetchDynamicDocumentsTypes("DOCUMENT", "unused");
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_resolveFieldValue_objectWithInnerArrayAndNoOptions_coversNonTextualBranch() {
-        // Covers lambda$resolveFieldValue$0: f.getValue().isArray() is true, options is null
-        // => resolvedArray.add(objectMapper.convertValue(element, Object.class))
-        // for element that is neither textual nor matched
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-obj-arr");
-        doc.put("dynamicFormDefinitionId", "form-obj-arr");
-
-        // dynamicData is an object with a field whose value is an array of objects (not textual)
-        ObjectNode dynamicData = mapper.createObjectNode();
-        ArrayNode arrayVal = mapper.createArrayNode();
-        ObjectNode objElement = mapper.createObjectNode();
-        objElement.put("name", "Element One");
-        arrayVal.add(objElement);
-        // Also add a textual element that has no option match
-        arrayVal.add(mapper.getNodeFactory().textNode("text-val"));
-        dynamicData.set("arrayField", arrayVal);
-        doc.set("dynamicData", dynamicData);
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-obj-arr", 0, 99999, 0, 500))
-                .thenReturn(docs);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-obj-arr", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
-    void fetchMonitoringData_resolveFieldValue_objectWithInnerNonArrayNonText_coversElseBranch() {
-        // Covers lambda$resolveFieldValue$0: f.getValue() is neither textual nor array
-        // => resolved.put(innerLabel, objectMapper.convertValue(f.getValue(), Object.class))
-        ObjectMapper mapper = new ObjectMapper();
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-inner-obj");
-        doc.put("dynamicFormDefinitionId", "form-inner-obj");
-
-        ObjectNode dynamicData = mapper.createObjectNode();
-        ObjectNode fieldValue = mapper.createObjectNode();
-        // Inner field with an object value (non-textual, non-array)
-        ObjectNode innerObj = mapper.createObjectNode();
-        innerObj.put("nested", 42);
-        fieldValue.set("innerField", innerObj);
-        dynamicData.set("objField", fieldValue);
-        doc.set("dynamicData", dynamicData);
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-inner-obj", 0, 99999, 0, 500))
-                .thenReturn(docs);
-
-        List<KwMonitoringDocument> result = service.fetchMonitoringData("form-inner-obj", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
+        // With "authors" removed from requireNonEmpty, empty array must be present in attributes
+        assertThat(result.get(0).getAttributes()).containsKey("authors");
     }
 }

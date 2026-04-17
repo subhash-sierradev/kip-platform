@@ -71,6 +71,32 @@ integration:
       client-secret: ${AZURE_KEYVAULT_CLIENT_SECRET}
       tenant-id: ${AZURE_KEYVAULT_TENANT_ID}
 
+  # Monitoring document attribute extraction configuration.
+  # Override any set to adapt to a client's custom Kaseware schema without code changes.
+  monitoring:
+    document:
+      # Fields already mapped to KwMonitoringDocument typed properties — skipped from attributes.
+      stable-fields:
+        - id
+        - title
+        - body
+        - createdTimestamp
+        - updatedTimestamp
+        - dynamicFormDefinitionId
+        - dynamicFormDefinitionName
+        - dynamicFormVersionNumber
+        - tenantId
+      # Keys inside dynamicData that are always excluded (internal Kaseware markers).
+      skipped-dynamic-keys:
+        - hiddenFields
+      # Array fields excluded from attributes when the array is empty.
+      require-non-empty-array-fields:
+        - authors
+        - approvers
+        - serials
+        - caseLabels
+        - relatedEntities
+
   # Kaseware Integration Configuration
   kaseware:
     auth:
