@@ -2,6 +2,7 @@ package com.integration.execution.auth;
 
 import com.integration.execution.contract.model.IntegrationSecret;
 import com.integration.execution.contract.model.enums.CredentialAuthType;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -15,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("OAuth2AuthStrategy")
 class OAuth2AuthStrategyTest {
 
     @Mock
@@ -38,6 +40,18 @@ class OAuth2AuthStrategyTest {
         OAuth2AuthStrategy strategy = new OAuth2AuthStrategy(resolver);
         IntegrationSecret secret = IntegrationSecret.builder().build();
         when(resolver.resolve(secret)).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> strategy.apply(new HashMap<>(), secret))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("OAuth2 token missing");
+    }
+
+    @Test
+    @DisplayName("blank accessToken throws IllegalArgumentException")
+    void apply_withBlankToken_throwsIllegalArgumentException() {
+        OAuth2AuthStrategy strategy = new OAuth2AuthStrategy(resolver);
+        IntegrationSecret secret = IntegrationSecret.builder().build();
+        when(resolver.resolve(secret)).thenReturn(Map.of("accessToken", "   "));
 
         assertThatThrownBy(() -> strategy.apply(new HashMap<>(), secret))
                 .isInstanceOf(IllegalArgumentException.class)

@@ -236,7 +236,7 @@ describe('useCronFieldDescription', () => {
       const occurrences = [makeOccurrence('2024-01-01T09:00:00Z', '2024-01-01', '9:00 AM')];
 
       expect(buildCronFieldDescription('0 */20 9-17 ? JAN/2 MON-FRI', 'UTC', occurrences)).toBe(
-        'Runs every 20 minutes between 9 AM and 5 PM on Monday, Tuesday, Wednesday, Thursday and Friday'
+        'Runs every 20 minutes between 9 AM and 5:40 PM on Monday, Tuesday, Wednesday, Thursday and Friday'
       );
       expect(buildCronFieldDescription('0 0 10 ? JAN/2 MON', 'UTC', occurrences)).toBe(
         'Runs every Monday in January, March, May, July, September and November at 9:00 AM'

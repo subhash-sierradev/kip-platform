@@ -400,6 +400,104 @@ describe('JiraFieldMappingTab', () => {
     expect(rows[0].text()).toBe('SCRUM-999');
     expect(rows[1].text()).toBe('');
   });
+
+  it('prefers display labels for non-template-preferred types even when ids and names are missing', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'boolean-fallback',
+              jiraFieldId: undefined,
+              jiraFieldName: undefined,
+              dataType: 'BOOLEAN',
+              displayLabel: 'Enabled',
+              template: '{{ignored.boolean}}',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+      },
+    });
+
+    expect(wrapper.find('.mapped-value').text()).toBe('Enabled');
+    expect(wrapper.find('.field-name').text()).toBe('Unknown Field');
+  });
+
+  it('falls back to raw sprint ids when the sprint list prop is nullish', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: 'null-sprint-list',
+              jiraFieldId: 'customfield_10021',
+              jiraFieldName: 'Sprint',
+              dataType: 'NUMBER',
+              displayLabel: '91',
+              metadata: { fieldType: 'sprint' },
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+        sprints: null as any,
+      },
+    });
+
+    expect(wrapper.find('.mapped-value').text()).toBe('91');
+  });
+
+  it('uses default mapping values for nullish webhook metadata and non-sprint number fields', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: {
+          ...baseWebhook,
+          jiraFieldMappings: [
+            {
+              id: undefined,
+              jiraFieldId: undefined,
+              jiraFieldName: undefined,
+              dataType: undefined,
+              defaultValue: 'fallback-value',
+              required: false,
+            },
+            {
+              id: 'number-non-sprint',
+              jiraFieldId: 'customfield_20000',
+              jiraFieldName: undefined,
+              dataType: 'NUMBER',
+              displayLabel: '123',
+              required: false,
+            },
+          ],
+        },
+        webhookId: 'w1',
+      },
+    });
+
+    const rows = wrapper.findAll('.mapped-value');
+    expect(rows[0].text()).toBe('fallback-value');
+    expect(rows[1].text()).toBe('123');
+
+    const fieldNames = wrapper.findAll('.field-name');
+    expect(fieldNames[0].text()).toBe('Unknown Field');
+    expect(fieldNames[1].text()).toBe('customfield_20000');
+  });
+
+  it('renders zero rows when webhook data is null', () => {
+    const wrapper = mount(JiraFieldMappingTab, {
+      props: {
+        webhookData: null,
+        webhookId: 'w1',
+      },
+    });
+
+    expect(wrapper.findAll('.row')).toHaveLength(0);
+  });
 });
 
 const gridStub = {

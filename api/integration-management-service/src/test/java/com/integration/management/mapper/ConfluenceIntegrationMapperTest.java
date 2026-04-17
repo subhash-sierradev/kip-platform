@@ -14,6 +14,7 @@ import com.integration.management.model.dto.response.ConfluenceIntegrationRespon
 import com.integration.management.model.dto.response.ConfluenceIntegrationSummaryResponse;
 import com.integration.management.repository.projection.ConfluenceIntegrationSummaryProjection;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -68,6 +69,12 @@ class ConfluenceIntegrationMapperTest {
         assertThat(entity.getNormalizedName()).isEqualTo("daily_report");
         assertThat(entity.getIncludeTableOfContents()).isFalse();
         assertThat(entity.getConnectionId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000011"));
+    }
+
+    @Test
+    @DisplayName("toEntity returns null for null request")
+    void toEntity_null_returnsNull() {
+        assertThat(mapper().toEntity(null)).isNull();
     }
 
     @Test
@@ -130,7 +137,7 @@ class ConfluenceIntegrationMapperTest {
                 .dynamicDocumentType("DYN")
                 .languages(List.of(
                         Language.builder().code("en").name("English").nativeName("English").build(),
-                        Language.builder().code("ja").name("Japanese").nativeName("日本語").build()))
+                        Language.builder().code("ja").name("Japanese").nativeName("æ—¥æœ¬èªž").build()))
                 .reportNameTemplate("daily")
                 .confluenceSpaceKey("OPS")
                 .confluenceSpaceKeyFolderKey("ROOT")
@@ -156,6 +163,44 @@ class ConfluenceIntegrationMapperTest {
     }
 
     @Test
+    @DisplayName("toDetailsResponse with null connectionId sets null")
+    void toDetailsResponse_nullConnectionId_setsNull() {
+        ConfluenceIntegrationMapperImpl mapper = mapper();
+
+        ConfluenceIntegration entity = ConfluenceIntegration.builder()
+                .name("Test")
+                .connectionId(null)
+                .languages(null)
+                .build();
+
+        ConfluenceIntegrationResponse response = mapper.toDetailsResponse(entity);
+
+        assertThat(response.getConnectionId()).isNull();
+        assertThat(response.getLanguageCodes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("toDetailsResponse with null languages sets empty language codes")
+    void toDetailsResponse_nullLanguages_setsEmptyLanguageCodes() {
+        ConfluenceIntegrationMapperImpl mapper = mapper();
+
+        ConfluenceIntegration entity = ConfluenceIntegration.builder()
+                .name("Test")
+                .languages(null)
+                .build();
+
+        ConfluenceIntegrationResponse response = mapper.toDetailsResponse(entity);
+
+        assertThat(response.getLanguageCodes()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("toDetailsResponse returns null for null entity")
+    void toDetailsResponse_null_returnsNull() {
+        assertThat(mapper().toDetailsResponse(null)).isNull();
+    }
+
+    @Test
     @DisplayName("toCreationResponse and toLanguageCodes handle null branches")
     void toCreationResponse_andToLanguageCodes_handleNullBranches() {
         ConfluenceIntegrationMapperImpl mapper = mapper();
@@ -167,6 +212,33 @@ class ConfluenceIntegrationMapperTest {
         CreationResponse response = mapper.toCreationResponse(entity);
         assertThat(response.getId()).isNull();
         assertThat(response.getName()).isEqualTo("name");
+    }
+
+    @Test
+    @DisplayName("toCreationResponse with non-null id maps id to string")
+    void toCreationResponse_nonNullId_mapsIdToString() {
+        ConfluenceIntegrationMapperImpl mapper = mapper();
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000099");
+        ConfluenceIntegration entity = ConfluenceIntegration.builder().id(id).name("named").build();
+
+        CreationResponse response = mapper.toCreationResponse(entity);
+
+        assertThat(response.getId()).isEqualTo(id.toString());
+        assertThat(response.getName()).isEqualTo("named");
+    }
+
+    @Test
+    @DisplayName("toDetailsResponse with non-null languages list sets languages field")
+    void toDetailsResponse_nonNullLanguages_setsLanguagesList() {
+        ConfluenceIntegrationMapperImpl mapper = mapper();
+        Language lang = Language.builder().code("en").name("English").nativeName("English").build();
+        ConfluenceIntegration entity = ConfluenceIntegration.builder()
+                .name("Test").languages(List.of(lang)).connectionId(null).build();
+
+        ConfluenceIntegrationResponse response = mapper.toDetailsResponse(entity);
+
+        assertThat(response.getLanguages()).hasSize(1);
+        assertThat(response.getLanguageCodes()).containsExactly("en");
     }
 
     @Test
@@ -289,6 +361,12 @@ class ConfluenceIntegrationMapperTest {
     }
 
     @Test
+    @DisplayName("projectionToSummaryResponse returns null for null projection")
+    void projectionToSummaryResponse_null_returnsNull() {
+        assertThat(mapper().projectionToSummaryResponse(null)).isNull();
+    }
+
+    @Test
     @DisplayName("toExecutionCommand maps integration and job execution")
     void toExecutionCommand_mapsIntegrationAndJobExecution() {
         ConfluenceIntegrationMapperImpl mapper = mapper();
@@ -317,12 +395,8 @@ class ConfluenceIntegrationMapperTest {
                 .build();
 
         ConfluenceExecutionCommand command = mapper.toExecutionCommand(
-                integration,
-                execution,
-                "secret-name",
-                "tenant-2",
-                TriggerType.MANUAL,
-                "ignored",
+                integration, execution, "secret-name", "tenant-2",
+                TriggerType.MANUAL, "ignored",
                 Instant.parse("2026-02-03T00:00:00Z"),
                 Instant.parse("2026-02-04T00:00:00Z"));
 
@@ -331,9 +405,64 @@ class ConfluenceIntegrationMapperTest {
         assertThat(command.getConnectionSecretName()).isEqualTo("secret-name");
         assertThat(command.getLanguageCodes()).containsExactly("en");
         assertThat(command.isIncludeTableOfContents()).isFalse();
-        assertThat(command.getBusinessTimezone()).isEqualTo("UTC");
+        assertThat(command.getBusinessTimeZone()).isEqualTo("UTC");
         assertThat(command.getTriggeredBy()).isEqualTo(TriggerType.API);
     }
+
+    @Nested
+    @DisplayName("toExecutionCommand null branches")
+    class ToExecutionCommandNullBranches {
+
+        @Test
+        @DisplayName("toExecutionCommand returns null when all parameters are null")
+        void allNull_returnsNull() {
+            assertThat(mapper().toExecutionCommand(null, null, null, null, null, null, null, null)).isNull();
+        }
+
+        @Test
+        @DisplayName("integration null but other params non-null skips integration fields")
+        void integrationNull_skipsIntegrationFields() {
+            ConfluenceIntegrationMapperImpl mapper = mapper();
+
+            IntegrationJobExecution execution = IntegrationJobExecution.builder()
+                    .id(UUID.fromString("00000000-0000-0000-0000-000000000019"))
+                    .triggeredBy(TriggerType.SCHEDULER)
+                    .triggeredByUser("scheduler")
+                    .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                    .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                    .build();
+
+            ConfluenceExecutionCommand command = mapper.toExecutionCommand(
+                    null, execution, "secret", "tenant", TriggerType.SCHEDULER, "user",
+                    Instant.parse("2026-02-01T00:00:00Z"), Instant.parse("2026-02-02T00:00:00Z"));
+
+            assertThat(command).isNotNull();
+            assertThat(command.getIntegrationId()).isNull();
+            assertThat(command.getJobExecutionId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000019"));
+        }
+
+        @Test
+        @DisplayName("jobExecution null but integration non-null skips jobExecution fields")
+        void jobExecutionNull_skipsJobExecutionFields() {
+            ConfluenceIntegrationMapperImpl mapper = mapper();
+
+            ConfluenceIntegration integration = ConfluenceIntegration.builder()
+                    .id(UUID.fromString("00000000-0000-0000-0000-000000000020"))
+                    .name("TestInt")
+                    .languages(null)
+                    .includeTableOfContents(Boolean.TRUE)
+                    .schedule(null)
+                    .build();
+
+            ConfluenceExecutionCommand command = mapper.toExecutionCommand(
+                    integration, null, "secret", "tenant", TriggerType.SCHEDULER, "user",
+                    Instant.parse("2026-02-01T00:00:00Z"), Instant.parse("2026-02-02T00:00:00Z"));
+
+            assertThat(command).isNotNull();
+            assertThat(command.getIntegrationId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000020"));
+            assertThat(command.getJobExecutionId()).isNull();
+            assertThat(command.getBusinessTimeZone()).isNull(); // schedule null â†’ no tz
+            assertThat(command.isIncludeTableOfContents()).isTrue();
+        }
+    }
 }
-
-

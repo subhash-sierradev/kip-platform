@@ -191,7 +191,7 @@ class KwToArcGISOrchestratorTest {
                 .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
         when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
 
-        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+        orchestrator.processExecution(command);
 
         // boundary doc was excluded; only beforeBoundary was passed to the mapper
         verify(locationMapper).transformToArcGISFeaturesWithMetadata(

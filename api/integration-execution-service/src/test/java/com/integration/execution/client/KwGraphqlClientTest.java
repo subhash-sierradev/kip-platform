@@ -592,14 +592,209 @@ class KwGraphqlClientTest {
     void executeGraphQLQuery_runtimeExceptionDuringHandling_wrapsInIntegrationApiException() throws Exception {
         when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
         when(kwHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
-                .thenAnswer(invocation -> {
-                    HttpClientResponseHandler<?> handler = invocation.getArgument(1);
-                    throw new RuntimeException("Handler failed");
-                });
+                .thenThrow(new RuntimeException("Handler failed"));
 
         assertThatThrownBy(() -> client.executeGraphQLQuery(Map.of("query", "{ test }")))
                 .isInstanceOf(IntegrationApiException.class)
                 .hasMessageContaining("Failed to execute GraphQL query");
+    }
+
+    @Test
+    void executeGraphQLQuery_handlerThrowsCheckedException_wrapsInRuntimeException() throws Exception {
+        // Covers inner catch(Exception e) -> throw new RuntimeException(e) at handler level
+        // When handler.handle() throws a non-IntegrationApiException (e.g. JSON parse error)
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        // Return malformed JSON so objectMapper.readTree throws JsonParseException (not IntegrationApiException)
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity("{invalid json!!!}"));
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.executeGraphQLQuery(Map.of("query", "{ test }")))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("Failed to execute GraphQL query");
+    }
+
+    @Test
+    void queryDocumentsWithLocations_normalizeSearchWithData_handlesNullSearchWithDataNode()
+            throws Exception {
+        // Covers normalizeSearchWithData: searchWithData path is missing -> missingNode returned
+        // parseDynamicDocumentsResponse path: normalized.isMissingNode() -> returns empty list
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        // Return JSON with no searchWithData under data
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"noSearchWithData\":null}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).isEmpty();
+    }
+
+    @Test
+    void queryDocumentsWithLocations_searchWithDataIsObject_withItemsArray_normalizesFromItems()
+            throws Exception {
+        // Covers normalizeSearchWithData: node.isObject() with "items" array
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"items\":[{\"id\":\"doc-items-1\"}]}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+        when(kwDocumentMapper.convertToDocumentDtos(any()))
+                .thenReturn(List.of(new KwDocumentDto("doc-items-1", "Doc", "DOCUMENT", 1L, 2L)));
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.getFirst().getId()).isEqualTo("doc-items-1");
+    }
+
+    @Test
+    void queryDocumentsWithLocations_searchWithDataIsObject_withNodesArray_normalizesFromNodes()
+            throws Exception {
+        // Covers normalizeSearchWithData: node.isObject() with "nodes" array
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"nodes\":[{\"id\":\"doc-nodes-1\"}]}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+        when(kwDocumentMapper.convertToDocumentDtos(any()))
+                .thenReturn(List.of(new KwDocumentDto("doc-nodes-1", "Doc", "DOCUMENT", 1L, 2L)));
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).hasSize(1);
+        assertThat(documents.getFirst().getId()).isEqualTo("doc-nodes-1");
+    }
+
+    @Test
+    void normalizeSearchWithData_objectWithNoResultsItemsOrNodes_returnsNodeAsIs() throws Exception {
+        // Covers normalizeSearchWithData: node.isObject() but no results/items/nodes => return node
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        // Object with an unknown key (no results/items/nodes) - parseDocumentLocationsResponse
+        // returns List.of() because normalized.isArray() is false
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"unknownKey\":\"value\"}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).isEmpty();
+    }
+
+    @Test
+    void normalizeSearchWithData_objectWithResultsNotArray_returnsNodeAsIs() throws Exception {
+        // Covers normalizeSearchWithData: node.isObject(), results != null but !results.isArray()
+        // Then checks items (null), nodes (null) => falls through to return node
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"results\":\"not-an-array\"}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).isEmpty();
+    }
+
+    @Test
+    void normalizeSearchWithData_objectWithItemsNotArray_thenNodesNull_returnsNodeAsIs() throws Exception {
+        // Covers normalizeSearchWithData: items != null but !items.isArray(), nodes is null => return node
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"items\":\"not-an-array\"}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("REPORT")
+                .windowStart(Instant.parse("2026-02-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-02-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> documents = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(documents).isEmpty();
+    }
+
+    @Test
+    void fetchMonitoringDocuments_nonNullFormDefinitionIdButNotArray_returnsAsIs() throws Exception {
+        // Covers fetchMonitoringDocuments lambda:
+        //   dynamicFormDefinitionId != null && !isBlank() && results.isArray() is FALSE path
+        //   because normalizeSearchWithData returns a non-array object node
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        // searchWithData is an object with no recognized keys => normalizeSearchWithData returns node itself
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"total\":0}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        // dynamicFormDefinitionId is non-null and non-blank, but results is not an array
+        JsonNode result = client.fetchMonitoringDocuments("form-xyz", 0, 99999, 0, 100);
+
+        // Should return the node as-is (falls through to "return results" at the bottom)
+        assertThat(result).isNotNull();
+        assertThat(result.isArray()).isFalse();
+    }
+
+    @Test
+    void parseDocumentLocationsResponse_searchWithDataIsObjectNoRecognizedKeys_returnsEmpty() throws Exception {
+        // Covers parseDocumentLocationsResponse: normalized is not null and not array => return List.of()
+        // This is triggered when searchWithData is an object node with no results/items/nodes arrays
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":{\"count\":0,\"data\":\"nothing\"}}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT").itemSubtype("FINAL")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-02T00:00:00Z"))
+                .build();
+
+        List<KwDocumentDto> result = client.queryDocumentsWithLocations(cmd);
+
+        assertThat(result).isEmpty();
     }
 
     private void mockHttpExecution(ClassicHttpResponse response) throws Exception {

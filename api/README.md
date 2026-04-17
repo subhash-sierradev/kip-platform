@@ -134,20 +134,23 @@ java -jar integration-execution-service/build/libs/integration-execution-service
 ## Testing
 
 ```bash
-# Run all tests
-mvn test
+# Run all tests (from api/)
+./gradlew test
 
-# Run with coverage
-mvn clean test jacoco:report
-
-# Run checkstyle validation
-mvn checkstyle:check
+# Run with coverage report (80% minimum threshold enforced)
+./gradlew test jacocoTestReport
 
 # View coverage report
-open target/site/jacoco/index.html
+open integration-management-service/build/reports/jacoco/test/html/index.html
+
+# Run checkstyle validation
+./gradlew checkstyleMain checkstyleTest
 
 # Run specific test class
-mvn test -Dtest=JiraApiClientTest
+./gradlew :integration-management-service:test --tests "com.integration.management.JiraApiClientTest"
+
+# Full verification (checkstyle + tests + coverage)
+./gradlew clean check
 ```
 
 **Current Coverage**: IMS ~39% (Target: 80%) · IES: 0% (Target: 80%)
@@ -214,7 +217,7 @@ Set `azure.keyvault.enabled: false` to use PostgreSQL `vault_secrets` table.
 ### Code Standards
 
 1. **IDE Formatting**: Use .editorconfig (automatic in IntelliJ/VS Code/Eclipse)
-2. **Checkstyle**: Run `mvn checkstyle:check` before committing
+2. **Checkstyle**: Run `./gradlew checkstyleMain checkstyleTest` before committing
 3. **Testing**: Write tests first (TDD preferred), maintain >80% coverage
 4. **Database**: Always use Flyway migrations for schema changes
 5. **Contract Module**: Coordinate changes - shared by both services
@@ -224,22 +227,20 @@ Set `azure.keyvault.enabled: false` to use PostgreSQL `vault_secrets` table.
 ```bash
 # 1. Format code (automatic with EditorConfig)
 # 2. Validate checkstyle
-mvn checkstyle:check
+./gradlew checkstyleMain checkstyleTest
 
 # 3. Run tests with coverage
-mvn clean test jacoco:report
+./gradlew test jacocoTestReport
 
 # 4. Build all modules
-mvn clean install
+./gradlew clean build
 
 # 5. Test both services locally
 # Terminal 1: Management Service (8085)
-cd integration-management-service
-mvn spring-boot:run
+./gradlew :integration-management-service:bootRun
 
 # Terminal 2: Execution Service (8081)
-cd integration-execution-service
-mvn spring-boot:run
+./gradlew :integration-execution-service:bootRun
 ```
 
 **Last Updated**: March 16, 2026
@@ -335,7 +336,7 @@ Service method (@PublishNotification)
 **Standards**:
 
 - Follow EditorConfig (automatic formatting)
-- Run `mvn checkstyle:check` before commits
+- Run `./gradlew checkstyleMain checkstyleTest` before commits
 - Maintain >80% test coverage
 - Use Flyway for database changes
 

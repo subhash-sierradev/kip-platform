@@ -131,9 +131,6 @@ public class IntegrationJobExecutionService {
             execution.setStatus(result.getStatus());
             execution.setCompletedAt(result.getCompletedAt() != null ? result.getCompletedAt() : Instant.now());
             execution.setTotalRecords(result.getTotalRecords());
-            execution.setAddedRecords(result.getAddedRecords());
-            execution.setUpdatedRecords(result.getUpdatedRecords());
-            execution.setFailedRecords(result.getFailedRecords());
             execution.setExecutionMetadata(result.getExecutionMetadata());
             execution.setErrorMessage(result.getErrorMessage());
             jobExecutionRepository.save(execution);

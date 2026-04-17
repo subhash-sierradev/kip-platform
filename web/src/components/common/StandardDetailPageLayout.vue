@@ -145,7 +145,8 @@ const activeTabComponent = computed(() => {
 .detail-page-layout {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   background: #f8fafc;
 }
 
@@ -156,12 +157,14 @@ const activeTabComponent = computed(() => {
   position: relative;
   box-sizing: border-box;
   overflow: auto;
+  min-height: 0;
 }
 
 .tab-content {
   animation: fadeIn 0.3s ease-in-out;
   width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 @keyframes fadeIn {

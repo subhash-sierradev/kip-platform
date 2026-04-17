@@ -157,15 +157,31 @@ Steps:
 2. Ensure current branch matches `branch`; switch if needed.
 3. Extract branch prefix and infer task type using the Task Type Mapping table.
 4. Push branch if upstream is missing.
-5. Build PR title as `<ticket>: <summary>`.
-6. Create PR to `baseBranch` from `branch`.
-7. Use draft mode when `draft=true`.
-8. Report inferred task type in completion output.
+5. Build PR title as `<ticket>: <summary>` using conventional commit prefix:
+   - `feat:` for new features (minor bump)
+   - `fix:` for bug fixes (patch bump)
+   - `breaking:` for breaking changes (major bump)
+   - No prefix for chores/refactors (patch default)
+6. Map inferred task type to version bump label:
+   - `feature` → add label `bump:minor`
+   - `breaking-change` → add label `bump:major`
+   - `fix`, `bug`, `hotfix`, `patch`, `chore`, `refactor`, `documentation` → add label `bump:patch`
+7. Create PR to `baseBranch` from `branch` with the bump label.
+8. Use draft mode when `draft=true`.
+9. Report inferred task type and applied label in completion output.
 
 Command shape:
 
 ```bash
-gh pr create --base <baseBranch> --head <branch> --title "<ticket>: <summary>" [--body "<prBody>"] [--draft]
+# Determine prefix and label from task type
+# feature     → prefix="feat"    label="bump:minor"
+# breaking-change → prefix="breaking" label="bump:major"
+# fix/bug/hotfix/patch/chore/refactor → prefix="fix" label="bump:patch"
+
+gh pr create --base <baseBranch> --head <branch> \
+  --title "<prefix>: <ticket>: <summary>" \
+  --label "<bump-label>" \
+  [--body "<prBody>"] [--draft]
 ```
 
 If `gh` is unavailable or unauthenticated:

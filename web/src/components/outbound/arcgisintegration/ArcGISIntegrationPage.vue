@@ -102,6 +102,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useListRouteSync } from '@/composables/useListRouteSync';
 import { useResponsivePageSize } from '@/composables/useResponsivePageSize';
+import { ROUTES } from '@/router/routes';
 // formatMetadataDate no longer used in page; handled in card component
 import ArcGISIntegrationWizard from './wizard/ArcGISIntegrationWizard.vue';
 import ArcGISIntegrationCard from './ArcGISIntegrationCard.vue';
@@ -149,6 +150,7 @@ const pageSizeOptions = [6, 9, 12, 24, 48];
 const arcgisSortOptions: DashboardSortOption[] = [
   { value: 'name', label: 'Name' },
   { value: 'createdDate', label: 'Created Date' },
+  { value: 'lastModifiedDate', label: 'Updated Date' },
   { value: 'isEnabled', label: 'Status' },
   { value: 'lastTrigger', label: 'Last Triggered' },
 ];
@@ -229,6 +231,8 @@ const getSortValue = (integration: ArcGISIntegrationSummaryResponse, sortField: 
       return integration.name || '';
     case 'createdDate':
       return integration.createdDate;
+    case 'lastModifiedDate':
+      return integration.lastModifiedDate;
     case 'isEnabled':
       return integration.isEnabled;
     case 'lastTrigger':
@@ -260,7 +264,7 @@ const sortedIntegrations = computed(() => {
       const bValue = getSortValue(b, sortBy.value);
 
       // Handle date fields
-      if (sortBy.value === 'createdDate') {
+      if (sortBy.value === 'createdDate' || sortBy.value === 'lastModifiedDate') {
         return compareDates(aValue as string, bValue as string);
       }
 
@@ -453,7 +457,7 @@ async function triggerIntegration(integration: ArcGISIntegrationSummaryResponse)
 }
 
 const openDetails = (integrationId: string): void => {
-  const targetPath = `/outbound/integration/arcgis/${integrationId}`;
+  const targetPath = ROUTES.arcgisIntegrationDetails(integrationId);
   router.push({ path: targetPath, query: buildStateQuery(true) }).catch(error => {
     console.error('Navigation to ArcGIS details failed:', error);
     toast.showError('Failed to open integration details');
@@ -471,7 +475,7 @@ const {
   {
     router,
     route,
-    validSortOptions: ['name', 'createdDate', 'isEnabled', 'lastTrigger'],
+    validSortOptions: ['name', 'createdDate', 'lastModifiedDate', 'isEnabled', 'lastTrigger'],
     validViewModes: ['grid', 'list'],
     totalPages,
   },

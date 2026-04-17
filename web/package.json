@@ -1,6 +1,6 @@
 {
-  "name": "integration-platform-ui",
-  "version": "0.157.1",
+  "name": "kip-web",
+  "version": "0.0.1-rc.7",
   "private": true,
   "type": "module",
   "engines": {
@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "cross-env NODE_OPTIONS=--no-deprecation vite --host 0.0.0.0",
     "dev:sandbox": "cross-env NODE_OPTIONS=--no-deprecation vite --mode sandbox --host 0.0.0.0",
-    "build": "npm run format:check && vue-tsc && npm run test:run && npm run build:bundle",
-    "build:ci": "npm run format:check && cross-env NODE_OPTIONS='--max-old-space-size=4096' vue-tsc && npm run test:run && npm run build:bundle",
+    "build": "npm run audit:check && npm run format:check && vue-tsc && npm run test:run && npm run build:bundle",
+    "build:ci": "npm run audit:check && npm run format:check && cross-env NODE_OPTIONS='--max-old-space-size=4096' vue-tsc && npm run test:run && npm run build:bundle",
     "build:bundle": "vite build --mode production",
     "build:check": "npm run format:check && vue-tsc --noEmit && npm run test:run && vite build --mode development --logLevel error",
     "build:sandbox": "npm run format:check && vue-tsc && vite build --mode sandbox",
@@ -43,13 +43,14 @@
     "validate:fix": "npm run format && npm run type-check && npm run lint:fix && npm run test:coverage:enforce",
     "validate:coverage": "npm run format:check && npm run type-check && npm run lint:strict && npm run test:coverage:enforce && echo \"All validation checks with enforced coverage completed!\"",
     "validate:coverage:ci": "npm run format:check && npm run type-check && npm run lint:strict && npm run test:coverage:enforce",
-    "ci": "npm run format:check && npm run lint:strict && npm run type-check && npm run test:coverage:enforce && npm run build:bundle",
+    "ci": "npm run audit:check && npm run format:check && npm run lint:strict && npm run type-check && npm run test:coverage:enforce && npm run build:bundle",
+    "ci:no-format": "npm run lint:strict && npm run type-check && npm run test:coverage:enforce && npm run build:bundle",
     "validate:quick": "npm run lint:check && npm run test:run && echo \"Quick validation checks passed!\"",
+    "audit:check": "npm audit --audit-level=high",
     "validate:strict": "npm run format:check && npm run type-check:strict && npm run lint:strict && npm run test:run && echo \"Strict validation checks passed!\"",
     "check-all": "npm run validate:strict",
     "generate:api": "openapi --input ./openapi.yaml --output ./src/api/generated --client axios",
     "version:bump": "node ../scripts/version-manager.js bump",
-    "version:sync": "node ../scripts/version-manager.js sync",
     "version:current": "node ../scripts/version-manager.js current",
     "version:major": "node ../scripts/version-manager.js bump major",
     "version:minor": "node ../scripts/version-manager.js bump minor",
@@ -98,7 +99,7 @@
     "globals": "^16.5.0",
     "jsdom": "^25.0.1",
     "openapi-typescript-codegen": "^0.29.0",
-    "prettier": "^3.4.2",
+    "prettier": "^3.8.2",
     "typescript": "^5.7.2",
     "vite": "^7.3.2",
     "vitest": "^4.0.9",
@@ -116,6 +117,7 @@
     "picomatch": "^4.0.4",
     "rollup": "^4.59.0",
     "@eslint/config-array": "^0.23.2",
-    "@eslint/eslintrc": "^3.3.4"
+    "@eslint/eslintrc": "^3.3.4",
+    "follow-redirects": "^1.16.0"
   }
 }

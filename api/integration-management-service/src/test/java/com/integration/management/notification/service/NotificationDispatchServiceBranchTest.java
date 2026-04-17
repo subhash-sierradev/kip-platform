@@ -253,6 +253,107 @@ class NotificationDispatchServiceBranchTest {
                         .isEqualTo("existingSection"));
     }
 
+    // ── notifyInitiator = false → initiator excluded from recipients ──────────
+
+    @Test
+    @DisplayName("notifyInitiator=false excludes triggeredByUserId from recipient list")
+    void notifyInitiator_false_excludesInitiator() {
+        String eventKey = "SITE_CONFIG_UPDATED";
+        // Build rule with notifyInitiator = false
+        NotificationEventCatalog catalog = NotificationEventCatalog.builder()
+                .eventKey(eventKey)
+                .entityType(com.integration.execution.contract.model.enums.NotificationEntityType.SITE_CONFIG)
+                .notifyInitiator(false)
+                .isEnabled(true)
+                .build();
+        catalog.setId(UUID.randomUUID());
+        NotificationRule rule = NotificationRule.builder()
+                .event(catalog).severity(NotificationSeverity.INFO).isEnabled(true).build();
+        rule.setId(UUID.randomUUID());
+        rule.setTenantId(TENANT_ID);
+
+        NotificationRecipientPolicy policy = buildPolicy(rule);
+        AppNotification saved = buildNotification();
+        AppNotificationResponse response = buildResponse(saved.getId());
+
+        when(notificationRuleRepository
+                .findByEventEventKeyAndTenantIdAndIsEnabledTrue(eventKey, TENANT_ID))
+                .thenReturn(Optional.of(rule));
+        when(recipientPolicyRepository.findByRuleId(rule.getId()))
+                .thenReturn(Optional.of(policy));
+        when(notificationTemplateService.getTemplatesForTenant(TENANT_ID)).thenReturn(List.of());
+        // Two users: initiator and another
+        when(userProfileService.getAllUsersByTenant(TENANT_ID))
+                .thenReturn(List.of(buildProfile(TRIGGER_USER), buildProfile("other-user")));
+        when(appNotificationRepository.save(any())).thenReturn(saved);
+        when(notificationMapper.toAppNotificationResponse(saved)).thenReturn(response);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.dispatch(eventKey, TENANT_ID, TRIGGER_USER, Map.of());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        // Only "other-user" gets notification - initiator is excluded
+        org.mockito.ArgumentCaptor<AppNotification> captor =
+                org.mockito.ArgumentCaptor.forClass(AppNotification.class);
+        verify(appNotificationRepository).save(captor.capture());
+        assertThat(captor.getValue().getUserId()).isEqualTo("other-user");
+    }
+
+    // ── resolveByKey: null eventKey → returns null ───────────────────────────
+
+    @Test
+    @DisplayName("dispatch with eventKey without recognised suffix - resolveByKey returns null (no byKey added)")
+    void dispatch_noMatchingSuffix_noByKeyAdded() {
+        // Use an event key that does not end with any recognised suffix (_UPDATED, _ENABLED, etc.)
+        // resolveByKey returns null → byKey == null → no putIfAbsent
+        String eventKey = "SOME_CUSTOM_FIRED";
+        NotificationEventCatalog catalog = NotificationEventCatalog.builder()
+                .eventKey(eventKey)
+                .entityType(com.integration.execution.contract.model.enums.NotificationEntityType.SITE_CONFIG)
+                .notifyInitiator(true)
+                .isEnabled(true)
+                .build();
+        catalog.setId(UUID.randomUUID());
+        NotificationRule rule = NotificationRule.builder()
+                .event(catalog).severity(NotificationSeverity.INFO).isEnabled(true).build();
+        rule.setId(UUID.randomUUID());
+        rule.setTenantId(TENANT_ID);
+
+        NotificationRecipientPolicy policy = buildPolicy(rule);
+        AppNotification saved = buildNotification();
+        AppNotificationResponse response = buildResponse(saved.getId());
+
+        when(notificationRuleRepository
+                .findByEventEventKeyAndTenantIdAndIsEnabledTrue(eventKey, TENANT_ID))
+                .thenReturn(Optional.of(rule));
+        when(recipientPolicyRepository.findByRuleId(rule.getId()))
+                .thenReturn(Optional.of(policy));
+        when(notificationTemplateService.getTemplatesForTenant(TENANT_ID)).thenReturn(List.of());
+        when(userProfileService.getAllUsersByTenant(TENANT_ID))
+                .thenReturn(List.of(buildProfile("user-a")));
+        when(appNotificationRepository.save(any())).thenReturn(saved);
+        when(notificationMapper.toAppNotificationResponse(saved)).thenReturn(response);
+
+        org.mockito.ArgumentCaptor<AppNotification> captor =
+                org.mockito.ArgumentCaptor.forClass(AppNotification.class);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.dispatch(eventKey, TENANT_ID, TRIGGER_USER, Map.of());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(appNotificationRepository).save(captor.capture());
+        // triggeredBy is added but no specific byKey (createdBy/updatedBy/etc.)
+        assertThat(captor.getValue().getMetadata()).containsKey("triggeredBy");
+        assertThat(captor.getValue().getMetadata()).doesNotContainKey("createdBy");
+        assertThat(captor.getValue().getMetadata()).doesNotContainKey("updatedBy");
+    }
+
     // ─── helpers ─────────────────────────────────────────────────────────────
 
     private void dispatchAndCapture(String eventKey, String triggeredBy,

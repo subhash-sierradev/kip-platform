@@ -83,6 +83,17 @@ class AzureKeyVaultServiceTest {
     }
 
     @Test
+    void getSecret_whenSecretValueNull_throwsCredentialNotFound() {
+        // KeyVaultSecret with null value
+        KeyVaultSecret kvSecret = new KeyVaultSecret("secret-a", null);
+        when(keyVaultSecretClient.get("secret-a")).thenReturn(kvSecret);
+
+        assertThatThrownBy(() -> service.getSecret("secret-a"))
+                .isInstanceOf(AzureKeyVaultException.class)
+                .hasMessageContaining("Credential not found for key: secret-a");
+    }
+
+    @Test
     void getSecret_whenDeserializationFails_throwsDomainException() throws Exception {
         KeyVaultSecret kvSecret = new KeyVaultSecret("secret-a", "not-json");
         when(keyVaultSecretClient.get("secret-a")).thenReturn(kvSecret);

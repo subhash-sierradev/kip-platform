@@ -139,6 +139,30 @@ class NotificationRecipientPolicyServiceTest {
         }
 
         @Test
+        @DisplayName("creates SELECTED_USERS policy with null userIds - skips user rows and resolveUsers")
+        void creates_selected_users_policy_with_null_userIds_skips_user_rows() {
+            // Covers: RecipientType.SELECTED_USERS && getUserIds() == null → skip user save + resolveUsers
+            NotificationRule rule = buildRule();
+            NotificationRecipientPolicy saved = buildPolicy(rule, RecipientType.SELECTED_USERS);
+            RecipientPolicyResponse response = buildPolicyResponse(saved.getId());
+            CreateRecipientPolicyRequest request = CreateRecipientPolicyRequest.builder()
+                    .ruleId(rule.getId()).recipientType("SELECTED_USERS")
+                    .userIds(null)  // null userIds
+                    .build();
+
+            when(notificationRuleRepository.findById(rule.getId()))
+                    .thenReturn(Optional.of(rule));
+            when(recipientPolicyRepository.save(any())).thenReturn(saved);
+            when(notificationMapper.toRecipientPolicyResponse(saved)).thenReturn(response);
+
+            RecipientPolicyResponse result =
+                    notificationRecipientPolicyService.create(TENANT_ID, USER_ID, request);
+
+            assertThat(result).isEqualTo(response);
+            verify(recipientUserRepository, never()).save(any());
+        }
+
+        @Test
         @DisplayName("throws IllegalArgumentException for invalid recipient type")
         void throws_for_invalid_recipient_type() {
             CreateRecipientPolicyRequest request = CreateRecipientPolicyRequest.builder()
@@ -266,6 +290,30 @@ class NotificationRecipientPolicyServiceTest {
                     .update(TENANT_ID, USER_ID, policy.getId(), request);
 
             verify(recipientUserRepository).deleteAllInBatch(List.of(existing));
+            verify(recipientUserRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("updates SELECTED_USERS policy with null userIds - skips user save and resolveUsers")
+        void update_selected_users_with_null_userIds_skips_user_rows() {
+            // Covers: RecipientType.SELECTED_USERS && getUserIds() == null → skip user save + resolveUsers
+            NotificationRule rule = buildRule();
+            NotificationRecipientPolicy policy = buildPolicy(rule, RecipientType.ALL_USERS);
+            RecipientPolicyResponse response = buildPolicyResponse(policy.getId());
+            CreateRecipientPolicyRequest request = CreateRecipientPolicyRequest.builder()
+                    .ruleId(rule.getId()).recipientType("SELECTED_USERS")
+                    .userIds(null)  // null userIds
+                    .build();
+
+            when(recipientPolicyRepository.findById(policy.getId()))
+                    .thenReturn(Optional.of(policy));
+            when(recipientUserRepository.findByRecipientPolicyId(policy.getId()))
+                    .thenReturn(List.of());
+            when(recipientPolicyRepository.save(policy)).thenReturn(policy);
+            when(notificationMapper.toRecipientPolicyResponse(policy)).thenReturn(response);
+
+            notificationRecipientPolicyService.update(TENANT_ID, USER_ID, policy.getId(), request);
+
             verify(recipientUserRepository, never()).save(any());
         }
     }

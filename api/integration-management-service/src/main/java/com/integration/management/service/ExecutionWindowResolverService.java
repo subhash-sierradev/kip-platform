@@ -63,7 +63,7 @@ public class ExecutionWindowResolverService {
                 .atStartOfDay(zoneId)
                 .toInstant();
 
-        // Validate window: skip job run if start is not before end.
+        // Validate window: throw error if start is not before end.
         // With a half-open [start, end) interval, start == end means zero-length window
         // which happens when the job is triggered on the same calendar day as the last execution.
         if (!alignedStart.isBefore(alignedEnd)) {

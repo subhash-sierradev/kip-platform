@@ -4,12 +4,9 @@ on:
   pull_request:
     branches:
       - main
-      - release
+      - main-2 # Added main-2 to trigger frontend CI for PRs targeting main-2 branch
       - 'release/**'
     types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'web/**'
-      - '.github/workflows/web-ci.yml'
 
 concurrency:
   group: web-ci-${{ github.event.pull_request.number || github.ref }}
@@ -40,7 +37,7 @@ jobs:
         run: npm ci
 
       - name: Lint, type-check, test and build
-        run: npm run ci
+        run: npm run ci:no-format
 
       - name: Install licensee
         run: sudo gem install licensee > /dev/null

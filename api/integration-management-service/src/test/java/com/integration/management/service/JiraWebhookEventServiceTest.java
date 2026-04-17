@@ -138,6 +138,30 @@ class JiraWebhookEventServiceTest {
             assertThat(cmd.getOriginalEventId()).isNotBlank();
             assertThat(cmd.getRetryAttempt()).isEqualTo(0);
         }
+
+        @Test
+        @DisplayName("null jiraWebhookPayload uses 0 for log length (null branch)")
+        void executeWebhook_nullPayload_logsZeroLength() {
+            JiraWebhook webhook = JiraWebhook.builder()
+                    .id(WEBHOOK_ID).tenantId(TENANT_ID).createdBy(USER_ID).lastModifiedBy(USER_ID)
+                    .name("Webhook Z").connectionId(UUID.randomUUID())
+                    .webhookUrl("https://example.test").samplePayload("{}").isEnabled(true)
+                    .jiraFieldMappings(null).build();
+            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+                    .thenReturn(Optional.of(webhook));
+            when(integrationConnectionService.getIntegrationConnectionNameById(
+                    webhook.getConnectionId().toString(), TENANT_ID)).thenReturn("secret-z");
+            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
+                JiraWebhookEvent e = inv.getArgument(0);
+                if (e.getId() == null) e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(mapper.toResponse(any(JiraWebhookEvent.class)))
+                    .thenReturn(JiraWebhookEventResponse.builder().id("z2").build());
+
+            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, null, TENANT_ID, USER_ID);
+            assertThat(out.getStatusCode().value()).isEqualTo(202);
+        }
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -220,6 +244,34 @@ class JiraWebhookEventServiceTest {
         void applyResult_null_doesNothing() {
             jiraWebhookEventService.applyResult(null);
             verify(triggerHistoryRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("failed result with non-zero responseStatusCode sets FAILED status and preserves statusCode")
+        void applyResult_failedResultWithNonZeroStatusCode_setsFailed() {
+            UUID triggerId = UUID.randomUUID();
+            JiraWebhookEvent existing = buildEvent(WEBHOOK_ID, "orig-2");
+            existing.setId(triggerId);
+            when(triggerHistoryRepository.findById(triggerId)).thenReturn(Optional.of(existing));
+            when(triggerHistoryRepository.save(existing)).thenReturn(existing);
+
+            com.integration.execution.contract.message.JiraWebhookExecutionResult result =
+                    com.integration.execution.contract.message.JiraWebhookExecutionResult.builder()
+                            .triggerEventId(triggerId)
+                            .success(false)
+                            .transformedPayload("{err}")
+                            .responseStatusCode(500)
+                            .responseBody("error body")
+                            .jiraIssueUrl(null)
+                            .build();
+
+            jiraWebhookEventService.applyResult(result);
+
+            assertThat(existing.getStatus())
+                    .isEqualTo(com.integration.execution.contract.model.enums.TriggerStatus.FAILED);
+            assertThat(existing.getResponseStatusCode()).isEqualTo(500);
+            assertThat(existing.getResponseBody()).isEqualTo("error body");
+            verify(triggerHistoryRepository).save(existing);
         }
 
         @Test
@@ -591,6 +643,112 @@ class JiraWebhookEventServiceTest {
                             .success(true)
                             .build());
             verify(triggerHistoryRepository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("null result does nothing")
+        void applyResult_nullResult_doesNothing() {
+            // Covers applyResult: result == null branch
+            jiraWebhookEventService.applyResult(null);
+            verify(triggerHistoryRepository, never()).findById(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("executeWebhook - buildCommand branches")
+    class BuildCommandBranches {
+
+        @Test
+        @DisplayName("webhook with null jiraFieldMappings uses empty list for fieldMappings")
+        void executeWebhook_webhookWithNullFieldMappings_usesEmptyList() {
+            // This is already exercised by the main executeWebhook test (webhook has no field mappings set)
+            // but we also test null retryAttempt path in event
+            JiraWebhook webhook = JiraWebhook.builder()
+                    .id(WEBHOOK_ID).tenantId(TENANT_ID).createdBy(USER_ID).lastModifiedBy(USER_ID)
+                    .name("Webhook B").connectionId(UUID.randomUUID())
+                    .webhookUrl("https://example2.test").samplePayload("{}").isEnabled(true)
+                    .jiraFieldMappings(null)  // explicit null
+                    .build();
+            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+                    .thenReturn(Optional.of(webhook));
+            when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
+                    .thenReturn("secret-b");
+            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
+                JiraWebhookEvent e = inv.getArgument(0);
+                if (e.getId() == null) e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(mapper.toResponse(any(JiraWebhookEvent.class)))
+                    .thenReturn(JiraWebhookEventResponse.builder().id("y").build());
+
+            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{}", TENANT_ID, USER_ID);
+
+            assertThat(out.getStatusCode().value()).isEqualTo(202);
+            var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
+            verify(messagePublisher).publish(any(), any(), cmdCaptor.capture());
+            assertThat(cmdCaptor.getValue().getFieldMappings()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("executeWebhook with webhook having non-null fieldMappings covers non-null branch")
+        void executeWebhook_webhookWithNonNullFieldMappings_usesFieldMappings() {
+            // Covers buildCommand: webhook.getJiraFieldMappings() != null → stream the mappings
+            JiraWebhook webhook = JiraWebhook.builder()
+                    .id(WEBHOOK_ID).tenantId(TENANT_ID).createdBy(USER_ID).lastModifiedBy(USER_ID)
+                    .name("Webhook C").connectionId(UUID.randomUUID())
+                    .webhookUrl("https://example3.test").samplePayload("{}").isEnabled(true)
+                    .jiraFieldMappings(java.util.List.of())  // non-null but empty
+                    .build();
+            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+                    .thenReturn(Optional.of(webhook));
+            when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
+                    .thenReturn("secret-c");
+            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
+                JiraWebhookEvent e = inv.getArgument(0);
+                if (e.getId() == null) e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(mapper.toResponse(any(JiraWebhookEvent.class)))
+                    .thenReturn(JiraWebhookEventResponse.builder().id("z").build());
+
+            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{}", TENANT_ID, USER_ID);
+
+            assertThat(out.getStatusCode().value()).isEqualTo(202);
+            var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
+            verify(messagePublisher).publish(any(), any(), cmdCaptor.capture());
+            assertThat(cmdCaptor.getValue().getFieldMappings()).isEmpty();
+            // retryAttempt from new JiraWebhookEvent (default is null from recordJiraWebhookEvent)
+        }
+
+        @Test
+        @DisplayName("buildCommand with saved event having null retryAttempt uses 0 as default")
+        void executeWebhook_savedEventWithNullRetryAttempt_usesZeroDefault() {
+            // Covers buildCommand: event.getRetryAttempt() != null ? ... : 0  (null branch)
+            JiraWebhook webhook = JiraWebhook.builder()
+                    .id(WEBHOOK_ID).tenantId(TENANT_ID).createdBy(USER_ID).lastModifiedBy(USER_ID)
+                    .name("Webhook D").connectionId(UUID.randomUUID())
+                    .webhookUrl("https://example4.test").samplePayload("{}").isEnabled(true)
+                    .jiraFieldMappings(null).build();
+            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+                    .thenReturn(Optional.of(webhook));
+            when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
+                    .thenReturn("secret-d");
+            // Return an event with null retryAttempt to cover the ternary null branch
+            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
+                JiraWebhookEvent e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                e.setRetryAttempt(null);  // force null retryAttempt
+                return e;
+            });
+            when(mapper.toResponse(any(JiraWebhookEvent.class)))
+                    .thenReturn(JiraWebhookEventResponse.builder().id("d").build());
+
+            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{}", TENANT_ID, USER_ID);
+            assertThat(out.getStatusCode().value()).isEqualTo(202);
+
+            var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
+            verify(messagePublisher).publish(any(), any(), cmdCaptor.capture());
+            assertThat(cmdCaptor.getValue().getRetryAttempt()).isEqualTo(0);
         }
     }
 

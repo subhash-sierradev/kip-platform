@@ -272,7 +272,7 @@ public class KwGraphQLService {
             if (requireNonEmpty && node.isEmpty()) {
                 return;
             }
-            attributes.put(key, objectMapper.convertValue(node, new TypeReference<List<Object>>() {}));
+            attributes.put(key, objectMapper.convertValue(node, new TypeReference<List<Object>>() { }));
             return;
         }
         attributes.put(key, objectMapper.convertValue(node, Object.class));

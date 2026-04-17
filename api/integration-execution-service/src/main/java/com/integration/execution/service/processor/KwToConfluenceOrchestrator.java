@@ -67,18 +67,18 @@ public class KwToConfluenceOrchestrator {
             }
 
             List<KwMonitoringDocument> namedClientData = confluencePageRenderer.filterNamedClients(monitoringData);
-            log.info("Confluence integration {} \u2014 records after unknown-client filter: fetched={} included={}",
+            log.info("Confluence integration {} _ records after unknown-client filter: fetched={} included={}",
                     cmd.getIntegrationId(), monitoringData.size(), namedClientData.size());
 
             if (namedClientData.isEmpty()) {
-                log.info("Confluence integration {} \u2014 all fetched records have unknown client, no page published",
+                log.info("Confluence integration {} _ all fetched records have unknown client, no page published",
                         cmd.getIntegrationId());
                 return ConfluenceJobExecutionResult.success(0, null, null);
             }
 
             // Fetch Confluence user timezone and convert monitoring data timestamps
-            ZoneId fallbackTimezone = cmd.getBusinessTimezone() != null && !cmd.getBusinessTimezone().isBlank()
-                    ? ZoneId.of(cmd.getBusinessTimezone())
+            ZoneId fallbackTimezone = cmd.getBusinessTimeZone() != null && !cmd.getBusinessTimeZone().isBlank()
+                    ? ZoneId.of(cmd.getBusinessTimeZone())
                     : null;
             ZoneId confluenceTimezone = confluenceApiClient.getUserTimezone(
                     cmd.getConnectionSecretName(), fallbackTimezone);
@@ -92,7 +92,7 @@ public class KwToConfluenceOrchestrator {
                             cmd.getConnectionSecretName(),
                             cmd.getConfluenceSpaceKey(),
                             cmd.getConfluenceSpaceKeyFolderKey(),
-                            buildMonitoringPageTitle(cmd),
+                            buildMonitoringPageTitle(cmd, confluenceTimezone),
                             pageContent));
 
             log.info("Confluence integration {} — published monitoring page", cmd.getIntegrationId());
@@ -108,9 +108,9 @@ public class KwToConfluenceOrchestrator {
         }
     }
 
-    private String buildMonitoringPageTitle(final ConfluenceExecutionCommand cmd) {
-        String formattedDate = MONITORING_TITLE_FORMATTER.format(
-                Instant.now().atZone(ZoneId.systemDefault()));
+    private String buildMonitoringPageTitle(final ConfluenceExecutionCommand cmd, final ZoneId timezone) {
+        Instant windowEnd = cmd.getWindowEnd() != null ? cmd.getWindowEnd() : Instant.now();
+        String formattedDate = MONITORING_TITLE_FORMATTER.format(windowEnd.atZone(timezone));
         return cmd.getReportNameTemplate().replace("{date}", formattedDate);
     }
 

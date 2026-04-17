@@ -9,6 +9,7 @@ import com.integration.management.entity.JiraWebhookEvent;
 import com.integration.management.repository.AuditLogRepository;
 import com.integration.management.exception.IntegrationApiException;
 import com.integration.management.service.ArcGISIntegrationService;
+import com.integration.management.service.ClientIpAddressResolver;
 import com.integration.management.service.ConfluenceIntegrationService;
 import com.integration.management.service.IntegrationConnectionService;
 import com.integration.management.service.JiraWebhookEventService;
@@ -140,6 +141,8 @@ class AuditLogAspectTest {
     private ConfluenceIntegrationService confluenceIntegrationService;
     @Mock
     private SettingsService settingsService;
+    @Mock
+    private ClientIpAddressResolver clientIpAddressResolver;
 
     @InjectMocks
     private AuditLogAspect aspect;
@@ -167,6 +170,7 @@ class AuditLogAspectTest {
         when(joinPoint.getArgs()).thenReturn(new Object[] {"conn-123", new NameRequest("My Connection")});
         ResponseEntity<?> proceeded = ResponseEntity.ok().build();
         when(joinPoint.proceed()).thenReturn(proceeded);
+        when(clientIpAddressResolver.resolveClientIpAddress(any())).thenReturn("203.0.113.10");
 
         Object out = aspect.logAudit(joinPoint);
 
@@ -729,6 +733,7 @@ class AuditLogAspectTest {
         when(signature.getParameterNames()).thenReturn(new String[] {"id", "request"});
         when(joinPoint.getArgs()).thenReturn(new Object[] {"conn-123", new NameRequest("My Connection")});
         when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+        when(clientIpAddressResolver.resolveClientIpAddress(any())).thenReturn("192.168.1.25");
 
         aspect.logAudit(joinPoint);
 
@@ -756,6 +761,7 @@ class AuditLogAspectTest {
         when(signature.getParameterNames()).thenReturn(new String[] {"id", "request"});
         when(joinPoint.getArgs()).thenReturn(new Object[] {"conn-123", new NameRequest("My Connection")});
         when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+        when(clientIpAddressResolver.resolveClientIpAddress(any())).thenReturn("203.0.113.5");
 
         aspect.logAudit(joinPoint);
 
@@ -783,6 +789,7 @@ class AuditLogAspectTest {
         when(signature.getParameterNames()).thenReturn(new String[] {"id", "request"});
         when(joinPoint.getArgs()).thenReturn(new Object[] {"conn-123", new NameRequest("My Connection")});
         when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+        when(clientIpAddressResolver.resolveClientIpAddress(any())).thenReturn("192.168.1.100");
 
         aspect.logAudit(joinPoint);
 
@@ -1446,6 +1453,303 @@ class AuditLogAspectTest {
         verify(auditLogRepository).save(captor.capture());
         // null name → getDefaultEntityName → "Confluence Integration - conf-null"
         assertThat(captor.getValue().getEntityName()).isEqualTo("Confluence Integration - conf-null");
+    }
+
+    // -----------------------------------------------------------------------
+    // Additional branch coverage: getDefaultEntityName INTEGRATION_CONNECTION
+    // -----------------------------------------------------------------------
+
+    static class ConnectionTargets {
+        @AuditLoggable(entityType = EntityType.INTEGRATION_CONNECTION, action = AuditActivity.UPDATE, entityIdParam = "id")
+        public ResponseEntity<?> updateConnection(String id) {
+            return ResponseEntity.ok().build();
+        }
+    }
+
+    @Test
+    @DisplayName("fetchEntityNameFromDatabase falls back to getDefaultEntityName for INTEGRATION_CONNECTION when service throws")
+    void logAudit_integrationConnectionType_serviceThrows_usesDefaultName() throws Throwable {
+        MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(integrationConnectionService.getIntegrationConnectionNameById("conn-ex", "tenant-1"))
+                .thenThrow(new RuntimeException("db error"));
+
+        Method method = ConnectionTargets.class.getMethod("updateConnection", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"conn-ex"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // exception → getDefaultEntityName → "Connection - conn-ex"
+        assertThat(captor.getValue().getEntityName()).isEqualTo("Connection - conn-ex");
+    }
+
+    static class WebhookDeleteTargets {
+        @AuditLoggable(entityType = EntityType.JIRA_WEBHOOK, action = AuditActivity.DELETE, entityIdParam = "id")
+        public ResponseEntity<?> deleteWebhook(String id) {
+            return ResponseEntity.noContent().build();
+        }
+    }
+
+    @Test
+    @DisplayName("fetchEntityNameFromDatabase falls back to getDefaultEntityName for JIRA_WEBHOOK when service throws")
+    void logAudit_jiraWebhookType_serviceThrows_usesDefaultName() throws Throwable {
+        MockHttpServletRequest request = new MockHttpServletRequest("DELETE", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(jiraWebhookService.getJiraWebhookNameById("wh-ex"))
+                .thenThrow(new RuntimeException("webhook not found"));
+
+        Method method = WebhookDeleteTargets.class.getMethod("deleteWebhook", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"wh-ex"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.noContent().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // exception → getDefaultEntityName → "Webhook - wh-ex"
+        assertThat(captor.getValue().getEntityName()).isEqualTo("Webhook - wh-ex");
+    }
+
+    static class WebhookEventTargets {
+        @AuditLoggable(entityType = EntityType.JIRA_WEBHOOK_EVENT, action = AuditActivity.EXECUTE, entityIdParam = "id")
+        public ResponseEntity<?> executeEvent(String id) {
+            return ResponseEntity.ok().build();
+        }
+    }
+
+    @Test
+    @DisplayName("fetchEntityNameFromDatabase falls back to getDefaultEntityName for JIRA_WEBHOOK_EVENT when service throws")
+    void logAudit_jiraWebhookEventType_serviceThrows_usesDefaultName() throws Throwable {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(triggerHistoryService.findByOriginalEventIdOrderByRetryAttempt("evt-ex"))
+                .thenThrow(new RuntimeException("event not found"));
+
+        Method method = WebhookEventTargets.class.getMethod("executeEvent", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"evt-ex"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // exception → yields "Webhook Event" (default in the JIRA_WEBHOOK_EVENT case)
+        assertThat(captor.getValue().getEntityName()).isEqualTo("Webhook Event");
+    }
+
+    @Test
+    @DisplayName("fetchEntityNameFromDatabase getDefaultEntityName for INTEGRATION_CONNECTION via IllegalArgumentException")
+    void logAudit_integrationConnectionType_invalidUUID_usesDefaultName() throws Throwable {
+        // Covers getDefaultEntityName: INTEGRATION_CONNECTION case via outer IllegalArgumentException catch
+        MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        when(integrationConnectionService.getIntegrationConnectionNameById("not-a-uuid", "tenant-1"))
+                .thenThrow(new IllegalArgumentException("invalid UUID"));
+
+        Method method = ConnectionTargets.class.getMethod("updateConnection", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"not-a-uuid"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // IllegalArgumentException → getDefaultEntityName → "Connection - not-a-uuid"
+        assertThat(captor.getValue().getEntityName()).isEqualTo("Connection - not-a-uuid");
+    }
+
+    @Test
+    @DisplayName("extractFieldOrGetter resolves value from superclass field via inheritance chain")
+    void logAudit_extractFieldOrGetter_superclassField_resolves() throws Throwable {
+        // Covers extractFieldOrGetter: superclass traversal (cls = cls.getSuperclass())
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        // Use a subclass that inherits 'id' field from a parent class
+        class BaseRequest {
+            final String id;
+            BaseRequest(String baseId) {
+                this.id = baseId;
+            }
+        }
+        class SubRequest extends BaseRequest {
+            SubRequest(String subId) {
+                super(subId);
+            }
+        }
+
+        // For this test, we use Targets.create which looks for "id" parameter name
+        Method method = Targets.class.getMethod("create", String.class, NameRequest.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        // Parameter names don't include "id" directly, forcing field extraction path
+        when(signature.getParameterNames()).thenReturn(new String[]{"req", "name"});
+        SubRequest subReq = new SubRequest("field-id-123");
+        when(joinPoint.getArgs()).thenReturn(new Object[]{subReq, new NameRequest("Test Name")});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // extractFieldOrGetter traverses superclass to find "id"
+        assertThat(captor.getValue().getEntityId()).isEqualTo("field-id-123");
+    }
+
+    @Test
+    @DisplayName("populateRetryMetadata: webhookId is null in event, skips webhookName fetch")
+    void logAudit_retryMetadata_nullWebhookId_skipsWebhookNameFetch() throws Throwable {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        JiraWebhookEvent event = new JiraWebhookEvent();
+        // webhookId is null => skip webhook name fetch
+        when(triggerHistoryService.findByOriginalEventIdOrderByRetryAttempt("evt-null-wh"))
+                .thenReturn(event);
+
+        Method method = Targets.class.getMethod("retry", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"evt-null-wh"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        // No webhook name added, but originalTriggerId present
+        assertThat(captor.getValue().getMetadata()).containsKey("originalTriggerId");
+        assertThat(captor.getValue().getMetadata()).doesNotContainKey("webhookName");
+    }
+
+    @Test
+    @DisplayName("populateRetryMetadata: webhookName is null, skips metadata addition")
+    void logAudit_retryMetadata_nullWebhookName_skipsWebhookNameMetadata() throws Throwable {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        JiraWebhookEvent event = new JiraWebhookEvent();
+        event.setWebhookId("wh-null-name");
+        when(triggerHistoryService.findByOriginalEventIdOrderByRetryAttempt("evt-null-name"))
+                .thenReturn(event);
+        when(jiraWebhookService.getJiraWebhookNameById("wh-null-name")).thenReturn(null);
+
+        Method method = Targets.class.getMethod("retry", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"evt-null-name"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getMetadata()).containsKey("originalTriggerId");
+        assertThat(captor.getValue().getMetadata()).doesNotContainKey("webhookName");
+    }
+
+    @Test
+    @DisplayName("resolvePreDeleteContext: non-DELETE action returns empty context")
+    void logAudit_nonDelete_resolvePreDeleteContext_returnsEmptyContext() throws Throwable {
+        // Covers resolvePreDeleteContext: annotation.action() != DELETE => return new PreDeleteContext(null, null)
+        MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        Method method = ConnectionTargets.class.getMethod("updateConnection", String.class);
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{"id"});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{"conn-update"});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok().build());
+
+        aspect.logAudit(joinPoint);
+
+        ArgumentCaptor<AuditLog> captor = ArgumentCaptor.forClass(AuditLog.class);
+        verify(auditLogRepository).save(captor.capture());
+        assertThat(captor.getValue().getEntityId()).isEqualTo("conn-update");
+    }
+
+    @Test
+    @DisplayName("logAudit extractIdFromResponseBody: body has getId returning null")
+    void logAudit_responseBodyWithNullGetId_returnsNull() throws Throwable {
+        // Covers extractIdFromResponseBody: val == null => don't return, fall through
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/x");
+        request.setAttribute(X_TENANT_ID, "tenant-1");
+        request.setAttribute(X_USER_ID, "user-1");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
+
+        class NullIdBody {
+            public String getId() {
+                return null;
+            }
+        }
+
+        Method method = Targets.class.getMethod("createFromResponse");
+        ProceedingJoinPoint joinPoint = org.mockito.Mockito.mock(ProceedingJoinPoint.class);
+        MethodSignature signature = org.mockito.Mockito.mock(MethodSignature.class);
+        when(joinPoint.getSignature()).thenReturn(signature);
+        when(signature.getMethod()).thenReturn(method);
+        when(signature.getParameterNames()).thenReturn(new String[]{});
+        when(joinPoint.getArgs()).thenReturn(new Object[]{});
+        when(joinPoint.proceed()).thenReturn(ResponseEntity.ok(new NullIdBody()));
+
+        aspect.logAudit(joinPoint);
+
+        // entityId cannot be resolved (null from getId()) => audit is not saved (entityId is null/blank)
+        verify(auditLogRepository, never()).save(any());
     }
 }
 

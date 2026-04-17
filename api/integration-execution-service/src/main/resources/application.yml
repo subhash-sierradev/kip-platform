@@ -15,6 +15,15 @@ server:
   port: 8081
   address: 0.0.0.0
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  info:
+    build:
+      enabled: true
+
 app:
   messaging:
     transport: ${APP_MESSAGING_TRANSPORT:rabbitmq}

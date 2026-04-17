@@ -145,6 +145,17 @@ describe('JiraWebhookDetailsPage', () => {
     expect((layout.props() as any).status).toBe('disabled');
   });
 
+  it('ignores status updates before webhook data has loaded', async () => {
+    hoisted.getWebhookByIdMock.mockReturnValueOnce(new Promise(() => {}));
+
+    const wrapper = mount(JiraWebhookDetailsPage);
+    await wrapper.find('.emit-status-updated').trigger('click');
+    await flushPromises();
+
+    const layout = wrapper.findComponent({ name: 'StandardDetailPageLayout' });
+    expect((layout.props() as any).status).toBe('disabled');
+  });
+
   it('maps webhook fetch errors to user-friendly messages', async () => {
     hoisted.getWebhookByIdMock.mockRejectedValueOnce(new Error('403 forbidden'));
     const wrapper403 = mount(JiraWebhookDetailsPage);
@@ -329,5 +340,30 @@ describe('JiraWebhookDetailsPage', () => {
     expect(hoisted.getSprintsByConnectionIdMock).not.toHaveBeenCalled();
     expect((layout.props() as any).componentProps.sprints).toEqual([]);
     expect((layout.props() as any).componentProps.sprintsLoading).toBe(false);
+  });
+
+  it('skips project lookup when the project mapping trims to an empty value', async () => {
+    hoisted.getWebhookByIdMock.mockResolvedValueOnce({
+      ...defaultWebhook,
+      jiraFieldMappings: [
+        {
+          jiraFieldId: 'project',
+          jiraFieldName: 'Project',
+          displayLabel: '   ',
+          defaultValue: '   ',
+        },
+      ],
+    });
+
+    const wrapper = mount(JiraWebhookDetailsPage);
+    await flushPromises();
+
+    const layout = wrapper.findComponent({ name: 'StandardDetailPageLayout' });
+    await wrapper.find('.emit-tab-mapping').trigger('click');
+    await flushPromises();
+
+    expect(hoisted.getProjectsByConnectionIdMock).not.toHaveBeenCalled();
+    expect(hoisted.getSprintsByConnectionIdMock).not.toHaveBeenCalled();
+    expect((layout.props() as any).componentProps.sprints).toEqual([]);
   });
 });

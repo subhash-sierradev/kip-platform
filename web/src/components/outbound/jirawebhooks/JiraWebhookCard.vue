@@ -22,9 +22,9 @@
         <div class="icon-box">
           <WebhookIcon size="medium" />
         </div>
-        <div class="title-box" style="flex: 1">
-          <div v-if="viewMode === 'list'" class="title-row-list" style="width: 100%">
-            <div style="display: flex; align-items: center; gap: 8px; width: 100%">
+        <div class="title-box title-box-fill">
+          <div v-if="viewMode === 'list'" class="title-row-list title-row-list-full">
+            <div class="list-header-row">
               <span class="title-text">{{ webhook.name }}</span>
               <span
                 class="status-chip"
@@ -35,13 +35,10 @@
               <span v-if="getProjectLabel(webhook)" class="project-chip">{{
                 getProjectLabel(webhook)
               }}</span>
-              <span style="flex: 1 1 0"></span>
+              <span class="list-spacer"></span>
               <span class="trigger-label">Last Trigger:</span>
-              <span
-                v-if="webhook.lastEventHistory?.status"
-                class="trigger-chip"
-                :class="'trigger-' + webhook.lastEventHistory.status.toLowerCase()"
-              >
+              <IntegrationStatusIcon :status="webhook.lastEventHistory?.status" />
+              <span v-if="webhook.lastEventHistory?.status" class="value">
                 {{ webhook.lastEventHistory.status }}
               </span>
               <span v-if="webhook.lastEventHistory?.triggeredAt" class="trigger-date">
@@ -49,24 +46,34 @@
               </span>
               <span v-if="!webhook.lastEventHistory" class="trigger-date">No triggers yet</span>
             </div>
-            <div style="display: flex; align-items: center; margin-top: 5px">
-              <span class="info-cell" style="display: inline; padding: 0; margin: 0">
+            <div class="list-metadata-row">
+              <span class="info-cell list-inline-info-cell">
                 <span class="label">Issue Type:</span>
                 <span class="value">{{ getIssueTypeLabel(webhook) }}</span>
-                <span class="label" style="margin-left: 25px">Assignee:</span>
+                <span class="label list-assignee-label">Assignee:</span>
                 <span class="value">{{ getAssignee(webhook) }}</span>
               </span>
-              <span style="flex: 1 1 0"></span>
+              <span class="list-spacer"></span>
               <span class="created-text"
                 ><span class="label">Created:</span>
                 {{ formatMetadataDate(webhook.createdDate) }}</span
+              >
+              <span class="created-text"
+                ><span class="label">Updated:</span>
+                {{ formatMetadataDate(webhook.lastModifiedDate) }}</span
               >
             </div>
           </div>
           <div v-else>
             <div class="title-text">{{ webhook.name }}</div>
-            <div class="created-text">
-              <span class="label">Created:</span> {{ formatMetadataDate(webhook.createdDate) }}
+            <div class="created-updated-row">
+              <div class="created-text">
+                <span class="label">Created:</span> {{ formatMetadataDate(webhook.createdDate) }}
+              </div>
+              <div class="created-text">
+                <span class="label">Updated:</span>
+                {{ formatMetadataDate(webhook.lastModifiedDate) }}
+              </div>
             </div>
           </div>
         </div>
@@ -78,42 +85,33 @@
         />
       </div>
 
-      <div v-if="viewMode === 'grid'" style="display: flex; flex-direction: column; gap: 0">
-        <div class="chips-row" style="margin-bottom: 12px">
+      <div v-if="viewMode === 'grid'" class="grid-card-content">
+        <div class="chips-row compact-chips-row">
           <span
             class="status-chip"
             :class="webhook.isEnabled ? 'status-active' : 'status-disabled'"
           >
             {{ webhook.isEnabled ? 'Enabled' : 'Disabled' }}
           </span>
-          <span v-if="getProjectLabel(webhook)" class="project-chip" style="margin-right: 55px">
+          <span v-if="getProjectLabel(webhook)" class="project-chip compact-project-chip">
             {{ getProjectLabel(webhook) }}
           </span>
         </div>
-        <div class="info-row" style="margin-bottom: 0; margin-top: -6px">
+        <div class="info-row compact-info-row">
           <div class="info-cell">
             <span class="label">Issue Type:</span>
             <span class="value">{{ getIssueTypeLabel(webhook) }}</span>
           </div>
-          <div
-            class="info-cell align-right"
-            style="display: flex; flex-direction: column; align-items: flex-end; gap: 0"
-          >
-            <div style="margin-top: -30px">
+          <div class="info-cell align-right compact-info-cell">
+            <div class="compact-trigger-block">
               <span class="trigger-label">Last Trigger:</span>
-              <span
-                v-if="webhook.lastEventHistory?.status"
-                class="trigger-chip"
-                :class="'trigger-' + webhook.lastEventHistory.status.toLowerCase()"
-              >
-                {{ webhook.lastEventHistory.status }}
-              </span>
+              <IntegrationStatusIcon :status="webhook.lastEventHistory?.status" />
               <span v-if="webhook.lastEventHistory?.triggeredAt" class="trigger-date">
                 {{ formatMetadataDate(webhook.lastEventHistory.triggeredAt) }}
               </span>
               <span v-if="!webhook.lastEventHistory" class="trigger-date"> No triggers yet</span>
             </div>
-            <div style="margin-top: 5px">
+            <div class="compact-assignee-row">
               <span class="label">Assignee:</span>
               <span class="value">{{ getAssignee(webhook) }}</span>
             </div>
@@ -156,6 +154,7 @@ import type { DashboardViewMode } from '@/types/dashboard';
 import type { JiraWebhook } from '@/types/JiraWebhook';
 import WebhookIcon from '@/components/common/WebhookIcon.vue';
 import ActionMenu, { type ActionMenuItem } from '@/components/common/ActionMenu.vue';
+import IntegrationStatusIcon from '@/components/common/IntegrationStatusIcon.vue';
 import {
   enableDisableAria,
   enableDisableIcon,
@@ -177,7 +176,7 @@ defineProps<{
   getProjectLabel: (webhook: JiraWebhook) => string | undefined;
   getIssueTypeLabel: (webhook: JiraWebhook) => string;
   getAssignee: (webhook: JiraWebhook) => string;
-  formatMetadataDate: (value: string) => string;
+  formatMetadataDate: (value: string | undefined) => string;
 }>();
 
 function getWebhookMenuItems(webhook: JiraWebhook): ActionMenuItem[] {

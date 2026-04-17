@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it } from 'vitest';
 
 import type { ConfluenceIntegrationSummaryResponse } from '@/api/models/ConfluenceIntegrationSummaryResponse';
+import IntegrationStatusIcon from '@/components/common/IntegrationStatusIcon.vue';
 import ConfluenceIntegrationCard from '@/components/outbound/confluenceintegration/ConfluenceIntegrationCard.vue';
 
 function makeIntegration(
@@ -252,8 +253,8 @@ describe('ConfluenceIntegrationCard', () => {
     });
     const icon = wrapper.find('.dx-icon-check');
     await icon.trigger('mouseenter');
-    // Check reactive state on the vm
-    expect((wrapper.vm as any).statusTooltipVisible).toBe(true);
+    const iconComponent = wrapper.findComponent(IntegrationStatusIcon);
+    expect((iconComponent.vm as any).tooltipVisible).toBe(true);
   });
 
   it('hides status tooltip on mouseleave', async () => {
@@ -263,7 +264,8 @@ describe('ConfluenceIntegrationCard', () => {
     const icon = wrapper.find('.dx-icon-check');
     await icon.trigger('mouseenter');
     await icon.trigger('mouseleave');
-    expect((wrapper.vm as any).statusTooltipVisible).toBe(false);
+    const iconComponent = wrapper.findComponent(IntegrationStatusIcon);
+    expect((iconComponent.vm as any).tooltipVisible).toBe(false);
   });
 
   it('no status icon when lastStatus is undefined', () => {
@@ -272,5 +274,12 @@ describe('ConfluenceIntegrationCard', () => {
     });
     expect(wrapper.find('[class*="dx-icon-check"]').exists()).toBe(false);
     expect(wrapper.find('[class*="dx-icon-close"]').exists()).toBe(false);
+  });
+
+  it('renders Updated label in card view', () => {
+    const wrapper = mount(ConfluenceIntegrationCard, {
+      props: { integration: makeIntegration(), menuItems: [] },
+    });
+    expect(wrapper.text()).toContain('Updated:');
   });
 });

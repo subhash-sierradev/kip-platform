@@ -138,4 +138,60 @@ describe('TemplateFieldEditor', () => {
     expect(onActionEnter).toHaveBeenNthCalledWith(1, 'Insert fields', expect.any(MouseEvent));
     expect(onActionEnter).toHaveBeenNthCalledWith(2, 'Show preview', expect.any(MouseEvent));
   });
+
+  it('forwards the hide-preview tooltip text when preview mode is active', async () => {
+    const onActionEnter = vi.fn();
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello',
+        showPreview: true,
+        previewText: 'Rendered preview',
+        onActionEnter,
+      },
+    });
+
+    await wrapper.find('.ps-eye-icon').trigger('mouseenter');
+    await nextTick();
+
+    expect(onActionEnter).toHaveBeenCalledWith('Hide preview', expect.any(MouseEvent));
+  });
+
+  it('does not add an extra space when the insertion point already follows whitespace', async () => {
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello ',
+      },
+      attachTo: document.body,
+    });
+
+    const textarea = wrapper.find('textarea');
+    const element = textarea.element as HTMLTextAreaElement;
+    element.setSelectionRange(6, 6);
+    await textarea.trigger('keyup');
+
+    const vm = wrapper.vm as { insertPlaceholder: (value: string) => Promise<void> };
+    await vm.insertPlaceholder('{{name}}');
+
+    const updates = wrapper.emitted('update:modelValue') || [];
+    const lastUpdate = updates[updates.length - 1] as string[];
+    expect(lastUpdate[0]).toBe('Hello {{name}}');
+  });
+
+  it('appends the placeholder when no selection has been captured yet', async () => {
+    const wrapper = mount(TemplateFieldEditor, {
+      props: {
+        ...baseProps,
+        modelValue: 'Hello',
+      },
+    });
+
+    const vm = wrapper.vm as { insertPlaceholder: (value: string) => Promise<void> };
+    await vm.insertPlaceholder('{{tail}}');
+
+    const updates = wrapper.emitted('update:modelValue') || [];
+    const lastUpdate = updates[updates.length - 1] as string[];
+    expect(lastUpdate[0]).toBe('Hello {{tail}}');
+  });
 });

@@ -4,6 +4,7 @@ import com.integration.execution.contract.model.BasicAuthCredential;
 import com.integration.execution.contract.model.IntegrationSecret;
 import com.integration.execution.contract.model.OAuthClientCredential;
 import com.integration.execution.contract.model.enums.CredentialAuthType;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
@@ -11,6 +12,7 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+@DisplayName("CredentialValueResolver")
 class CredentialValueResolverTest {
 
     private final CredentialValueResolver resolver = new CredentialValueResolver();
@@ -55,5 +57,39 @@ class CredentialValueResolverTest {
         assertThatThrownBy(() -> resolver.resolve(secret))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Credential data is required");
+    }
+
+    @Test
+    @DisplayName("basicAuth with null username and password omits those keys (putIfNotNull)")
+    void resolve_basicAuth_nullValues_omitsKeys() {
+        IntegrationSecret secret = IntegrationSecret.builder()
+                .authType(CredentialAuthType.BASIC_AUTH)
+                .credentials(BasicAuthCredential.builder().username(null).password(null).build())
+                .build();
+
+        Map<String, String> values = resolver.resolve(secret);
+
+        assertThat(values).doesNotContainKey("username").doesNotContainKey("password");
+    }
+
+    @Test
+    @DisplayName("oauth2 with null values omits those keys (putIfNotNull)")
+    void resolve_oauth2_nullValues_omitsKeys() {
+        IntegrationSecret secret = IntegrationSecret.builder()
+                .authType(CredentialAuthType.OAUTH2)
+                .credentials(OAuthClientCredential.builder()
+                        .clientId(null)
+                        .clientSecret(null)
+                        .tokenUrl(null)
+                        .scope(null)
+                        .build())
+                .build();
+
+        Map<String, String> values = resolver.resolve(secret);
+
+        assertThat(values).doesNotContainKey("clientId")
+                .doesNotContainKey("clientSecret")
+                .doesNotContainKey("tokenUrl")
+                .doesNotContainKey("scope");
     }
 }

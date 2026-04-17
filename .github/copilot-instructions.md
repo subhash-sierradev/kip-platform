@@ -374,6 +374,10 @@ Before generating code, confirm you have loaded and stored:
 - ✅ Fat JAR deployment pattern with ports 8085 (management) and 8081 (execution)
 - ✅ RabbitMQ notification pipeline: `@PublishNotification` AOP → TopicExchange → `NotificationListener` → `NotificationDispatchService` → SSE
 - ✅ Notification frontend: `useNotifications` (SSE), `useNotificationStore` (Pinia), `UserNotificationService` (hand-crafted API), `NotificationBell` (Lucide SVG)
+- ✅ Versioning: fully independent per-component SemVer — Web (`web/package.json` → `version`), IMS (`api/gradle.properties` → `imsVersion`), IES (`api/gradle.properties` → `iesVersion`), Contract (`api/gradle.properties` → `contractVersion`)
+- ✅ Version bump driven by PR label (`bump:major/minor/patch`) or PR title prefix (`breaking:` / `feat:` / `fix:`) — label takes priority, defaults to patch
+- ✅ Release branch names are free-form (`release/022026`, `release/1.0.0`, etc.) — no semver format required in branch name
+- ✅ CI/CD: `release-versioning.yml` (bump on main merge + RC tags on release branch), `release-candidate-preview.yml` (RC preview comment on PR), `api-deploy.yml` (reads `imsVersion`/`iesVersion`), `web-deploy.yml` (reads `package.json` version)
 
 _Focus on `api/`, `web/`, and `e2e/` components. Ignore source-endpoint-secured-app and target-endpoint-graphql-app as they are temporary and will be removed._
 

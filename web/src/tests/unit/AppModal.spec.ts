@@ -115,4 +115,59 @@ describe('AppModal', () => {
     expect(wrapper.emitted('update:open')).toBeFalsy();
     wrapper.unmount();
   });
+
+  it('renders without a title id when no title is provided', async () => {
+    const wrapper = mount(AppModal, {
+      props: { open: true },
+      slots: { default: '<div>Body</div>' },
+    });
+
+    await nextTick();
+
+    const card = document.body.querySelector('[data-testid="kw-modal-card"]');
+    expect(card?.getAttribute('aria-labelledby')).toBeNull();
+    expect(document.body.querySelector('.kw-modal__title')).toBeNull();
+
+    wrapper.unmount();
+  });
+
+  it('closes from the explicit close button and ignores non-escape keys', async () => {
+    const wrapper = mount(AppModal, {
+      props: { open: true, title: 'Closable' },
+      slots: { default: '<div>Body</div>' },
+    });
+
+    await nextTick();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    await nextTick();
+    expect(wrapper.emitted('update:open')).toBeFalsy();
+
+    const closeButton = document.body.querySelector('.kw-modal__close') as HTMLButtonElement | null;
+    closeButton?.click();
+    await nextTick();
+
+    expect(wrapper.emitted('update:open')).toEqual([[false]]);
+    wrapper.unmount();
+  });
+
+  it('restores focus when the modal closes after being open', async () => {
+    const trigger = document.createElement('button');
+    document.body.appendChild(trigger);
+    trigger.focus();
+
+    const wrapper = mount(AppModal, {
+      props: { open: true, title: 'Focus test' },
+      slots: { default: '<div>Body</div>' },
+    });
+
+    await nextTick();
+    await wrapper.setProps({ open: false });
+    await nextTick();
+
+    expect(document.activeElement).toBe(trigger);
+
+    wrapper.unmount();
+    trigger.remove();
+  });
 });

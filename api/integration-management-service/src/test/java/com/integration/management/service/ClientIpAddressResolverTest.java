@@ -1,4 +1,4 @@
-package com.integration.management.util;
+package com.integration.management.service;
 
 import com.integration.management.constants.CacheConstants;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,11 +21,13 @@ class ClientIpAddressResolverTest {
     @Mock
     private CacheManager mockCacheManager;
 
+    private ClientIpAddressResolver resolver;
+
     @BeforeEach
     void setUp() {
         ConcurrentMapCacheManager realCacheManager = new ConcurrentMapCacheManager(CacheConstants.IP_VALIDATION_CACHE);
-        new ClientIpAddressResolver(realCacheManager);
-        ClientIpAddressResolver.clearCache();
+        resolver = new ClientIpAddressResolver(realCacheManager);
+        resolver.clearCache();
     }
 
     @Test
@@ -35,7 +37,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Forwarded-For", "203.0.113.10, 10.0.0.1");
         request.setRemoteAddr("192.168.1.25");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("203.0.113.10");
     }
@@ -47,7 +49,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Real-IP", "198.51.100.5");
         request.setRemoteAddr("10.0.0.1");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("198.51.100.5");
     }
@@ -58,7 +60,7 @@ class ClientIpAddressResolverTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
         request.setRemoteAddr("172.16.0.1");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("172.16.0.1");
     }
@@ -70,7 +72,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Forwarded-For", "   ");
         request.setRemoteAddr("10.0.0.1");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("10.0.0.1");
     }
@@ -81,7 +83,7 @@ class ClientIpAddressResolverTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
         request.addHeader("X-Forwarded-For", "[2001:db8::1]");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("2001:db8::1");
     }
@@ -94,7 +96,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Real-IP", "also-not-an-ip");
         request.setRemoteAddr("still-not-an-ip");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isNull();
     }
@@ -105,8 +107,8 @@ class ClientIpAddressResolverTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
         request.addHeader("X-Forwarded-For", "203.0.113.50");
 
-        String firstCall = ClientIpAddressResolver.resolveClientIpAddress(request);
-        String secondCall = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String firstCall = resolver.resolveClientIpAddress(request);
+        String secondCall = resolver.resolveClientIpAddress(request);
 
         assertThat(firstCall).isEqualTo("203.0.113.50");
         assertThat(secondCall).isEqualTo("203.0.113.50");
@@ -115,7 +117,7 @@ class ClientIpAddressResolverTest {
     @Test
     @DisplayName("clearCache should not throw when cache exists")
     void clearCache_doesNotThrow() {
-        ClientIpAddressResolver.clearCache();
+        resolver.clearCache();
     }
 
     @Test
@@ -124,8 +126,8 @@ class ClientIpAddressResolverTest {
         // ConcurrentMapCacheManager doesn't use Caffeine, so getNativeCache throws ClassCastException
         // This tests the null-cache path instead
         when(mockCacheManager.getCache(CacheConstants.IP_VALIDATION_CACHE)).thenReturn(null);
-        new ClientIpAddressResolver(mockCacheManager);
-        assertThat(ClientIpAddressResolver.getNativeCache()).isNull();
+        resolver = new ClientIpAddressResolver(mockCacheManager);
+        assertThat(resolver.getNativeCache()).isNull();
     }
 
     @Test
@@ -143,7 +145,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Forwarded-For", longIp);
         request.setRemoteAddr(longIp);
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isNull();
     }
@@ -155,7 +157,7 @@ class ClientIpAddressResolverTest {
         request.addHeader("X-Forwarded-For", "[]");
         request.setRemoteAddr("[]");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isNull();
     }
@@ -166,7 +168,7 @@ class ClientIpAddressResolverTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
         request.addHeader("X-Real-IP", "::1");
 
-        String resolvedIp = ClientIpAddressResolver.resolveClientIpAddress(request);
+        String resolvedIp = resolver.resolveClientIpAddress(request);
 
         assertThat(resolvedIp).isEqualTo("::1");
     }

@@ -5,6 +5,7 @@ import com.integration.execution.security.config.SecurityProperties;
 import jakarta.servlet.FilterChain;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -93,6 +94,23 @@ class KeycloakAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("tenant_id string with leading slash is stripped")
+    void tenantIdStringWithLeadingSlash_isStripped() throws Exception {
+        setAuthContext(Map.of(
+                props.getJwt().getTenantIdClaim(), "//tenant-c",
+                props.getJwt().getUserIdClaim(), "carol"
+        ));
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        filter.doFilterInternal(request, response, chain);
+
+        assertThat(request.getAttribute(props.getJwt().getTenantIdClaim())).isEqualTo("tenant-c");
+        verify(chain).doFilter(request, response);
+    }
+
+    @Test
     @DisplayName("webhook client role should set system tenant/user and continue")
     void webhookClientRole_usesSystemTenantAndUser() throws Exception {
         setAuthContext(Map.of(
@@ -122,5 +140,75 @@ class KeycloakAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(403);
         assertThat(response.getContentAsString()).contains(props.getError().getMissingFields());
         verify(chain, never()).doFilter(request, response);
+    }
+
+    @Nested
+    @DisplayName("isWebhookClient branches")
+    class IsWebhookClientBranches {
+
+        @Test
+        @DisplayName("realm_access not a Map returns 403")
+        void realmAccessNotMap_returns403() throws Exception {
+            setAuthContext(Map.of("realm_access", "not-a-map"));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(response.getStatus()).isEqualTo(403);
+            verify(chain, never()).doFilter(request, response);
+        }
+
+        @Test
+        @DisplayName("roles not a List returns 403")
+        void rolesNotList_returns403() throws Exception {
+            setAuthContext(Map.of("realm_access", Map.of("roles", "not-a-list")));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(response.getStatus()).isEqualTo(403);
+            verify(chain, never()).doFilter(request, response);
+        }
+
+        @Test
+        @DisplayName("no claims at all returns 403")
+        void noClaimsAtAll_returns403() throws Exception {
+            setAuthContext(Map.of());
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(response.getStatus()).isEqualTo(403);
+            verify(chain, never()).doFilter(request, response);
+        }
+    }
+
+    @Nested
+    @DisplayName("getTenant branches")
+    class GetTenantBranches {
+
+        @Test
+        @DisplayName("tenantId list with all blank items returns 403 (no webhook)")
+        void tenantIdListAllBlank_returns403() throws Exception {
+            setAuthContext(Map.of(
+                    props.getJwt().getTenantIdClaim(), List.of("  ", ""),
+                    props.getJwt().getUserIdClaim(), "dave"
+            ));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            // tenantId is null because all list items are blank, and no webhook role -> 403
+            assertThat(response.getStatus()).isEqualTo(403);
+            verify(chain, never()).doFilter(request, response);
+        }
     }
 }

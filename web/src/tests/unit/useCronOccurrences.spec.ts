@@ -38,9 +38,9 @@ afterEach(() => {
 });
 
 describe('useCronOccurrences validation', () => {
-  it('rejects blank and malformed Quartz expressions', () => {
+  it('rejects blank expressions and accepts supported 5-field cron expressions', () => {
     expect(isValidQuartzCronExpression('')).toBe(false);
-    expect(isValidQuartzCronExpression('0 0 9 * *')).toBe(false);
+    expect(isValidQuartzCronExpression('0 0 9 * *')).toBe(true);
   });
 
   it('rejects unsupported wildcard day-of-week steps and conflicting day fields', () => {
@@ -279,7 +279,7 @@ describe('useCronOccurrences public formatting', () => {
 
     expect(result.success).toBe(true);
     expect(result.isDateRangeShift).toBe(false);
-    expect(result.text).toContain('Runs every day at');
+    expect(result.text).toBe('Runs every hour between 9 AM and 5 PM');
   });
 
   it('flags date-range shifts when the localized date differs from the UTC reference day', () => {

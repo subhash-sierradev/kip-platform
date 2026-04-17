@@ -1447,6 +1447,84 @@ describe('Cron description edge branches', () => {
     expect(result.text).toMatch(/every 15 minutes/i);
   });
 
+  it('renders wildcard-hour schedules as hourly localized minute offsets', () => {
+    const result = cronToTextWithTimezoneUniversal('0 0 * * * ?', 'Asia/Kolkata', '2026-04-13');
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs every hour at 30 minutes past the hour');
+    expect(result.timezoneLabel).toContain('Asia/Kolkata');
+  });
+
+  it('renders wildcard-hour minute lists as hourly localized time marks', () => {
+    const result = cronToTextWithTimezoneUniversal(
+      '0 10,20,30 * * * ?',
+      'Asia/Kolkata',
+      '2026-04-13'
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs every hour at 5:40 AM, 5:50 AM and 6 AM');
+    expect(result.timezoneLabel).toContain('Asia/Kolkata');
+  });
+
+  it('renders bounded hour windows using the full localized window', () => {
+    const hourlyWindow = cronToTextWithTimezoneUniversal(
+      '0 0 9-17 * * ?',
+      'Asia/Kolkata',
+      '2026-04-13'
+    );
+    const minuteWindow = cronToTextWithTimezoneUniversal(
+      '0 0/5 14 * * ?',
+      'Asia/Kolkata',
+      '2026-04-13'
+    );
+    const quarterHourWindow = cronToTextWithTimezoneUniversal(
+      '0 0/15 8-10 * * ?',
+      'Asia/Kolkata',
+      '2026-04-13'
+    );
+    const dayLongQuarterHourWindow = cronToTextWithTimezoneUniversal(
+      '0 0/15 9-17 * * ?',
+      'Asia/Kolkata',
+      '2026-04-13'
+    );
+
+    expect(hourlyWindow.success).toBe(true);
+    expect(hourlyWindow.text).toBe('Runs every hour between 2:30 PM and 10:30 PM');
+
+    expect(minuteWindow.success).toBe(true);
+    expect(minuteWindow.text).toBe('Runs every 5 minutes between 7:30 PM and 8:25 PM');
+
+    expect(quarterHourWindow.success).toBe(true);
+    expect(quarterHourWindow.text).toBe('Runs every 15 minutes between 1:30 PM and 4:15 PM');
+
+    expect(dayLongQuarterHourWindow.success).toBe(true);
+    expect(dayLongQuarterHourWindow.text).toBe(
+      'Runs every 15 minutes between 2:30 PM and 11:15 PM'
+    );
+  });
+
+  it('supports wildcard-year Quartz expressions', () => {
+    const result = cronToTextWithTimezoneUniversal('0 0 0 1 1 ? *', 'Asia/Kolkata', '2026-04-13');
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 5:30 AM on January 1st every year');
+  });
+
+  it('extends the lookahead horizon for rare but valid leap-day schedules', () => {
+    const result = cronToTextWithTimezoneUniversal('0 0 0 29 2 ?', 'Asia/Kolkata', '2026-04-13');
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 5:30 AM on February 29th every leap year');
+  });
+
+  it('renders day-of-month step schedules as recurring intervals rather than fixed monthly dates', () => {
+    const result = cronToTextWithTimezoneUniversal('0 0 1 1/2 * ?', 'Asia/Kolkata', '2026-04-13');
+
+    expect(result.success).toBe(true);
+    expect(result.text).toBe('Runs at 6:30 AM every 2 days starting from the 1st of every month');
+  });
+
   it('rejects invalid Quartz special-field combinations', () => {
     expect(cronToTextWithTimezoneUniversal('0 0 9 L * MON', 'UTC', '2026-03-01').success).toBe(
       false
@@ -1485,7 +1563,7 @@ describe('Cron field description helpers', () => {
 
     expect(singular).toBe('Runs every 1 minute');
     expect(ranged).toBe(
-      'Runs every 5 minutes between 2 PM and 4 PM on Monday, Tuesday, Wednesday, Thursday and Friday'
+      'Runs every 5 minutes between 2 PM and 4:55 PM on Monday, Tuesday, Wednesday, Thursday and Friday'
     );
   });
 
@@ -1496,6 +1574,54 @@ describe('Cron field description helpers', () => {
     expect(buildCronFieldDescription('0 0 0/4 ? * MON', 'UTC', [makeLocalOccurrence()])).toBe(
       'Runs every 4 hours on Mondays'
     );
+  });
+
+  it('describes hourly wildcard schedules using the localized minute offset', () => {
+    const description = buildCronFieldDescription('0 0 * * * ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({
+        utcDate: new Date('2026-04-13T00:00:00Z'),
+        localDate: '2026-04-13',
+        localTime: '5:30 AM',
+      }),
+    ]);
+
+    expect(description).toBe('Runs every hour at 30 minutes past the hour');
+  });
+
+  it('describes hourly minute lists using representative localized times', () => {
+    const description = buildCronFieldDescription('0 10,20,30 * * * ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({
+        utcDate: new Date('2026-04-13T12:10:00Z'),
+        localDate: '2026-04-13',
+        localTime: '5:40 PM',
+      }),
+    ]);
+
+    expect(description).toBe('Runs every hour at 5:40 AM, 5:50 AM and 6 AM');
+  });
+
+  it('describes day-of-month step schedules without collapsing them to a fixed day', () => {
+    const description = buildCronFieldDescription('0 0 1 1/2 * ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({
+        utcDate: new Date('2026-04-13T01:00:00Z'),
+        localDate: '2026-04-13',
+        localTime: '6:30 AM',
+      }),
+    ]);
+
+    expect(description).toBe('Runs at 6:30 AM every 2 days starting from the 1st of every month');
+  });
+
+  it('describes leap-day schedules as leap-year-only schedules', () => {
+    const description = buildCronFieldDescription('0 0 0 29 2 ?', 'Asia/Kolkata', [
+      makeLocalOccurrence({
+        utcDate: new Date('2028-02-29T00:00:00Z'),
+        localDate: '2028-02-29',
+        localTime: '5:30 AM',
+      }),
+    ]);
+
+    expect(description).toBe('Runs at 5:30 AM on February 29th every leap year');
   });
 
   it('describes nth weekdays and last weekdays', () => {

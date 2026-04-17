@@ -67,13 +67,14 @@ public interface ConfluenceIntegrationMapper extends NormalizationMapper {
     @Mapping(target = "itemType", source = "integration.documentItemType")
     @Mapping(target = "itemSubtype", source = "integration.documentItemSubtype")
     @Mapping(target = "dynamicDocumentType", source = "integration.dynamicDocumentType")
-    @Mapping(target = "languageCodes", expression = "java(toLanguageCodes(integration.getLanguages()))")
+    @Mapping(target = "languageCodes",
+            expression = "java(toLanguageCodes(integration != null ? integration.getLanguages() : null))")
     @Mapping(target = "confluenceSpaceKey", source = "integration.confluenceSpaceKey")
     @Mapping(target = "confluenceSpaceKeyFolderKey", source = "integration.confluenceSpaceKeyFolderKey")
     @Mapping(target = "reportNameTemplate", source = "integration.reportNameTemplate")
     @Mapping(target = "includeTableOfContents",
-            expression = "java(Boolean.TRUE.equals(integration.getIncludeTableOfContents()))")
-    @Mapping(target = "businessTimezone", source = "integration.schedule.businessTimeZone")
+            expression = "java(Boolean.TRUE.equals(integration != null ? integration.getIncludeTableOfContents() : null))")
+    @Mapping(target = "businessTimeZone", source = "integration.schedule.businessTimeZone")
     ConfluenceExecutionCommand toExecutionCommand(
             ConfluenceIntegration integration,
             IntegrationJobExecution jobExecution,

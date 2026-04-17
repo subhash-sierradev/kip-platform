@@ -149,4 +149,26 @@ describe('AddConnectionDialog', () => {
     expect(wrapper.emitted('update:open')).toBeFalsy();
     expect(wrapper.find('.test-state').text()).toContain('true|false|Network failure');
   });
+
+  it('closes internal dialog state when the open prop becomes false', async () => {
+    const wrapper = mountDialog();
+    await openDialog();
+
+    await wrapper.setProps({ open: false });
+    await nextTick();
+
+    expect(wrapper.find('.app-modal-stub').exists()).toBe(false);
+  });
+
+  it('emits modal open changes for both opening and closing actions', async () => {
+    const wrapper = mountDialog();
+    await openDialog();
+
+    const modal = wrapper.findComponent(AppModalStub as any);
+    await modal.vm.$emit('update:open', true);
+    await modal.vm.$emit('update:open', false);
+    await nextTick();
+
+    expect(wrapper.emitted('update:open')).toEqual([[true], [false]]);
+  });
 });

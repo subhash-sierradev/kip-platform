@@ -66,6 +66,7 @@ const cloneMode = ref<boolean>(false);
 const cloningWebhookData: Ref<JiraWebhook | undefined> = ref(undefined);
 import { useRouter, useRoute } from 'vue-router';
 import { JiraWebhookService } from '@/api/services/JiraWebhookService';
+import { ROUTES } from '@/router/routes';
 import type { JiraWebhook, JiraFieldMapping } from '@/types/JiraWebhook';
 import { formatMetadataDate } from '@/utils/dateUtils';
 import {
@@ -109,6 +110,7 @@ const pageSizeOptions = [6, 9, 12, 24, 48];
 const jiraSortOptions: DashboardSortOption[] = [
   { value: 'name', label: 'Name' },
   { value: 'createdDate', label: 'Created Date' },
+  { value: 'lastModifiedDate', label: 'Updated Date' },
   { value: 'isEnabled', label: 'Status' },
   { value: 'lastTrigger', label: 'Last Triggered' },
 ];
@@ -132,7 +134,7 @@ function applyStateFromRoute() {
   const q = route.query;
   if (typeof q.search === 'string') search.value = q.search;
   // Validate sortBy against allowed values
-  const validSortOptions = ['name', 'createdDate', 'isEnabled', 'lastTrigger'];
+  const validSortOptions = ['name', 'createdDate', 'lastModifiedDate', 'isEnabled', 'lastTrigger'];
   if (typeof q.sort === 'string' && validSortOptions.includes(q.sort)) {
     sortBy.value = q.sort;
   }
@@ -280,7 +282,7 @@ function buildStateQuery(includeScroll = false) {
 }
 
 const openDetails = (webhookId: string) => {
-  router.push({ path: `/outbound/webhook/jira/${webhookId}`, query: buildStateQuery(true) });
+  router.push({ path: ROUTES.jiraWebhookDetails(webhookId), query: buildStateQuery(true) });
 };
 
 const setViewMode = (mode: DashboardViewMode) => {

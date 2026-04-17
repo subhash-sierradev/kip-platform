@@ -34,6 +34,7 @@ export interface JiraWebhook {
   isDeleted: boolean;
   createdBy: string;
   createdDate: string;
+  lastModifiedDate?: string;
   lastEventHistory: JiraWebhookEventHistory;
   updatedDate?: string;
   triggerCount?: number;

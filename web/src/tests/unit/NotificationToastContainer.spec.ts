@@ -127,4 +127,37 @@ describe('NotificationToastContainer', () => {
     openSpy.mockRestore();
     wrapper.unmount();
   });
+
+  it('does not render a duplicate message body when the message matches the title', () => {
+    storeState.notificationToasts = [
+      {
+        id: 't5',
+        severity: 'INFO',
+        title: 'Same text',
+        message: 'Same text',
+      },
+    ] as any;
+
+    const wrapper = mount(NotificationToastContainer, { attachTo: document.body });
+
+    expect(document.body.querySelector('.ntf-message')).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('does not render an action link when the toast has no primary action metadata', () => {
+    storeState.notificationToasts = [
+      {
+        id: 't6',
+        severity: 'WARNING',
+        title: 'No action',
+        message: 'Just informational',
+        metadata: {},
+      },
+    ] as any;
+
+    const wrapper = mount(NotificationToastContainer, { attachTo: document.body });
+
+    expect(document.body.querySelector('.ntf-action-link')).toBeNull();
+    wrapper.unmount();
+  });
 });
