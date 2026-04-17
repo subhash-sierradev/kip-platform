@@ -46,6 +46,17 @@ public class KwToConfluenceOrchestrator {
                     offset,
                     limit);
 
+            // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
+            // ExecutionWindow.windowEnd is exclusive (half-open interval), so filter
+            // out any record whose updatedTimestamp falls on the boundary second.
+            Instant windowEnd = cmd.getWindowEnd();
+            if (windowEnd != null) {
+                long exclusiveEndSeconds = windowEnd.getEpochSecond();
+                monitoringData = monitoringData.stream()
+                        .filter(doc -> doc.getUpdatedTimestamp() < exclusiveEndSeconds)
+                        .toList();
+            }
+
             log.info("Confluence integration {} — monitoring records fetched={} startTs={} endTs={} start={} limit={}",
                     cmd.getIntegrationId(), monitoringData.size(), startTimestamp, endTimestamp, offset, limit);
 

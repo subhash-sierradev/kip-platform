@@ -182,6 +182,73 @@ class KwToConfluenceOrchestratorTest {
         assertThat(result.errorMessage()).isNull();
     }
 
+    @Test
+    void processExecution_documentAtExactWindowEnd_isExcludedByFilter() {
+        // windowEnd epoch = 1000s; document updatedTimestamp == 1000 must be excluded
+        Instant windowEnd = Instant.ofEpochSecond(1000);
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(windowEnd)
+                .businessTimezone("UTC")
+                .build();
+
+        KwMonitoringDocument atBoundary = KwMonitoringDocument.builder()
+                .id("doc-boundary").updatedTimestamp(1000L).build();
+        KwMonitoringDocument beforeBoundary = KwMonitoringDocument.builder()
+                .id("doc-before").updatedTimestamp(999L).build();
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(List.of(atBoundary, beforeBoundary));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        // Both get filtered by filterNamedClients stub → returns empty → zero records published.
+        // The key assertion: filterNamedClients was called only with the non-boundary document.
+        verify(confluencePageRenderer).filterNamedClients(List.of(beforeBoundary));
+        assertThat(result.totalRecords()).isZero();
+    }
+
+    @Test
+    void processExecution_documentBeforeWindowEnd_isIncludedByFilter() {
+        Instant windowEnd = Instant.ofEpochSecond(1000);
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(windowEnd)
+                .businessTimezone("UTC")
+                .build();
+
+        KwMonitoringDocument doc = KwMonitoringDocument.builder()
+                .id("doc-1").title("Report").updatedTimestamp(999L)
+                .attributes(Map.of()).build();
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(List.of(doc));
+        when(confluencePageRenderer.filterNamedClients(List.of(doc))).thenReturn(List.of(doc));
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>ok</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.totalRecords()).isEqualTo(1);
+        assertThat(result.errorMessage()).isNull();
+    }
+
     private ConfluenceExecutionCommand buildCommand(
             String dynamicType, String reportTemplate, String timezone) {
         return ConfluenceExecutionCommand.builder()

@@ -168,6 +168,59 @@ class KwToArcGISOrchestratorTest {
         );
     }
 
+    @Test
+    void processExecution_documentAtExactWindowEnd_isExcludedByFilter() {
+        // windowEnd epoch = 1000s; document at exactly 1000 must be excluded
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(Instant.ofEpochSecond(1000))
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundary = new KwDocumentDto("doc-boundary", "D", "TYPE", 1L, 1000L);
+        KwDocumentDto beforeBoundary = documentWithLocations("doc-before", 1);
+        beforeBoundary.setUpdatedTimestamp(999L);
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundary, beforeBoundary));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(
+                eq(List.of(beforeBoundary)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        // boundary doc was excluded; only beforeBoundary was passed to the mapper
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(beforeBoundary)), any());
+        verify(locationMapper, never()).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundary, beforeBoundary)), any());
+    }
+
+    @Test
+    void processExecution_allDocumentsAtOrAfterWindowEnd_returnsEmptyResult() {
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(Instant.ofEpochSecond(1000))
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundary = new KwDocumentDto("doc-1", "D", "TYPE", 1L, 1000L);
+        KwDocumentDto afterBoundary = new KwDocumentDto("doc-2", "D", "TYPE", 1L, 1001L);
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundary, afterBoundary));
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.totalRecords()).isZero();
+        verify(locationMapper, never()).transformToArcGISFeaturesWithMetadata(any(), any());
+    }
+
     private ArcGISExecutionCommand command(String secretName) {
         return ArcGISExecutionCommand.builder()
                 .integrationId(UUID.randomUUID())

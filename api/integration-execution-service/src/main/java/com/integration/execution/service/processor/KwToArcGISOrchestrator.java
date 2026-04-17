@@ -40,6 +40,16 @@ public class KwToArcGISOrchestrator {
         // Step 1: Fetch documents from Kaseware
         List<KwDocumentDto> documents = kwGraphqlClient.queryDocumentsWithLocations(cmd);
 
+        // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
+        // ExecutionWindow.windowEnd is exclusive (half-open interval), so filter
+        // out any record whose updatedTimestamp falls on the boundary second.
+        if (cmd.getWindowEnd() != null) {
+            long exclusiveEndSeconds = cmd.getWindowEnd().getEpochSecond();
+            documents = documents.stream()
+                    .filter(doc -> doc.getUpdatedTimestamp() < exclusiveEndSeconds)
+                    .toList();
+        }
+
         if (documents.isEmpty()) {
             log.info("No document locations found for integration: {} in the time window {} - {}",
                     cmd.getIntegrationId(), cmd.getWindowStart(), cmd.getWindowEnd());
