@@ -22,5 +22,6 @@ public class JiraWebhookSummaryResponse {
     private Boolean isDeleted;
     private String createdBy;
     private Instant createdDate;
+    private Instant lastModifiedDate;
     private JiraWebhookEventSummaryResponse lastEventHistory;
 }

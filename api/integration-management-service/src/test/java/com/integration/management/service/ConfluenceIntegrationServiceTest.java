@@ -1174,4 +1174,148 @@ class ConfluenceIntegrationServiceTest {
                 .isInstanceOf(IntegrationPersistenceException.class)
                 .hasCauseInstanceOf(InvalidLanguageCodeException.class);
     }
+
+    @Test
+    @DisplayName("getAllByTenant: disabled integration does not set nextRunAtUtc")
+    void getAllByTenant_disabledIntegration_noNextRunAtUtc() {
+        // Covers lambda$getAllByTenant$0: Boolean.TRUE.equals(isEnabled) = false → skip setNextRunAtUtc
+        com.integration.management.repository.projection.ConfluenceIntegrationSummaryProjection projection =
+                org.mockito.Mockito.mock(
+                        com.integration.management.repository.projection.ConfluenceIntegrationSummaryProjection.class);
+        when(confluenceIntegrationRepository.findAllSummariesByTenantId("t1"))
+                .thenReturn(List.of(projection));
+
+        ConfluenceIntegrationSummaryResponse response = ConfluenceIntegrationSummaryResponse.builder()
+                .id(UUID.randomUUID()).isEnabled(false)  // disabled → no nextRunAtUtc
+                .build();
+        when(confluenceIntegrationMapper.projectionToSummaryResponse(projection)).thenReturn(response);
+
+        List<ConfluenceIntegrationSummaryResponse> out = service.getAllByTenant("t1");
+
+        assertThat(out).hasSize(1);
+        assertThat(out.getFirst().getNextRunAtUtc()).isNull();
+        verify(cronScheduleService, never()).getNextRun(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("toggleActiveStatus: null integration name uses empty string in metadata")
+    void toggleActiveStatus_nullName_usesEmptyString() {
+        // Covers: integration.getName() != null ? ... : "" when name is null
+        UUID id = UUID.randomUUID();
+        ConfluenceIntegration integration = ConfluenceIntegration.builder()
+                .id(id).tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .name(null)  // null name
+                .connectionId(UUID.randomUUID()).isEnabled(true).build();
+        when(confluenceIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
+                .thenReturn(Optional.of(integration));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+
+        boolean result = service.toggleActiveStatus(id, "t1", "u1");
+
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("resolveLanguages: empty resolved list throws InvalidLanguageCodeException")
+    void resolveLanguages_emptyResolved_throwsException() {
+        // Covers else-if (resolvedLanguages.isEmpty()) branch
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("xx-XX"));  // code that won't match anything
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(new ConfluenceIntegration());
+        // All languages empty → filtered result is empty (size != input size → throws first branch)
+        // To hit the else-if, we need languageCodes.size() == resolvedLanguages.size() but both empty
+        // That means input languageCodes is empty too:
+        request.setLanguageCodes(List.of());  // empty list
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.create(request, "tenant1", "user1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasCauseInstanceOf(InvalidLanguageCodeException.class);
+    }
+
+    @Test
+    @DisplayName("getConfluenceSpaceLabel: null spaces returns null")
+    void getConfluenceSpaceLabel_nullSpaces_returnsNull() {
+        // Covers: if (spaces == null) → return null
+        UUID connectionId = UUID.randomUUID();
+        when(confluenceLookupService.getSpacesByConnectionId(connectionId, "t1")).thenReturn(null);
+
+        String result = service.getConfluenceSpaceLabel(connectionId, "t1", "SPACE-1");
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("getConfluenceSpaceFolderLabel: null pages returns null")
+    void getConfluenceSpaceFolderLabel_nullPages_returnsNull() {
+        // Covers: if (pages == null) → return null
+        UUID connectionId = UUID.randomUUID();
+        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, "t1", "SPACE-1"))
+                .thenReturn(null);
+
+        String result = service.getConfluenceSpaceFolderLabel(connectionId, "t1", "SPACE-1", "folder-id");
+
+        assertThat(result).isNull();
+    }
+
+    @Test
+    @DisplayName("getConfluenceSpaceFolderLabel: page with null parentTitle returns just title")
+    void getConfluenceSpaceFolderLabel_nullParentTitle_returnsTitle() {
+        // Covers lambda$getConfluenceSpaceFolderLabel$1: parentTitle == null → return page.getTitle()
+        UUID connectionId = UUID.randomUUID();
+        com.integration.execution.contract.rest.response.confluence.ConfluencePageDto page =
+                new ConfluencePageDto();
+        page.setId("folder-id");
+        page.setTitle("My Page");
+        page.setParentTitle(null);  // null parentTitle → return page.getTitle() only
+        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, "t1", "SPACE-1"))
+                .thenReturn(List.of(page));
+
+        String result = service.getConfluenceSpaceFolderLabel(connectionId, "t1", "SPACE-1", "folder-id");
+
+        assertThat(result).isEqualTo("My Page");
+    }
+
+    @Test
+    @DisplayName("getConfluenceSpaceFolderLabel: page with blank parentTitle returns just title")
+    void getConfluenceSpaceFolderLabel_blankParentTitle_returnsTitle() {
+        // Covers lambda$getConfluenceSpaceFolderLabel$1: parentTitle blank → return page.getTitle() only
+        UUID connectionId = UUID.randomUUID();
+        com.integration.execution.contract.rest.response.confluence.ConfluencePageDto page =
+                new ConfluencePageDto();
+        page.setId("folder-id");
+        page.setTitle("My Page");
+        page.setParentTitle("   ");  // blank parentTitle → return page.getTitle() only
+        when(confluenceLookupService.getPagesByConnectionIdAndSpaceKey(connectionId, "t1", "SPACE-1"))
+                .thenReturn(List.of(page));
+
+        String result = service.getConfluenceSpaceFolderLabel(connectionId, "t1", "SPACE-1", "folder-id");
+
+        assertThat(result).isEqualTo("My Page");
+    }
+
+    @Test
+    @DisplayName("isUniqueConstraintViolation: non-matching message throws IntegrationPersistenceException")
+    void isUniqueConstraintViolation_nonMatchingMessage_throwsPersistence() {
+        // Covers isUniqueConstraintViolation: message present but no keyword → returns false
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+
+        Language en = new Language();
+        en.setCode("en-US");
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        ConfluenceIntegration entity = new ConfluenceIntegration();
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(entity);
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(en));
+        when(confluenceIntegrationRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("foreign key violation"));
+
+        assertThatThrownBy(() -> service.create(request, "t1", "u1"))
+                .isInstanceOf(IntegrationPersistenceException.class)
+                .hasMessageContaining("data integrity");
+    }
 }

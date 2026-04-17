@@ -2,7 +2,7 @@ package com.integration.management.mapper;
 
 import com.integration.management.entity.IntegrationSchedule;
 import com.integration.management.model.dto.request.IntegrationScheduleRequest;
-import com.integration.management.model.dto.response.IntegrationScheduleResponse;
+import com.integration.execution.contract.rest.response.IntegrationScheduleResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.MappingTarget;

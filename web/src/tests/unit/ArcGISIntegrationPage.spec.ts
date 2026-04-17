@@ -309,6 +309,35 @@ describe('ArcGISIntegrationPage', () => {
     expect(wrapper.vm.filteredIntegrations[0].id).toBe('arc-2');
   });
 
+  it('filters integrations by integration name when search text matches the title', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-road',
+        name: 'Road Sync',
+        createdBy: 'alice',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: true,
+      },
+      {
+        id: 'arc-river',
+        name: 'River Sync',
+        createdBy: 'bob',
+        createdDate: '2024-01-02T00:00:00Z',
+        isEnabled: false,
+      },
+    ]);
+
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    wrapper.vm.search = 'road';
+    await nextTick();
+
+    expect(wrapper.vm.filteredIntegrations).toHaveLength(1);
+    expect(wrapper.vm.filteredIntegrations[0].id).toBe('arc-road');
+  });
+
   it('omits the trigger menu item for disabled integrations', async () => {
     const wrapper = mountPage() as any;
     await nextTick();
@@ -403,11 +432,39 @@ describe('ArcGISIntegrationPage', () => {
     expect(hoisted.triggerJobExecutionMock).toHaveBeenCalledWith('arc-5', 'Arc Five');
   });
 
+  it('passes enable and disable handlers to confirmWithHandlers', async () => {
+    const wrapper = mountPage() as any;
+    await nextTick();
+    wrapper.vm.pendingIntegration = {
+      id: 'arc-6',
+      name: 'Arc Six',
+      createdBy: 'maya',
+      createdDate: '2024-01-01T00:00:00Z',
+      isEnabled: false,
+    };
+
+    await wrapper.vm.handleConfirm();
+
+    const handlers = hoisted.confirmWithHandlersMock.mock.calls[0][0] as {
+      enable: () => Promise<void>;
+      disable: () => Promise<void>;
+    };
+
+    hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce(true);
+    await handlers.enable();
+
+    hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce(false);
+    await handlers.disable();
+
+    expect(hoisted.toggleIntegrationStatusMock).toHaveBeenNthCalledWith(1, 'arc-6', false);
+    expect(hoisted.toggleIntegrationStatusMock).toHaveBeenNthCalledWith(2, 'arc-6', false);
+  });
+
   it('updates a local integration when toggle returns a boolean and refetches when it does not', async () => {
     hoisted.getAllIntegrationsMock.mockResolvedValue([
       {
-        id: 'arc-6',
-        name: 'Arc Six',
+        id: 'arc-7',
+        name: 'Arc Seven',
         createdBy: 'maya',
         createdDate: '2024-01-01T00:00:00Z',
         isEnabled: false,
@@ -418,12 +475,34 @@ describe('ArcGISIntegrationPage', () => {
     await new Promise(r => setTimeout(r, 0));
 
     hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce(true);
-    await wrapper.vm.enableDisableIntegration('arc-6', false);
+    await wrapper.vm.enableDisableIntegration('arc-7', false);
     expect(wrapper.vm.integrations[0].isEnabled).toBe(true);
 
     hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce('non-boolean');
-    await wrapper.vm.enableDisableIntegration('arc-6', true);
+    await wrapper.vm.enableDisableIntegration('arc-7', true);
     expect(hoisted.getAllIntegrationsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves local integrations unchanged when the toggled integration is not found', async () => {
+    hoisted.getAllIntegrationsMock.mockResolvedValue([
+      {
+        id: 'arc-known',
+        name: 'Arc Known',
+        createdBy: 'maya',
+        createdDate: '2024-01-01T00:00:00Z',
+        isEnabled: false,
+      },
+    ]);
+
+    const wrapper = mountPage() as any;
+    await nextTick();
+    await new Promise(r => setTimeout(r, 0));
+
+    hoisted.toggleIntegrationStatusMock.mockResolvedValueOnce(true);
+    await wrapper.vm.enableDisableIntegration('arc-missing', false);
+
+    expect(wrapper.vm.integrations[0].isEnabled).toBe(false);
+    expect(hoisted.getAllIntegrationsMock).toHaveBeenCalledTimes(1);
   });
 
   it('removes an integration only when delete succeeds', async () => {

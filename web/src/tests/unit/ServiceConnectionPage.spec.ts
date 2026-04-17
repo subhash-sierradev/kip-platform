@@ -5,6 +5,7 @@ import { mount } from '@vue/test-utils';
 
 const {
   mockGetDependents,
+  mockGridRefresh,
   mockToastError,
   mockToastSuccess,
   mockSetPage,
@@ -16,6 +17,7 @@ const {
   mockFetchConnections,
 } = vi.hoisted(() => ({
   mockGetDependents: vi.fn(),
+  mockGridRefresh: vi.fn(),
   mockToastError: vi.fn(),
   mockToastSuccess: vi.fn(),
   mockSetPage: vi.fn(),
@@ -75,7 +77,13 @@ const GenericDataGridStub = defineComponent({
     data: { type: Array, default: () => [] },
   },
   emits: ['option-changed'],
-  setup(props, { slots, emit }) {
+  setup(props, { slots, emit, expose }) {
+    expose({
+      instance: {
+        refresh: mockGridRefresh,
+      },
+    });
+
     return () =>
       h('div', { class: 'gdg-stub' }, [
         h('button', {
@@ -171,6 +179,7 @@ function mountPage(serviceType: ServiceType = ServiceType.JIRA) {
 describe('ServiceConnectionPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGridRefresh.mockReset();
     state.loading.value = false;
     state.error.value = '';
     state.page.value = 0;
@@ -268,6 +277,51 @@ describe('ServiceConnectionPage', () => {
     expect(mockToastError).toHaveBeenCalledWith('Failed to check connection dependents');
   });
 
+  it('updates and clears action tooltip state through helper methods', () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.onActionEnter('Update Secret', { clientX: 100, clientY: 50 } as MouseEvent, true);
+    expect(setupState.actionTipVisible).toBe(true);
+    expect(setupState.actionTipText).toBe('Update Secret');
+    expect(setupState.actionTipX).toBe(8);
+    expect(setupState.actionTipY).toBe(62);
+
+    setupState.onActionMove({ clientX: 400, clientY: 70 } as MouseEvent);
+    expect(setupState.actionTipX).toBe(168);
+    expect(setupState.actionTipY).toBe(82);
+
+    setupState.actionTipLeft = false;
+    setupState.onActionMove({ clientX: 20, clientY: 30 } as MouseEvent);
+    expect(setupState.actionTipX).toBe(32);
+    expect(setupState.actionTipY).toBe(42);
+
+    setupState.onActionLeave();
+    expect(setupState.actionTipVisible).toBe(false);
+  });
+
+  it('uses the default tooltip placement branch when placeLeft is omitted', () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.onActionEnter('Test Connection', { clientX: 40, clientY: 25 } as MouseEvent);
+
+    expect(setupState.actionTipVisible).toBe(true);
+    expect(setupState.actionTipText).toBe('Test Connection');
+    expect(setupState.actionTipX).toBe(52);
+    expect(setupState.actionTipY).toBe(37);
+  });
+
+  it('treats null and missing integrations as no dependents', () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    expect(setupState.hasAnyDependents(null)).toBe(false);
+    expect(
+      setupState.hasAnyDependents({ serviceType: ServiceType.JIRA } as Record<string, unknown>)
+    ).toBe(false);
+  });
+
   it('opens add dialog and closes it after create completes', async () => {
     const wrapper = mountPage();
 
@@ -281,6 +335,85 @@ describe('ServiceConnectionPage', () => {
     await nextTick();
 
     expect((wrapper.vm as any).createDialogOpen).toBe(false);
+  });
+
+  it('resets dependents state after the dependents dialog is closed', async () => {
+    mockGetDependents.mockResolvedValueOnce({
+      serviceType: ServiceType.ARCGIS,
+      integrations: [{ id: 'a1', name: 'A', description: 'd', isEnabled: true }],
+    });
+
+    const wrapper = mountPage();
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+    await deleteBtn?.trigger('click');
+    await nextTick();
+
+    expect((wrapper.vm as any).dependentsResponse).not.toBeNull();
+
+    const okButton = wrapper.findAll('button').find(b => b.text() === 'OK');
+    await okButton?.trigger('click');
+    await nextTick();
+
+    expect((wrapper.vm as any).dependentsDialogOpen).toBe(false);
+    expect((wrapper.vm as any).dependentsResponse).toBeNull();
+  });
+
+  it('closes and resets the secret dialog without rotating when cancelled', async () => {
+    const wrapper = mountPage();
+    const keyBtn = wrapper
+      .findAll('button')
+      .find(b => b.attributes('aria-label') === 'Edit Secret');
+    await keyBtn?.trigger('click');
+    await wrapper.find('#secret-input').setValue('discard-me');
+
+    await wrapper.find('.secret-actions button').trigger('click');
+
+    expect(mockRotateSecret).not.toHaveBeenCalled();
+    expect((wrapper.vm as any).secretDialogOpen).toBe(false);
+    expect((wrapper.vm as any).secretConnection).toBeNull();
+    expect((wrapper.vm as any).secretValue).toBe('');
+  });
+
+  it('returns early from secret update when no connection id or secret value exists', async () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    await setupState.confirmSecretUpdate();
+    expect(mockRotateSecret).not.toHaveBeenCalled();
+
+    setupState.secretConnection = { id: 'c1' };
+    setupState.secretValue = '';
+    await setupState.confirmSecretUpdate();
+    expect(mockRotateSecret).not.toHaveBeenCalled();
+  });
+
+  it('keeps the secret dialog open when secret rotation returns false', async () => {
+    mockRotateSecret.mockResolvedValueOnce(false);
+
+    const wrapper = mountPage();
+    const keyBtn = wrapper
+      .findAll('button')
+      .find(b => b.attributes('aria-label') === 'Edit Secret');
+    await keyBtn?.trigger('click');
+    await wrapper.find('#secret-input').setValue('still-open');
+
+    await wrapper.find('.secret-actions button:last-child').trigger('click');
+    await nextTick();
+
+    expect(mockRotateSecret).toHaveBeenCalledWith('c1', 'still-open');
+    expect((wrapper.vm as any).secretDialogOpen).toBe(true);
+    expect((wrapper.vm as any).secretConnection?.id).toBe('c1');
+  });
+
+  it('returns early from delete click when the selected connection has no id', async () => {
+    state.allConnections.value = [{}];
+
+    const wrapper = mountPage();
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+    await deleteBtn?.trigger('click');
+
+    expect(mockGetDependents).not.toHaveBeenCalled();
+    expect((wrapper.vm as any).dialogOpen).toBe(false);
   });
 
   it('shows unable to delete message when delete conflict has no dependent details', async () => {
@@ -306,6 +439,101 @@ describe('ServiceConnectionPage', () => {
     await wrapper.find('.confirm-btn').trigger('click');
 
     expect(mockToastError).toHaveBeenCalledWith('Unable to delete connection');
+  });
+
+  it('opens the dependents dialog when delete returns conflict details with integrations', async () => {
+    mockGetDependents.mockResolvedValueOnce({ serviceType: ServiceType.JIRA, integrations: [] });
+    mockDeleteConnection.mockRejectedValueOnce(
+      new ApiError(
+        { method: 'DELETE', url: '/integrations/connections/c1' } as any,
+        {
+          url: '/integrations/connections/c1',
+          ok: false,
+          status: 409,
+          statusText: 'Conflict',
+          body: {
+            details: {
+              serviceType: ServiceType.JIRA,
+              integrations: [{ id: 'dep-1', name: 'Webhook A', description: '', isEnabled: true }],
+            },
+          },
+        } as any,
+        'Conflict'
+      )
+    );
+
+    const wrapper = mountPage();
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+
+    await deleteBtn?.trigger('click');
+    await wrapper.find('.confirm-btn').trigger('click');
+    await nextTick();
+
+    expect(wrapper.find('.dependents-dialog').exists()).toBe(true);
+    expect((wrapper.vm as any).dependentsNameCaption).toBe('Jira Webhook Name');
+    expect(mockToastError).not.toHaveBeenCalledWith('Unable to delete connection');
+  });
+
+  it('shows a generic delete failure toast for non-ApiError failures', async () => {
+    mockGetDependents.mockResolvedValueOnce({ serviceType: ServiceType.JIRA, integrations: [] });
+    mockDeleteConnection.mockRejectedValueOnce(new Error('boom'));
+
+    const wrapper = mountPage();
+    const deleteBtn = wrapper.findAll('button').find(b => b.attributes('aria-label') === 'Delete');
+
+    await deleteBtn?.trigger('click');
+    await wrapper.find('.confirm-btn').trigger('click');
+
+    expect(mockToastError).toHaveBeenCalledWith('Failed to delete connection');
+  });
+
+  it('closes the confirmation dialog when no pending action is selected during confirm', async () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.pendingConnection = { id: 'c1' };
+    setupState.pendingAction = null;
+    setupState.dialogOpen = true;
+
+    await setupState.handleConfirm();
+
+    expect(setupState.dialogOpen).toBe(false);
+    expect(setupState.pendingConnection).toBeNull();
+  });
+
+  it('returns immediately from confirm when no pending connection exists', async () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.pendingConnection = null;
+    setupState.pendingAction = 'test';
+    setupState.dialogOpen = true;
+
+    await setupState.handleConfirm();
+
+    expect(mockTestConnection).not.toHaveBeenCalled();
+    expect(setupState.dialogOpen).toBe(true);
+  });
+
+  it('refreshes the backing grid when create completes and when called directly', () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.handleCreateConnectionCreated();
+    setupState.refreshGrid();
+
+    expect(mockGridRefresh).toHaveBeenCalledTimes(2);
+    expect(mockGridRefresh).toHaveBeenCalledWith(true);
+  });
+
+  it('ignores unknown grid option changes', () => {
+    const wrapper = mountPage();
+    const setupState = (wrapper.vm as any).$?.setupState;
+
+    setupState.onGridOptionsChanged({ fullName: 'paging.unknown', value: 99 });
+
+    expect(mockSetPage).not.toHaveBeenCalledWith(99);
+    expect(mockSetRowsPerPage).not.toHaveBeenCalledWith(99);
   });
 
   it('exposes confluence dependent label and default label branches', async () => {

@@ -1,0 +1,480 @@
+﻿name: Release Versioning
+
+# main / main-2 -> label-driven semantic bump (bump:patch / bump:minor / bump:major)
+#              - bump type set via PR label; defaults to patch if no label present
+#              - per-module tags created from the NEW bumped version in source files
+#              - release branch name is free-form (e.g. release/022026)
+# release/* -> per-module RC versioning using current version in source files as base
+#              - branch name is free-form; no semver format required
+#              - each module (web, ims, ies, contract) has its own independent RC counter via git tags
+#              - annotated git tags created per changed module on every merge
+#              - tag format: web-X.Y.Z-rc.N  ims-X.Y.Z-rc.N  ies-X.Y.Z-rc.N  integration-execution-contract-X.Y.Z-rc.N
+#              - base version X.Y.Z read from source files (package.json / gradle.properties)
+
+on:
+  pull_request:
+    branches:
+      - main
+      - main-2 # Added main-2 to trigger frontend CI for PRs targeting main-2 branch
+      - 'release/**'
+    types: [closed]
+
+# Prevent parallel version bumps on the same branch.
+# Never cancel in-progress to avoid half-written gradle.properties commits.
+concurrency:
+  group: versioning-${{ github.event.pull_request.base.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  # ===========================================================================
+  # JOB 1: Semantic version bump  PRs merging into main
+  # ===========================================================================
+  release-version-bump:
+    if: >-
+      github.event.pull_request.merged == true &&
+      (github.event.pull_request.base.ref == 'main' ||
+       github.event.pull_request.base.ref == 'main-2')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token || secrets.GH_VERSION_BOT_TOKEN  }}
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Detect changed modules
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+            contract:
+              - 'api/integration-execution-contract/**'
+            management:
+              - 'api/integration-management-service/**'
+            execution:
+              - 'api/integration-execution-service/**'
+
+      - name: Resolve bump type from PR labels or title
+        id: bump-type
+        env:
+          PR_LABELS: ${{ toJson(github.event.pull_request.labels.*.name) }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          BUMP="patch"
+          SOURCE="default"
+
+          # Priority 1: explicit label (bump:major / bump:minor / bump:patch)
+          if echo "$PR_LABELS" | grep -q '"bump:major"'; then
+            BUMP="major"; SOURCE="label"
+          elif echo "$PR_LABELS" | grep -q '"bump:minor"'; then
+            BUMP="minor"; SOURCE="label"
+          elif echo "$PR_LABELS" | grep -q '"bump:patch"'; then
+            BUMP="patch"; SOURCE="label"
+
+          # Priority 2: PR title conventional commit prefix
+          # breaking: / BREAKING: / break:  -> major
+          # feat: / feature:                -> minor
+          # fix: / bugfix: / hotfix:        -> patch (already default)
+          elif echo "$PR_TITLE" | grep -qiE '^(breaking|break)(\(.+\))?!?:'; then
+            BUMP="major"; SOURCE="title"
+          elif echo "$PR_TITLE" | grep -qiE '^(feat|feature)(\(.+\))?!?:'; then
+            BUMP="minor"; SOURCE="title"
+          elif echo "$PR_TITLE" | grep -qiE '^(fix|bugfix|hotfix)(\(.+\))?!?:'; then
+            BUMP="patch"; SOURCE="title"
+          fi
+
+          echo "type=$BUMP" >> "$GITHUB_OUTPUT"
+          echo "Resolved bump type: $BUMP (source: $SOURCE)"
+          echo "  PR title:  $PR_TITLE"
+          echo "  PR labels: $PR_LABELS"
+
+      - name: Write semver increment script
+        run: |
+          cat > /tmp/semver_bump.sh << 'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          VERSION="$1"
+          BUMP="$2"
+          # Strip any pre-release suffix (e.g. -rc.1) before incrementing
+          VERSION=$(echo "$VERSION" | cut -d- -f1)
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          PATCH=$(echo "$VERSION" | cut -d. -f3)
+          case "$BUMP" in
+            major) echo "$((MAJOR + 1)).0.0" ;;
+            minor) echo "${MAJOR}.$((MINOR + 1)).0" ;;
+            patch) echo "${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+            *)     echo "Unknown bump type: $BUMP" >&2; exit 1 ;;
+          esac
+          EOF
+          chmod +x /tmp/semver_bump.sh
+
+      # -----------------------------------------------------------------------
+      # Web — bump package.json version
+      # -----------------------------------------------------------------------
+      - name: Bump Web version
+        if: steps.filter.outputs.web == 'true'
+        id: web-bump
+        run: |
+          CURRENT=$(node -p "require('./web/package.json').version")
+          NEW=$(/tmp/semver_bump.sh "$CURRENT" "${{ steps.bump-type.outputs.type }}")
+          echo "Web: $CURRENT -> $NEW"
+          NEW_VER="$NEW" node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('web/package.json', 'utf8'));
+            pkg.version = process.env.NEW_VER;
+            fs.writeFileSync('web/package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Contract — bump version in api/integration-execution-contract/build.gradle.kts
+      # -----------------------------------------------------------------------
+      - name: Bump contract version
+        if: steps.filter.outputs.contract == 'true'
+        id: contract-bump
+        run: |
+          CURRENT=$(grep '^version = ' api/integration-execution-contract/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+          NEW=$(/tmp/semver_bump.sh "$CURRENT" "${{ steps.bump-type.outputs.type }}")
+          echo "Contract: $CURRENT -> $NEW"
+          sed -i "s/^version = \".*\"/version = \"${NEW}\"/" api/integration-execution-contract/build.gradle.kts
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # IMS — bump version in api/integration-management-service/build.gradle.kts
+      # -----------------------------------------------------------------------
+      - name: Bump IMS version
+        if: steps.filter.outputs.management == 'true'
+        id: ims-bump
+        run: |
+          CURRENT=$(grep '^version = ' api/integration-management-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+          NEW=$(/tmp/semver_bump.sh "$CURRENT" "${{ steps.bump-type.outputs.type }}")
+          echo "IMS: $CURRENT -> $NEW"
+          sed -i "s/^version = \".*\"/version = \"${NEW}\"/" api/integration-management-service/build.gradle.kts
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # IES — bump version in api/integration-execution-service/build.gradle.kts
+      # -----------------------------------------------------------------------
+      - name: Bump IES version
+        if: steps.filter.outputs.execution == 'true'
+        id: ies-bump
+        run: |
+          CURRENT=$(grep '^version = ' api/integration-execution-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+          NEW=$(/tmp/semver_bump.sh "$CURRENT" "${{ steps.bump-type.outputs.type }}")
+          echo "IES: $CURRENT -> $NEW"
+          sed -i "s/^version = \".*\"/version = \"${NEW}\"/" api/integration-execution-service/build.gradle.kts
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      # Commit all changed files, create per-module tags, push
+      # -----------------------------------------------------------------------
+      - name: Commit version bumps and create git tags
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          CHANGED=$(git diff --name-only || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          MSG_PARTS=()
+          TAGS=()
+
+          if [ "${{ steps.filter.outputs.web }}" == "true" ]; then
+            V="${{ steps.web-bump.outputs.new_version }}"
+            MSG_PARTS+=("web@${V}")
+            TAGS+=("web-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.contract }}" == "true" ]; then
+            V="${{ steps.contract-bump.outputs.new_version }}"
+            MSG_PARTS+=("integration-execution-contract@${V}")
+            TAGS+=("integration-execution-contract-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.management }}" == "true" ]; then
+            V="${{ steps.ims-bump.outputs.new_version }}"
+            MSG_PARTS+=("ims@${V}")
+            TAGS+=("ims-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.execution }}" == "true" ]; then
+            V="${{ steps.ies-bump.outputs.new_version }}"
+            MSG_PARTS+=("ies@${V}")
+            TAGS+=("ies-${V}")
+          fi
+
+          COMMIT_MSG="chore(version): bump $(IFS=', '; echo "${MSG_PARTS[*]}") [skip ci]"
+          git add web/package.json \
+                  api/integration-management-service/build.gradle.kts \
+                  api/integration-execution-service/build.gradle.kts \
+                  api/integration-execution-contract/build.gradle.kts
+          git diff --staged --quiet && { echo "Nothing staged to commit."; exit 0; }
+          git commit -m "$COMMIT_MSG"
+
+          for TAG in "${TAGS[@]}"; do
+            git tag -a "$TAG" -m "Release: $TAG"
+            echo "Created tag: $TAG"
+          done
+
+          # Create a platform tag from the bumped version.
+          # Priority: web version if web changed, otherwise IMS, otherwise IES.
+          PLATFORM_VER=""
+          if [ -n "${{ steps.web-bump.outputs.new_version }}" ]; then
+            PLATFORM_VER="${{ steps.web-bump.outputs.new_version }}"
+          elif [ -n "${{ steps.ims-bump.outputs.new_version }}" ]; then
+            PLATFORM_VER="${{ steps.ims-bump.outputs.new_version }}"
+          elif [ -n "${{ steps.ies-bump.outputs.new_version }}" ]; then
+            PLATFORM_VER="${{ steps.ies-bump.outputs.new_version }}"
+          fi
+          if [ -n "$PLATFORM_VER" ]; then
+            if ! git rev-parse --verify "v${PLATFORM_VER}" > /dev/null 2>&1; then
+              git tag -a "v${PLATFORM_VER}" -m "Platform release v${PLATFORM_VER}"
+              echo "Created platform tag: v${PLATFORM_VER}"
+            else
+              echo "Platform tag v${PLATFORM_VER} already exists, skipping."
+            fi
+          fi
+
+          git push origin "HEAD:${{ github.event.pull_request.base.ref }}"
+          git push origin --tags
+          echo "Pushed: $COMMIT_MSG"
+
+  # ===========================================================================
+  # JOB 2: Per-module RC bump  PRs merging into release/**
+  #
+  # Each module has its own independent RC counter.
+  # Base version is read from source files (package.json / gradle.properties).
+  # Release branch name is free-form (e.g. release/022026).
+  # Tag format:  <module-name>-<base-version>-rc.<N>
+  # Example:     ims-0.0.1-rc.2
+  #              ies-0.0.1-rc.1
+  #              integration-execution-contract-0.0.1-rc.3
+  #              web-0.0.1-rc.1
+  # ===========================================================================
+  rc-version-bump:
+    if: >-
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.base.ref, 'release/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          token: ${{ github.token || secrets.GH_VERSION_BOT_TOKEN }}
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 0
+
+      - name: Fetch all tags
+        run: |
+          git fetch --tags
+          echo "Existing RC tags:"
+          git tag -l "*-rc.*" | sort || echo "  (none)"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Detect changed modules
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            web:
+              - 'web/**'
+            contract:
+              - 'api/integration-execution-contract/**'
+            management:
+              - 'api/integration-management-service/**'
+            execution:
+              - 'api/integration-execution-service/**'
+
+      # -----------------------------------------------------------------------
+      # Step 1: Read current version from source files as the RC base.
+      #   Base version is the current version in source files (strip any -rc.N suffix).
+      # -----------------------------------------------------------------------
+      - name: Detect base versions from source files
+        id: base-versions
+        run: |
+          WEB_BASE=$(node -p "require('./web/package.json').version" | cut -d- -f1)
+          IMS_BASE=$(grep '^version = ' api/integration-management-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/' | cut -d- -f1)
+          IES_BASE=$(grep '^version = ' api/integration-execution-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/' | cut -d- -f1)
+          CONTRACT_BASE=$(grep '^version = ' api/integration-execution-contract/build.gradle.kts | sed 's/version = "\(.*\)"/\1/' | cut -d- -f1)
+          echo "web_base=$WEB_BASE"           >> "$GITHUB_OUTPUT"
+          echo "ims_base=$IMS_BASE"           >> "$GITHUB_OUTPUT"
+          echo "ies_base=$IES_BASE"           >> "$GITHUB_OUTPUT"
+          echo "contract_base=$CONTRACT_BASE" >> "$GITHUB_OUTPUT"
+          echo "Base versions — web: $WEB_BASE  ims: $IMS_BASE  ies: $IES_BASE  contract: $CONTRACT_BASE"
+
+      # -----------------------------------------------------------------------
+      # Step 2: Calculate the next RC for each module independently.
+      #   Scans only that module's own tags to determine its RC counter.
+      #   No-tags case defaults to rc.1.
+      # -----------------------------------------------------------------------
+      - name: Calculate per-module RC versions
+        id: rc-calc
+        run: |
+          next_rc() {
+            local MODULE="$1"
+            local BASE="$2"
+            local LAST
+            LAST=$(git tag -l "${MODULE}-${BASE}-rc.*" \
+                   | sed -n 's/.*-rc\.\([0-9]*\)$/\1/p' \
+                   | sort -n | tail -1)
+            if [ -z "$LAST" ]; then
+              echo 1
+            else
+              echo $((LAST + 1))
+            fi
+          }
+
+          WEB_BASE="${{ steps.base-versions.outputs.web_base }}"
+          IMS_BASE="${{ steps.base-versions.outputs.ims_base }}"
+          IES_BASE="${{ steps.base-versions.outputs.ies_base }}"
+          CONTRACT_BASE="${{ steps.base-versions.outputs.contract_base }}"
+
+          CONTRACT_RC=$(next_rc "integration-execution-contract" "$CONTRACT_BASE")
+          IMS_RC=$(next_rc "ims" "$IMS_BASE")
+          IES_RC=$(next_rc "ies" "$IES_BASE")
+          WEB_RC=$(next_rc "web" "$WEB_BASE")
+
+          CONTRACT_VERSION="${CONTRACT_BASE}-rc.${CONTRACT_RC}"
+          IMS_VERSION="${IMS_BASE}-rc.${IMS_RC}"
+          IES_VERSION="${IES_BASE}-rc.${IES_RC}"
+          WEB_VERSION="${WEB_BASE}-rc.${WEB_RC}"
+
+          echo "contract_version=$CONTRACT_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ims_version=$IMS_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "ies_version=$IES_VERSION"           >> "$GITHUB_OUTPUT"
+          echo "web_version=$WEB_VERSION"           >> "$GITHUB_OUTPUT"
+
+          echo ""
+          echo "Per-module RC versions for this merge:"
+          echo "  web                            -> $WEB_VERSION"
+          echo "  integration-execution-contract -> $CONTRACT_VERSION"
+          echo "  ims                            -> $IMS_VERSION"
+          echo "  ies                            -> $IES_VERSION"
+
+      # -----------------------------------------------------------------------
+      # Step 3: Apply the correct RC version to each changed module.
+      #   Each module uses its own rc-calc output, not a shared version.
+      # -----------------------------------------------------------------------
+
+      # Web
+      - name: Bump Web RC version
+        if: steps.filter.outputs.web == 'true'
+        run: |
+          RC_VERSION="${{ steps.rc-calc.outputs.web_version }}"
+          CURRENT=$(node -p "require('./web/package.json').version")
+          echo "Web: $CURRENT -> $RC_VERSION"
+          RC_VER="$RC_VERSION" node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('web/package.json', 'utf8'));
+            pkg.version = process.env.RC_VER;
+            fs.writeFileSync('web/package.json', JSON.stringify(pkg, null, 2) + '\\n');
+          "
+
+      # Contract
+      - name: Bump contract RC version
+        if: steps.filter.outputs.contract == 'true'
+        run: |
+          RC_VERSION="${{ steps.rc-calc.outputs.contract_version }}"
+          CURRENT=$(grep '^version = ' api/integration-execution-contract/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+          echo "Contract: $CURRENT -> $RC_VERSION"
+          sed -i "s/^version = \".*\"/version = \"${RC_VERSION}\"/" api/integration-execution-contract/build.gradle.kts
+
+      # IMS + IES — now independent: version in their own build.gradle.kts
+      - name: Bump backend RC version
+        if: steps.filter.outputs.management == 'true' || steps.filter.outputs.execution == 'true'
+        run: |
+          if [ "${{ steps.filter.outputs.management }}" == "true" ]; then
+            RC_VERSION="${{ steps.rc-calc.outputs.ims_version }}"
+            CURRENT=$(grep '^version = ' api/integration-management-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+            echo "IMS: $CURRENT -> $RC_VERSION"
+            sed -i "s/^version = \".*\"/version = \"${RC_VERSION}\"/" api/integration-management-service/build.gradle.kts
+          fi
+          if [ "${{ steps.filter.outputs.execution }}" == "true" ]; then
+            RC_VERSION="${{ steps.rc-calc.outputs.ies_version }}"
+            CURRENT=$(grep '^version = ' api/integration-execution-service/build.gradle.kts | sed 's/version = "\(.*\)"/\1/')
+            echo "IES: $CURRENT -> $RC_VERSION"
+            sed -i "s/^version = \".*\"/version = \"${RC_VERSION}\"/" api/integration-execution-service/build.gradle.kts
+          fi
+
+      # -----------------------------------------------------------------------
+      # Step 4: Commit all file changes, create per-module annotated tags, push.
+      # -----------------------------------------------------------------------
+      - name: Commit RC bumps and create per-module git tags
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          CHANGED=$(git diff --name-only || true)
+          if [ -z "$CHANGED" ]; then
+            echo "No changes — nothing to commit."
+            exit 0
+          fi
+
+          MSG_PARTS=()
+          TAGS=()
+
+          if [ "${{ steps.filter.outputs.web }}" == "true" ]; then
+            V="${{ steps.rc-calc.outputs.web_version }}"
+            MSG_PARTS+=("web@${V}")
+            TAGS+=("web-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.contract }}" == "true" ]; then
+            V="${{ steps.rc-calc.outputs.contract_version }}"
+            MSG_PARTS+=("integration-execution-contract@${V}")
+            TAGS+=("integration-execution-contract-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.management }}" == "true" ]; then
+            V="${{ steps.rc-calc.outputs.ims_version }}"
+            MSG_PARTS+=("ims@${V}")
+            TAGS+=("ims-${V}")
+          fi
+          if [ "${{ steps.filter.outputs.execution }}" == "true" ]; then
+            V="${{ steps.rc-calc.outputs.ies_version }}"
+            MSG_PARTS+=("ies@${V}")
+            TAGS+=("ies-${V}")
+          fi
+
+          COMMIT_MSG="chore(version): bump $(IFS=', '; echo "${MSG_PARTS[*]}") [skip ci]"
+
+          git add web/package.json \
+                  api/integration-management-service/build.gradle.kts \
+                  api/integration-execution-service/build.gradle.kts \
+                  api/integration-execution-contract/build.gradle.kts
+          git diff --staged --quiet && { echo "Nothing staged to commit."; exit 0; }
+          git commit -m "$COMMIT_MSG"
+
+          # Create one annotated tag per changed module (independent RC counter per module)
+          for TAG in "${TAGS[@]}"; do
+            git tag -a "$TAG" -m "Release candidate: $TAG"
+            echo "Created tag: $TAG"
+          done
+
+          TARGET_BRANCH="${{ github.event.pull_request.base.ref }}"
+          git push origin "HEAD:${TARGET_BRANCH}"
+          git push origin --tags
+          echo ""
+          echo "Pushed commit + ${#TAGS[@]} tag(s) to ${TARGET_BRANCH}"
+          for TAG in "${TAGS[@]}"; do echo "  -> $TAG"; done

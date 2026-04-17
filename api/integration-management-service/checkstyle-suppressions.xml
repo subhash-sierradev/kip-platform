@@ -9,6 +9,7 @@
     <suppress checks="MissingJavadocMethod" files=".*Test\.java"/>
     <suppress checks="JavadocMethod" files=".*Test\.java"/>
     <suppress checks="MethodName" files=".*Test\.java"/>
+    <suppress checks="MethodName" files=".*IT\.java"/>
 
     <!-- Suppress Javadoc checks for configuration classes -->
     <suppress checks="MissingJavadocType" files=".*[Cc]onfig.*\.java"/>
@@ -19,6 +20,9 @@
     <suppress checks="MissingJavadocMethod" files=".*dto.*\.java"/>
     <suppress checks="MissingJavadocType" files=".*model.*\.java"/>
     <suppress checks="MissingJavadocMethod" files=".*model.*\.java"/>
+
+    <!-- Suppress LineLength for MapStruct mappers: @Mapping expression strings cannot be line-wrapped -->
+    <suppress checks="LineLength" files=".*[Mm]apper.*\.java"/>
 
     <!-- Suppress utility class constructor hiding for Spring Boot main classes -->
     <suppress checks="HideUtilityClassConstructor" files=".*Application\.java"/>

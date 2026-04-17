@@ -19,6 +19,8 @@ spring:
             url: ${integration.execution.base-url}
           execution-confluence-api:
             url: ${integration.execution.base-url}
+          execution-version:
+            url: ${integration.execution.base-url}
 
   profiles:
     active: dev
@@ -40,7 +42,6 @@ spring:
         format_sql: true
         jdbc:
           batch_size: 20
-          time_zone: UTC
         order_inserts: true
         order_updates: true
 
@@ -99,9 +100,22 @@ server:
   port: 8085
   address: 0.0.0.0
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  info:
+    build:
+      enabled: true
+
 app:
   messaging:
     transport: ${APP_MESSAGING_TRANSPORT:rabbitmq}
+  # Path to the root version.json manifest.
+  # Override via VERSION_FILE_PATH env variable in deployment (e.g. /app/version.json).
+  # Default is relative to the working directory (repo root when running locally).
+  version-file-path: ${VERSION_FILE_PATH:../version.json}
 
 # General application timeout configuration
 application:

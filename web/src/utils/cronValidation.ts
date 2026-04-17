@@ -7,7 +7,7 @@ import { isValidQuartzCronExpression } from '@/composables/cron/useCronOccurrenc
 
 /**
  * Validates a cron expression format
- * @param cronExpression - The cron expression to validate (format: "second minute hour day month dayOfWeek")
+ * @param cronExpression - The cron expression to validate (format: 5-field cron, Quartz 6-field, or Quartz 7-field with year)
  * @returns Object with isValid boolean and error message if invalid
  */
 export function validateCronExpression(cronExpression: string): {
@@ -20,7 +20,9 @@ export function validateCronExpression(cronExpression: string): {
   }
 
   const parts = cronExpression.trim().split(/\s+/);
-  const [, , , day, , dayOfWeek] = parts;
+  const normalizedParts =
+    parts.length === 5 ? ['0', ...parts] : parts.length === 7 ? parts.slice(0, 6) : parts;
+  const [, , , day, , dayOfWeek] = normalizedParts;
 
   const dayValidation = validateDayFields(day, dayOfWeek);
   if (!dayValidation.isValid) {
@@ -41,10 +43,11 @@ function validateBasicFormat(cronExpression: string): { isValid: boolean; error?
   }
 
   const parts = cronExpression.trim().split(/\s+/);
-  if (parts.length !== 6) {
+  if (parts.length < 5 || parts.length > 7) {
     return {
       isValid: false,
-      error: 'Cron expression must have 6 parts: second minute hour day month dayOfWeek',
+      error:
+        'Cron expression must have 5, 6, or 7 parts: [second] minute hour day month dayOfWeek [year]',
     };
   }
 

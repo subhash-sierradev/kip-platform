@@ -25,7 +25,6 @@ describe('Cron Validation Utility', () => {
       const invalidExpressions = [
         '', // Empty
         '0 0 9', // Too few parts
-        '0 0 9 * * ? *', // Too many parts
         '0 60 9 * * ?', // Invalid minute (60)
         '0 0 25 * * ?', // Invalid hour (25)
         '0 0 9 32 * ?', // Invalid day (32)
@@ -39,6 +38,13 @@ describe('Cron Validation Utility', () => {
         expect(result.isValid).toBe(false);
         expect(result.error).toBeDefined();
       });
+    });
+
+    it('accepts wildcard-year Quartz expressions', () => {
+      const result = validateCronExpression('0 0 9 * * ? *');
+
+      expect(result.isValid).toBe(true);
+      expect(result.error).toBeUndefined();
     });
 
     it('validates day/dayOfWeek mutual exclusivity', () => {

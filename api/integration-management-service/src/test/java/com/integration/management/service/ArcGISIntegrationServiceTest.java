@@ -5,6 +5,7 @@ import com.integration.execution.contract.model.enums.FieldTransformationType;
 import com.integration.execution.contract.model.enums.FrequencyPattern;
 import com.integration.execution.contract.model.enums.TriggerType;
 import com.integration.execution.contract.rest.response.CreationResponse;
+import com.integration.execution.contract.rest.response.IntegrationScheduleResponse;
 import com.integration.execution.contract.rest.response.arcgis.ArcGISFieldDto;
 import com.integration.management.entity.ArcGISIntegration;
 import com.integration.management.entity.IntegrationFieldMapping;
@@ -17,6 +18,7 @@ import com.integration.management.mapper.IntegrationJobExecutionMapper;
 import com.integration.management.mapper.IntegrationSchedulerMapper;
 import com.integration.management.model.dto.request.ArcGISIntegrationCreateUpdateRequest;
 import com.integration.management.model.dto.request.IntegrationScheduleRequest;
+import com.integration.management.model.dto.response.ArcGISIntegrationResponse;
 import com.integration.management.model.dto.response.ArcGISIntegrationSummaryResponse;
 import com.integration.management.notification.messaging.NotificationEventPublisher;
 import com.integration.management.repository.ArcGISIntegrationRepository;
@@ -489,10 +491,10 @@ class ArcGISIntegrationServiceTest {
         integration.setIsEnabled(false);
         when(arcGISIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
                 .thenReturn(Optional.of(integration));
-        com.integration.management.model.dto.response.ArcGISIntegrationResponse response = com.integration.management.model.dto.response.ArcGISIntegrationResponse
+        ArcGISIntegrationResponse response = ArcGISIntegrationResponse
                 .builder()
                 .id(id).itemSubtype("S")
-                .schedule(com.integration.management.model.dto.response.IntegrationScheduleResponse
+                .schedule(IntegrationScheduleResponse
                         .builder()
                         .executionTime(LocalTime.of(10, 0)).build())
                 .build();
@@ -676,12 +678,12 @@ class ArcGISIntegrationServiceTest {
         when(arcGISIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
                 .thenReturn(Optional.of(integration));
 
-        com.integration.management.model.dto.response.ArcGISIntegrationResponse response = com.integration.management.model.dto.response.ArcGISIntegrationResponse
+        com.integration.management.model.dto.response.ArcGISIntegrationResponse response = ArcGISIntegrationResponse
                 .builder()
                 .id(id).itemSubtype("S")
-                .schedule(com.integration.management.model.dto.response.IntegrationScheduleResponse
+                .schedule(IntegrationScheduleResponse
                         .builder()
-                        .executionTime(java.time.LocalTime.of(10, 0)).build())
+                        .executionTime(LocalTime.of(10, 0)).build())
                 .build();
         when(arcGISIntegrationMapper.toDetailsResponse(integration)).thenReturn(response);
         when(kwIntegrationService.getItemSubtypeDisplayValue(any())).thenReturn("Label");
@@ -749,6 +751,79 @@ class ArcGISIntegrationServiceTest {
 
         assertThat(actual).isSameAs(expected);
         verify(iesArcGISApiClient).fetchArcGISFields("secret-123");
+    }
+
+    @Test
+    @DisplayName("update with null fieldMappings skips syncIntegrationFieldMappings")
+    void update_nullFieldMappings_skipsSync() {
+        // Covers syncIntegrationFieldMappings: requestMappings == null → return early
+        UUID id = UUID.randomUUID();
+        ArcGISIntegration existing = buildExistingIntegration(id);
+        when(arcGISIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
+                .thenReturn(Optional.of(existing));
+        when(arcGISIntegrationRepository.save(any())).thenReturn(existing);
+
+        ArcGISIntegrationCreateUpdateRequest request = ArcGISIntegrationCreateUpdateRequest.builder()
+                .name("n").itemType("DOCUMENT").itemSubtype("S")
+                .connectionId(UUID.randomUUID())
+                .schedule(IntegrationScheduleRequest.builder()
+                        .executionTime(java.time.LocalTime.of(10, 0))
+                        .frequencyPattern(FrequencyPattern.DAILY).build())
+                .fieldMappings(null)  // null → syncIntegrationFieldMappings returns early
+                .build();
+        org.mockito.Mockito.doNothing().when(arcGISIntegrationMapper).updateEntity(any(), any());
+        org.mockito.Mockito.doNothing().when(integrationSchedulerMapper).updateEntity(any(), any());
+
+        service.update(id, request, "t1", "u1");
+
+        verify(integrationFieldMappingRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("update with empty fieldMappings skips syncIntegrationFieldMappings")
+    void update_emptyFieldMappings_skipsSync() {
+        // Covers syncIntegrationFieldMappings: requestMappings.isEmpty() → return early
+        UUID id = UUID.randomUUID();
+        ArcGISIntegration existing = buildExistingIntegration(id);
+        when(arcGISIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
+                .thenReturn(Optional.of(existing));
+        when(arcGISIntegrationRepository.save(any())).thenReturn(existing);
+
+        ArcGISIntegrationCreateUpdateRequest request = ArcGISIntegrationCreateUpdateRequest.builder()
+                .name("n").itemType("DOCUMENT").itemSubtype("S")
+                .connectionId(UUID.randomUUID())
+                .schedule(IntegrationScheduleRequest.builder()
+                        .executionTime(java.time.LocalTime.of(10, 0))
+                        .frequencyPattern(FrequencyPattern.DAILY).build())
+                .fieldMappings(java.util.List.of())  // empty → syncIntegrationFieldMappings returns early
+                .build();
+        org.mockito.Mockito.doNothing().when(arcGISIntegrationMapper).updateEntity(any(), any());
+        org.mockito.Mockito.doNothing().when(integrationSchedulerMapper).updateEntity(any(), any());
+
+        service.update(id, request, "t1", "u1");
+
+        verify(integrationFieldMappingRepository, never()).saveAll(any());
+    }
+
+    @Test
+    @DisplayName("isUniqueConstraintViolation: non-matching cause message returns false (throws IntegrationPersistenceException)")
+    void isUniqueConstraintViolation_nonMatchingMessage_throwsPersistence() {
+        // Covers isUniqueConstraintViolation: cause message exists but no keyword → returns false
+        UUID id = UUID.randomUUID();
+        ArcGISIntegration existing = buildExistingIntegration(id);
+        when(arcGISIntegrationRepository.findByIdAndTenantIdAndIsDeletedFalse(id, "t1"))
+                .thenReturn(Optional.of(existing));
+        org.mockito.Mockito.doNothing().when(arcGISIntegrationMapper).updateEntity(any(), any());
+        org.mockito.Mockito.doNothing().when(integrationSchedulerMapper).updateEntity(any(), any());
+        when(arcGISIntegrationRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("violation",
+                        new RuntimeException("foreign key constraint failed")));
+
+        ArcGISIntegrationCreateUpdateRequest request = buildCreateRequest("test");
+
+        assertThatThrownBy(() -> service.update(id, request, "t1", "u1"))
+                .isInstanceOf(com.integration.management.exception.IntegrationPersistenceException.class)
+                .hasMessageContaining("data integrity violation");
     }
 }
 

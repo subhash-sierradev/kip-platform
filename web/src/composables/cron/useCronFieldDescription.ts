@@ -1,57 +1,21 @@
+import {
+  detectSubdailyInterval,
+  expandDays,
+  expandMonths,
+  formatMinutePastHour,
+  getBoundedWindowTimeRange,
+  getDisplayMonths,
+  getLocalDayNames,
+  getRepresentativeLocalTimes,
+  isStrictNumericField,
+  isWildcardHourField,
+  joinNatural,
+  parseLocalMinute,
+  resolveQuartzDow,
+} from './useCronDescriptionHelpers';
 import { toOrdinal } from './useCronFieldParsers';
 import type { LocalOccurrence } from './useCronOccurrenceEngine';
 import { parseQuartzCron } from './useCronOccurrenceEngine';
-
-const DOW_NAMES: Record<string, string> = {
-  '0': 'Sunday',
-  '1': 'Monday',
-  '2': 'Tuesday',
-  '3': 'Wednesday',
-  '4': 'Thursday',
-  '5': 'Friday',
-  '6': 'Saturday',
-  '7': 'Sunday',
-  SUN: 'Sunday',
-  MON: 'Monday',
-  TUE: 'Tuesday',
-  WED: 'Wednesday',
-  THU: 'Thursday',
-  FRI: 'Friday',
-  SAT: 'Saturday',
-};
-
-const MONTH_NAMES: Record<string, string> = {
-  '1': 'January',
-  '2': 'February',
-  '3': 'March',
-  '4': 'April',
-  '5': 'May',
-  '6': 'June',
-  '7': 'July',
-  '8': 'August',
-  '9': 'September',
-  '10': 'October',
-  '11': 'November',
-  '12': 'December',
-  JAN: 'January',
-  FEB: 'February',
-  MAR: 'March',
-  APR: 'April',
-  MAY: 'May',
-  JUN: 'June',
-  JUL: 'July',
-  AUG: 'August',
-  SEP: 'September',
-  OCT: 'October',
-  NOV: 'November',
-  DEC: 'December',
-};
-
-function joinNatural(items: string[]): string {
-  if (items.length <= 1) return items[0] ?? '';
-  if (items.length === 2) return `${items[0]} and ${items[1]}`;
-  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
-}
 
 export function getMostCommonLocalTime(occurrences: LocalOccurrence[]): string | null {
   if (occurrences.length === 0) return null;
@@ -60,79 +24,6 @@ export function getMostCommonLocalTime(occurrences: LocalOccurrence[]): string |
     counts.set(occ.localTime, (counts.get(occ.localTime) ?? 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
-}
-
-function dowTokenIndex(token: string): number {
-  const upper = token.toUpperCase();
-  const nameEntry = Object.entries(DOW_NAMES).find(([k]) => k === upper && k.length > 1);
-  if (nameEntry) {
-    const order = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return order.indexOf(nameEntry[1]);
-  }
-  const n = parseInt(token, 10);
-  return Number.isNaN(n) ? -1 : n % 7;
-}
-
-function addDayRange(startToken: string, endToken: string, days: string[]): void {
-  const si = dowTokenIndex(startToken);
-  const ei = dowTokenIndex(endToken);
-  if (si === -1 || ei === -1) return;
-  for (let i = si; i <= ei; i++) {
-    const name = DOW_NAMES[String(i)];
-    if (name && !days.includes(name)) days.push(name);
-  }
-}
-
-function expandDays(field: string): string[] {
-  if (field === '*' || field === '?' || !field) return [];
-  if (field.includes('#') || /[0-9A-Za-z]L$/i.test(field)) return [];
-
-  const days: string[] = [];
-  for (const token of field
-    .toUpperCase()
-    .split(',')
-    .map(t => t.trim())) {
-    if (token.includes('-')) {
-      const [s, e] = token.split('-');
-      addDayRange(s, e, days);
-      continue;
-    }
-    const name = DOW_NAMES[token];
-    if (name && !days.includes(name)) days.push(name);
-  }
-  return days;
-}
-
-function expandMonths(field: string): string[] {
-  if (field === '*' || field === '?') return [];
-  const months: string[] = [];
-  for (const token of field
-    .toUpperCase()
-    .split(',')
-    .map(t => t.trim())) {
-    if (token.includes('/')) {
-      const [startTok, stepTok] = token.split('/');
-      const start = MONTH_NAMES[startTok]
-        ? Object.values(MONTH_NAMES).indexOf(MONTH_NAMES[startTok]) + 1
-        : parseInt(startTok, 10);
-      const step = parseInt(stepTok, 10);
-      for (let m = start; m <= 12; m += step) {
-        const name = MONTH_NAMES[String(m)];
-        if (name && !months.includes(name)) months.push(name);
-      }
-      continue;
-    }
-    const name = MONTH_NAMES[token];
-    if (name && !months.includes(name)) months.push(name);
-  }
-  return months;
-}
-
-function detectSubdailyInterval(minF: string, hourF: string): { minutes: number } | null {
-  if (!minF.includes('/')) return null;
-  if (hourF !== '*' && hourF !== '?' && !hourF.includes('-')) return null;
-  const step = parseInt(minF.split('/')[1], 10);
-  return !Number.isNaN(step) && step > 0 && step < 60 ? { minutes: step } : null;
 }
 
 function detectHourlyInterval(minF: string, hourF: string): { hours: number } | null {
@@ -161,58 +52,10 @@ function parseLastWeekday(dowField: string): string | null {
   return m ? (resolveQuartzDow(m[1]) ?? null) : null;
 }
 
-function resolveQuartzDow(token: string): string | undefined {
-  const upper = token.toUpperCase();
-  // Named tokens (MON, TUE etc.) resolve directly
-  if (DOW_NAMES[upper] && upper.length > 1) return DOW_NAMES[upper];
-  const n = parseInt(token, 10);
-  if (Number.isNaN(n)) return undefined;
-  // Quartz numeric DOW: 1=Sunday, 2=Monday, 3=Tuesday, ..., 7=Saturday
-  const quartzOrder = [
-    'Sunday',
-    'Monday',
-    'Tuesday',
-    'Wednesday',
-    'Thursday',
-    'Friday',
-    'Saturday',
-  ];
-  return quartzOrder[n - 1];
-}
-
 function buildDayPhrase(dowF: string): string {
   const days = expandDays(dowF);
   if (days.length === 0) return '';
   return days.length === 1 ? `on ${days[0]}s` : `on ${joinNatural(days)}`;
-}
-
-function buildHourRangePhrase(
-  hourF: string,
-  timezone: string,
-  occurrences: LocalOccurrence[]
-): string | null {
-  if (!hourF.includes('-') || occurrences.length === 0) return null;
-  const [startH, endH] = hourF.split('-').map(Number);
-  if (Number.isNaN(startH) || Number.isNaN(endH)) return null;
-
-  const anchor = occurrences[0].utcDate;
-  const fmtUtcHour = (h: number): string => {
-    const d = new Date(
-      Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate(), h, 0, 0)
-    );
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    }).formatToParts(d);
-    const hour = parts.find(p => p.type === 'hour')?.value ?? '';
-    const minute = parts.find(p => p.type === 'minute')?.value ?? '00';
-    const period = parts.find(p => p.type === 'dayPeriod')?.value ?? '';
-    return minute === '00' ? `${hour} ${period}` : `${hour}:${minute} ${period}`;
-  };
-
-  return `between ${fmtUtcHour(startH)} and ${fmtUtcHour(endH)}`;
 }
 
 function tryAllDescriptions(
@@ -225,19 +68,32 @@ function tryAllDescriptions(
   timezone: string,
   occurrences: LocalOccurrence[]
 ): string | null {
-  return (
-    trySubdailyInterval(minF, hourF, dowF, timezone, occurrences) ??
-    tryHourlyInterval(minF, hourF, dowF) ??
-    tryNthWeekday(dowF, localTime) ??
-    tryLastWeekday(dowF, localTime) ??
-    tryNearestWeekday(domF, monF, localTime) ??
-    tryLastDayOffset(domF, monF, localTime) ??
-    tryLastDayOfMonth(domF, monF, localTime, timezone, occurrences) ??
-    trySpecificDow(domF, dowF, monF, localTime, timezone, occurrences) ??
-    trySpecificDom(domF, monF, localTime, timezone, occurrences) ??
-    tryDailyWildcard(domF, dowF, localTime) ??
-    null
-  );
+  const attempts = [
+    () => trySubdailyInterval(minF, hourF, dowF, timezone, occurrences),
+    () => tryHourlyMinuteMark(minF, hourF, dowF, occurrences),
+    () => tryHourlyMinuteList(minF, hourF, dowF, timezone, occurrences),
+    () => tryHourlyWindow(minF, hourF, dowF, timezone, occurrences),
+    () => tryHourlyInterval(minF, hourF, dowF),
+    () => tryNthWeekday(dowF, localTime),
+    () => tryLastWeekday(dowF, localTime),
+    () => tryNearestWeekday(domF, monF, localTime),
+    () => tryLastDayOffset(domF, monF, localTime),
+    () => tryLastDayOfMonth(domF, monF, localTime, timezone, occurrences),
+    () => trySpecificDow(domF, dowF, monF, localTime, timezone, occurrences),
+    () => tryDayOfMonthStep(domF, monF, localTime),
+    () => trySpecificDomList(domF, monF, localTime),
+    () => trySpecificDom(domF, monF, localTime, timezone, occurrences),
+    () => tryDailyWildcard(domF, dowF, localTime),
+  ];
+
+  for (const attempt of attempts) {
+    const description = attempt();
+    if (description !== null) {
+      return description;
+    }
+  }
+
+  return null;
 }
 
 export function buildCronFieldDescription(
@@ -272,10 +128,86 @@ function trySubdailyInterval(
   const sub = detectSubdailyInterval(minF, hourF);
   if (!sub) return null;
   const label = `every ${sub.minutes} minute${sub.minutes !== 1 ? 's' : ''}`;
-  const rangePhrase = buildHourRangePhrase(hourF, timezone, occurrences);
+  const boundedWindow = getBoundedWindowTimeRange(minF, hourF, timezone, occurrences);
+  const rangePhrase = boundedWindow
+    ? `between ${boundedWindow.start} and ${boundedWindow.end}`
+    : null;
   const dayPhrase = buildDayPhrase(dowF);
   const parts = [label, rangePhrase, dayPhrase ? dayPhrase : null].filter(Boolean);
   return `Runs ${parts.join(' ')}`;
+}
+
+function tryHourlyMinuteMark(
+  minF: string,
+  hourF: string,
+  dowF: string,
+  occurrences: LocalOccurrence[]
+): string | null {
+  if (
+    !isWildcardHourField(hourF) ||
+    minF.includes('/') ||
+    minF.includes(',') ||
+    !isStrictNumericField(minF)
+  ) {
+    return null;
+  }
+
+  const localMinute = parseLocalMinute(occurrences[0]?.localTime ?? '');
+  if (localMinute === null) {
+    return null;
+  }
+
+  const dayPhrase = buildDayPhrase(dowF);
+  return `Runs every hour ${formatMinutePastHour(localMinute)}${dayPhrase ? ` ${dayPhrase}` : ''}`;
+}
+
+function tryHourlyMinuteList(
+  minF: string,
+  hourF: string,
+  dowF: string,
+  timezone: string,
+  occurrences: LocalOccurrence[]
+): string | null {
+  if (!isWildcardHourField(hourF) || minF.includes('/') || !minF.includes(',')) {
+    return null;
+  }
+
+  const minuteTokens = minF
+    .split(',')
+    .map(token => parseInt(token.trim(), 10))
+    .filter(token => !Number.isNaN(token));
+  if (minuteTokens.length < 2) {
+    return null;
+  }
+
+  const times = getRepresentativeLocalTimes(minuteTokens, timezone, occurrences);
+  const dayPhrase = buildDayPhrase(dowF);
+  return `Runs every hour at ${joinNatural(times)}${dayPhrase ? ` ${dayPhrase}` : ''}`;
+}
+
+function tryHourlyWindow(
+  minF: string,
+  hourF: string,
+  dowF: string,
+  timezone: string,
+  occurrences: LocalOccurrence[]
+): string | null {
+  if (
+    !hourF.includes('-') ||
+    minF.includes('/') ||
+    minF.includes(',') ||
+    !isStrictNumericField(minF)
+  ) {
+    return null;
+  }
+
+  const boundedWindow = getBoundedWindowTimeRange(minF, hourF, timezone, occurrences);
+  if (!boundedWindow) {
+    return null;
+  }
+
+  const dayPhrase = buildDayPhrase(dowF);
+  return `Runs every hour between ${boundedWindow.start} and ${boundedWindow.end}${dayPhrase ? ` ${dayPhrase}` : ''}`;
 }
 
 function tryHourlyInterval(minF: string, hourF: string, dowF: string): string | null {
@@ -293,40 +225,6 @@ function tryNthWeekday(dowF: string, localTime: string): string | null {
 function tryLastWeekday(dowF: string, localTime: string): string | null {
   const last = parseLastWeekday(dowF);
   return last ? `Runs on the last ${last} of every month at ${localTime}` : null;
-}
-
-function getLocalMonthNames(occurrences: LocalOccurrence[]): string[] {
-  const uniqueMonths = Array.from(new Set(occurrences.map(o => o.localDate.slice(5, 7)))).sort();
-  return uniqueMonths.map(mm =>
-    new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(
-      new Date(Date.UTC(2024, Number(mm) - 1, 1))
-    )
-  );
-}
-
-function getDisplayMonths(monF: string, occurrences: LocalOccurrence[]): string[] {
-  const months = expandMonths(monF);
-  if (months.length === 0) {
-    return months;
-  }
-
-  const localMonths = getLocalMonthNames(occurrences);
-  const shifted = localMonths.some(month => !months.includes(month));
-  return shifted ? localMonths : months;
-}
-
-function getLocalDayNames(occurrences: LocalOccurrence[]): string[] | null {
-  const dayOrder = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const localDows = new Set<number>();
-  let anyShifted = false;
-  for (const occ of occurrences) {
-    const utcDow = occ.utcDate.getUTCDay();
-    const localDow = new Date(`${occ.localDate}T00:00:00Z`).getUTCDay();
-    localDows.add(localDow);
-    if (utcDow !== localDow) anyShifted = true;
-  }
-  if (!anyShifted) return null;
-  return [...localDows].sort((a, b) => a - b).map(d => dayOrder[d]);
 }
 
 function getConsistentLocalDom(occurrences: LocalOccurrence[]): number | null {
@@ -528,11 +426,16 @@ function trySpecificDom(
   timezone: string,
   occurrences: LocalOccurrence[]
 ): string | null {
+  if (!isStrictNumericField(domF)) return null;
   const domNum = parseInt(domF, 10);
-  if (Number.isNaN(domNum)) return null;
 
   const anchorLocalTime = occurrences[0]?.localTime ?? localTime;
   const timePhrase = `at ${anchorLocalTime}`;
+  const months = getDisplayMonths(monF, occurrences);
+  const leapDayDescription = tryLeapDayDescription(domNum, months, timePhrase);
+  if (leapDayDescription) {
+    return leapDayDescription;
+  }
 
   const shiftedDatesDescription = tryShiftedSpecificDomDates(occurrences, timePhrase);
   if (shiftedDatesDescription) return shiftedDatesDescription;
@@ -542,20 +445,85 @@ function trySpecificDom(
 
   // For recurring monthly patterns check if all local dates share a consistent shifted DOM
   const effectiveDom = getConsistentLocalDom(occurrences) ?? domNum;
-  const months = getDisplayMonths(monF, occurrences);
-  if (months.length > 0) {
-    const monthPhrase =
-      months.length === 1
-        ? `${months[0]} ${toOrdinal(effectiveDom)}`
-        : `the ${toOrdinal(effectiveDom)} of ${joinNatural(months)}`;
-    return `Runs ${timePhrase} on ${monthPhrase} every year`;
+  const shiftedLeapDayDescription = tryLeapDayDescription(effectiveDom, months, timePhrase);
+  if (shiftedLeapDayDescription) {
+    return shiftedLeapDayDescription;
   }
-  const isMonthWild = monF === '*' || monF === '?';
-  return isMonthWild ? `Runs ${timePhrase} on the ${toOrdinal(effectiveDom)} of every month` : null;
+  return buildSpecificDomSchedule(monF, months, effectiveDom, timePhrase);
 }
 
 function tryDailyWildcard(domF: string, dowF: string, localTime: string): string | null {
   const isDomWild = domF === '*' || domF === '?';
   const days = expandDays(dowF);
   return isDomWild && days.length === 0 ? `Runs every day at ${localTime}` : null;
+}
+
+function tryDayOfMonthStep(domF: string, monF: string, localTime: string): string | null {
+  const stepMatch = domF.match(/^(\*|\d{1,2})\/(\d+)$/);
+  if (!stepMatch) {
+    return null;
+  }
+
+  const [, startToken, stepToken] = stepMatch;
+  const step = parseInt(stepToken, 10);
+  if (Number.isNaN(step) || step <= 0) {
+    return null;
+  }
+
+  const months = expandMonths(monF);
+  if (startToken === '*') {
+    return months.length > 0
+      ? `Runs at ${localTime} every ${step} days in ${joinNatural(months)}`
+      : `Runs at ${localTime} every ${step} days`;
+  }
+
+  const startDay = parseInt(startToken, 10);
+  const startPhrase = `starting from the ${toOrdinal(startDay)}`;
+  return months.length > 0
+    ? `Runs at ${localTime} every ${step} days ${startPhrase} of ${joinNatural(months)} every year`
+    : `Runs at ${localTime} every ${step} days ${startPhrase} of every month`;
+}
+
+function trySpecificDomList(domF: string, monF: string, localTime: string): string | null {
+  const tokens = domF.split(',').map(token => token.trim());
+  if (tokens.length < 2 || tokens.some(token => !isStrictNumericField(token))) {
+    return null;
+  }
+
+  const dayLabels = tokens.map(token => toOrdinal(parseInt(token, 10)));
+  const months = expandMonths(monF);
+  return months.length > 0
+    ? `Runs at ${localTime} on the ${joinNatural(dayLabels)} of ${joinNatural(months)} every year`
+    : `Runs at ${localTime} on the ${joinNatural(dayLabels)} of every month`;
+}
+
+function tryLeapDayDescription(
+  dayOfMonth: number,
+  months: string[],
+  timePhrase: string
+): string | null {
+  if (months.length === 1 && months[0] === 'February' && dayOfMonth === 29) {
+    return `Runs ${timePhrase} on February 29th every leap year`;
+  }
+
+  return null;
+}
+
+function buildSpecificDomSchedule(
+  monF: string,
+  months: string[],
+  dayOfMonth: number,
+  timePhrase: string
+): string | null {
+  if (months.length > 0) {
+    const monthPhrase =
+      months.length === 1
+        ? `${months[0]} ${toOrdinal(dayOfMonth)}`
+        : `the ${toOrdinal(dayOfMonth)} of ${joinNatural(months)}`;
+    return `Runs ${timePhrase} on ${monthPhrase} every year`;
+  }
+
+  return monF === '*' || monF === '?'
+    ? `Runs ${timePhrase} on the ${toOrdinal(dayOfMonth)} of every month`
+    : null;
 }

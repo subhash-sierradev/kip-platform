@@ -13,7 +13,7 @@ import com.integration.management.service.IntegrationConnectionService;
 import com.integration.management.service.JiraWebhookEventService;
 import com.integration.management.service.JiraWebhookService;
 import com.integration.management.service.SettingsService;
-import com.integration.management.util.ClientIpAddressResolver;
+import com.integration.management.service.ClientIpAddressResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -56,6 +56,7 @@ public final class AuditLogAspect {
     @Lazy
     private final ConfluenceIntegrationService confluenceIntegrationService;
     private final SettingsService settingsService;
+    private final ClientIpAddressResolver clientIpAddressResolver;
 
     private record PreDeleteContext(String entityId, String entityName) {
     }
@@ -320,7 +321,7 @@ public final class AuditLogAspect {
                 .filter(ServletRequestAttributes.class::isInstance)
                 .map(ServletRequestAttributes.class::cast)
                 .map(ServletRequestAttributes::getRequest)
-                .map(ClientIpAddressResolver::resolveClientIpAddress)
+                .map(clientIpAddressResolver::resolveClientIpAddress)
                 .orElse(null);
     }
 

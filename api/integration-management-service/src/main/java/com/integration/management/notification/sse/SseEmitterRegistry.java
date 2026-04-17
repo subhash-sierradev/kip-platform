@@ -57,7 +57,7 @@ public class SseEmitterRegistry {
             for (SseEmitter emitter : userEmitters) {
                 try {
                     emitter.send(event);
-                } catch (IOException ex) {
+                } catch (IOException | IllegalStateException ex) {
                     log.debug("Failed to send SSE to user {}, removing emitter: {}", userId, ex.getMessage());
                     dead.add(emitter);
                 }
@@ -90,7 +90,7 @@ public class SseEmitterRegistry {
             for (SseEmitter emitter : userEmitters) {
                 try {
                     emitter.send(ping);
-                } catch (IOException ex) {
+                } catch (IOException | IllegalStateException ex) {
                     dead.add(emitter);
                 }
             }

@@ -1,6 +1,7 @@
 package com.integration.management.model.dto.response;
 
 import com.integration.execution.contract.model.enums.FrequencyPattern;
+import com.integration.execution.contract.rest.response.IntegrationScheduleResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

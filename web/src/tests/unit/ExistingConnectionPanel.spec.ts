@@ -92,4 +92,85 @@ describe('ExistingConnectionPanel', () => {
 
     expect(wrapper.emitted('verify-existing')).toEqual([[]]);
   });
+
+  it('renders loading and empty dropdown states', async () => {
+    const wrapper = mount(ExistingConnectionPanel, {
+      props: {
+        existingConnections: [],
+        existingConnectionId: undefined,
+        loading: true,
+        activeCount: 0,
+        failedCount: 0,
+        isTestingExisting: false,
+        existingTested: false,
+        existingTestSuccess: false,
+        existingTestMessage: '',
+        verifyButtonText: 'Test Connection',
+        getConnectionStatus,
+        formatLastTested,
+      },
+    });
+
+    await wrapper.find('.cs-dropdown-selected').trigger('click');
+    expect(wrapper.find('.cs-loading-row').exists()).toBe(true);
+
+    await wrapper.setProps({ loading: false });
+    expect(wrapper.find('.cs-empty').text()).toContain('No saved connections found');
+  });
+
+  it('renders selected and list metadata without secret separators when secretName is absent', async () => {
+    const wrapper = mount(ExistingConnectionPanel, {
+      props: {
+        existingConnections: [
+          {
+            ...connection,
+            id: 'conn-2',
+            secretName: undefined,
+          },
+        ],
+        existingConnectionId: 'conn-2',
+        loading: false,
+        activeCount: 1,
+        failedCount: 0,
+        isTestingExisting: false,
+        existingTested: false,
+        existingTestSuccess: false,
+        existingTestMessage: '',
+        verifyButtonText: 'Test Connection',
+        getConnectionStatus,
+        formatLastTested,
+      },
+    });
+
+    expect(wrapper.find('.cs-connection-meta-line').text()).toContain('1 connection');
+    expect(wrapper.find('.cs-selected-separator').exists()).toBe(false);
+    expect(wrapper.find('.cs-selected-id').exists()).toBe(false);
+
+    await wrapper.find('.cs-dropdown-selected').trigger('click');
+    expect(wrapper.find('.cs-meta-separator').exists()).toBe(false);
+    expect(wrapper.find('.cs-connection-secret').exists()).toBe(false);
+  });
+
+  it('renders verification success and in-progress states', () => {
+    const wrapper = mount(ExistingConnectionPanel, {
+      props: {
+        existingConnections: [connection],
+        existingConnectionId: 'conn-1',
+        loading: false,
+        activeCount: 1,
+        failedCount: 0,
+        isTestingExisting: true,
+        existingTested: true,
+        existingTestSuccess: true,
+        existingTestMessage: 'Verified',
+        verifyButtonText: 'Verifying...',
+        getConnectionStatus,
+        formatLastTested,
+      },
+    });
+
+    expect(wrapper.find('.cs-loading-spinner').exists()).toBe(true);
+    expect(wrapper.find('.cs-test-btn-success').exists()).toBe(true);
+    expect(wrapper.find('.cs-verification-success').text()).toContain('Verified');
+  });
 });

@@ -284,4 +284,18 @@ class FieldTransformationServiceTest {
         assertThat(service.convertToLowercase(null)).isNull();
         assertThat(service.convertToTrim(null)).isNull();
     }
+
+    @Test
+    void convertToTitleCase_singleCharacterWord_returnsUppercasedChar() {
+        // Covers lambda$convertToTitleCase$0: word.length() > 1 is false (single-char word)
+        assertThat(service.convertToTitleCase("a b")).isEqualTo("A B");
+        assertThat(service.convertToTitleCase("i")).isEqualTo("I");
+    }
+
+    @Test
+    void isBooleanString_yesAndNo_returnTrue() {
+        // Covers isBooleanString: "yes" and "no" branches
+        assertThat(service.canApplyTransformation("yes", FieldTransformationType.TO_BOOLEAN)).isTrue();
+        assertThat(service.canApplyTransformation("YES", FieldTransformationType.TO_BOOLEAN)).isTrue();
+    }
 }

@@ -113,6 +113,9 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue';
 import { Eye, EyeOff } from 'lucide-vue-next';
+// Imported here because this component is also used standalone in AddConnectionDialog
+// (admin section), where ConnectionStep.vue is not in the tree and won't inject these styles.
+import './ConnectionStep.css';
 
 import type {
   ConnectionStepConfig,

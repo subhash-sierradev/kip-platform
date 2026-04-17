@@ -470,6 +470,58 @@ class IntegrationConnectionTestServiceTest {
     }
 
     @Test
+    void testConnection_confluenceWithSecretName_unauthorizedWord_returns401() {
+        // Covers extractStatusCode: message.contains("Unauthorized") branch (no "401" prefix)
+        when(confluenceApiClient.getCurrentUser("conf-secret-unauth"))
+                .thenThrow(new RuntimeException("Unauthorized request"));
+
+        ApiResponse response = service.testConnection(ServiceType.CONFLUENCE, "conf-secret-unauth");
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.statusCode()).isEqualTo(SC_UNAUTHORIZED);
+        assertThat(response.message()).isEqualTo("Invalid credentials - authentication failed");
+    }
+
+    @Test
+    void testConnection_confluenceWithSecretName_forbiddenWord_returns403() {
+        // Covers extractStatusCode: message.contains("Forbidden") branch (no "403" prefix)
+        when(confluenceApiClient.getCurrentUser("conf-secret-forb"))
+                .thenThrow(new RuntimeException("Forbidden access"));
+
+        ApiResponse response = service.testConnection(ServiceType.CONFLUENCE, "conf-secret-forb");
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.statusCode()).isEqualTo(SC_FORBIDDEN);
+        assertThat(response.message()).isEqualTo("Invalid credentials - access denied");
+    }
+
+    @Test
+    void testConnection_jiraWithSecretName_unauthorizedWord_returns401() {
+        // Covers extractErrorMessage for Jira: message.contains("Unauthorized") (no numeric code)
+        when(jiraApiClient.searchProjects("secret-jira-unauth"))
+                .thenThrow(new RuntimeException("Unauthorized"));
+
+        ApiResponse response = service.testConnection(ServiceType.JIRA, "secret-jira-unauth");
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.statusCode()).isEqualTo(SC_UNAUTHORIZED);
+        assertThat(response.message()).isEqualTo("Invalid credentials - authentication failed");
+    }
+
+    @Test
+    void testConnection_jiraWithSecretName_forbiddenWord_returns403() {
+        // Covers extractErrorMessage for Jira: message.contains("Forbidden") (no numeric code)
+        when(jiraApiClient.searchProjects("secret-jira-forb"))
+                .thenThrow(new RuntimeException("Forbidden"));
+
+        ApiResponse response = service.testConnection(ServiceType.JIRA, "secret-jira-forb");
+
+        assertThat(response.success()).isFalse();
+        assertThat(response.statusCode()).isEqualTo(SC_FORBIDDEN);
+        assertThat(response.message()).isEqualTo("Invalid credentials - access denied");
+    }
+
+    @Test
     void testConnection_confluenceWithSecret_blankAccountId_returnsFailure() throws Exception {
         IntegrationSecret secret = confluenceSecret();
         JsonNode user = OBJECT_MAPPER.readTree("{\"accountId\":\"\",\"displayName\":\"Empty\"}");

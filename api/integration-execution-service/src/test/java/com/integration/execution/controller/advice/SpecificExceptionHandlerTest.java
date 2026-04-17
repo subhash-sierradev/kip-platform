@@ -193,6 +193,44 @@ class SpecificExceptionHandlerTest {
     }
 
     @Test
+    void handleMethodArgumentTypeMismatchException_nullRequiredType_usesUnknownTypeFallback() {
+        MethodArgumentTypeMismatchException ex = new MethodArgumentTypeMismatchException(
+                "xyz",
+                null,   // requiredType == null → should produce "Unknown"
+                "param",
+                null,
+                null
+        );
+
+        ResponseEntity<SpecificExceptionHandler.ErrorResponse> response =
+                handler.handleMethodArgumentTypeMismatchException(ex, webRequest);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().message())
+                .contains("Invalid value 'xyz' for parameter 'param'")
+                .contains("Unknown");
+    }
+
+    @Test
+    void handleValidationExceptions_fieldWithNullDefaultMessage_usesInvalidValueFallback() {
+        // FieldError with a null defaultMessage exercises the
+        // `fe.getDefaultMessage() != null ? ... : "Invalid value"` false branch
+        FieldError fieldError = new FieldError("request", "someField", null, false, null, null, null);
+        BindException bindException = new BindException(new Object(), "request");
+        bindException.addError(fieldError);
+
+        ResponseEntity<SpecificExceptionHandler.ErrorResponse> response =
+                handler.handleValidationExceptions(bindException, webRequest);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        @SuppressWarnings("unchecked")
+        Map<String, String> details = (Map<String, String>) response.getBody().details();
+        assertThat(details).containsEntry("someField", "Invalid value");
+    }
+
+    @Test
     void handleArcGisApiException_invalidStatusCode_fallsBackToInternalServerError() {
         IntegrationApiException ex = new IntegrationApiException("upstream error", 799);
 

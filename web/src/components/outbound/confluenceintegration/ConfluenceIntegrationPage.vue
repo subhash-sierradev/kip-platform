@@ -100,6 +100,7 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { useListRouteSync } from '@/composables/useListRouteSync';
 import { useResponsivePageSize } from '@/composables/useResponsivePageSize';
+import { ROUTES } from '@/router/routes';
 import ConfluenceIntegrationWizard from './wizard/ConfluenceIntegrationWizard.vue';
 import ConfluenceIntegrationCard from './ConfluenceIntegrationCard.vue';
 import DashboardToolbar from '@/components/common/DashboardToolbar.vue';
@@ -139,6 +140,7 @@ const pageSizeOptions = [6, 9, 12, 24, 48];
 const confluenceSortOptions: DashboardSortOption[] = [
   { value: 'name', label: 'Name' },
   { value: 'createdDate', label: 'Created Date' },
+  { value: 'lastModifiedDate', label: 'Updated Date' },
   { value: 'isEnabled', label: 'Status' },
 ];
 
@@ -176,6 +178,8 @@ const getSortValue = (i: ConfluenceIntegrationSummaryResponse, field: string): u
       return i.name || '';
     case 'createdDate':
       return i.createdDate;
+    case 'lastModifiedDate':
+      return i.lastModifiedDate;
     case 'isEnabled':
       return i.isEnabled;
     default:
@@ -189,7 +193,7 @@ const sortedIntegrations = computed(() => {
     sorted.sort((a, b) => {
       const aVal = getSortValue(a, sortBy.value);
       const bVal = getSortValue(b, sortBy.value);
-      if (sortBy.value === 'createdDate') {
+      if (sortBy.value === 'createdDate' || sortBy.value === 'lastModifiedDate') {
         return new Date(bVal as string).getTime() - new Date(aVal as string).getTime();
       }
       if (sortBy.value === 'isEnabled') {
@@ -300,7 +304,7 @@ async function enableDisableIntegration(integrationId: string, isEnabled?: boole
 
 const openDetails = (integrationId: string): void => {
   router.push({
-    path: `/outbound/integration/confluence/${integrationId}`,
+    path: ROUTES.confluenceIntegrationDetails(integrationId),
     query: buildStateQuery(true),
   });
 };
@@ -315,7 +319,7 @@ const {
   {
     router,
     route,
-    validSortOptions: ['name', 'createdDate', 'isEnabled'],
+    validSortOptions: ['name', 'createdDate', 'lastModifiedDate', 'isEnabled'],
     validViewModes: ['grid', 'list'],
     totalPages,
   },

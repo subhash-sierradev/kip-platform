@@ -240,7 +240,8 @@ public class JiraWebhookService {
                 .isEnabled(webhook.getIsEnabled())
                 .isDeleted(webhook.getIsDeleted())
                 .createdBy(webhook.getCreatedBy())
-                .createdDate(webhook.getCreatedDate());
+                .createdDate(webhook.getCreatedDate())
+                .lastModifiedDate(webhook.getLastModifiedDate());
         if (latestEvent != null) {
             builder.lastEventHistory(JiraWebhookEventSummaryResponse.builder()
                     .id(latestEvent.getId().toString())

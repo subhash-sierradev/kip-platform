@@ -443,9 +443,14 @@ const cronDescription = computed<ScheduleDescriptionResult | null>(() => {
   if (localData.value.frequencyPattern !== 'CUSTOM' || !cron.value || !isValidateCron.value)
     return null;
 
+  const scheduleTimezone =
+    localData.value.timeCalculationMode === 'FIXED_DAY_BOUNDARY'
+      ? localData.value.businessTimeZone || 'UTC'
+      : getUserTimezone();
+
   return cronToTextWithTimezoneUniversal(
     cron.value,
-    getUserTimezone(),
+    scheduleTimezone,
     localData.value.executionDate || undefined
   );
 });

@@ -29,9 +29,6 @@ public interface ConfluenceExecutionMapper {
                 .startedAt(startedAt)
                 .completedAt(Instant.now())
                 .totalRecords(orchResult.totalRecords())
-                .addedRecords(0)
-                .updatedRecords(0)
-                .failedRecords(0)
                 .executionMetadata(buildExecutionMetadata(orchResult))
                 .errorMessage(orchResult.errorMessage())
                 .build();

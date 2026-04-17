@@ -39,7 +39,7 @@ public class ConfluenceExecutionCommand {
     private boolean includeTableOfContents;
 
     /** Business timezone for timestamp conversion (fallback if Confluence user timezone unavailable). */
-    private String businessTimezone;
+    private String businessTimeZone;
 
     /** Tracking ID of the IntegrationJobExecution record created by IMS before publishing. */
     private UUID jobExecutionId;

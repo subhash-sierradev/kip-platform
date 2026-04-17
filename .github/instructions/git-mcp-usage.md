@@ -247,6 +247,71 @@ KIP-464: add monitoring data page builder with integration processing service ex
 
 ---
 
+## 🏷️ PR Naming & Version Bump Labels
+
+Version bumps are driven **automatically** by PR title prefix or explicit label when the release branch merges into `main`.
+
+### PR Title Convention (Conventional Commits)
+
+| Title Prefix                     | Version Bump        | When to Use                               |
+| -------------------------------- | ------------------- | ----------------------------------------- |
+| `feat:` or `feature:`            | **minor**           | New feature, new endpoint, new UI page    |
+| `fix:` or `bugfix:` or `hotfix:` | **patch**           | Bug fix, config change, dependency update |
+| `breaking:` or `break:`          | **major**           | Removed endpoint, breaking API contract   |
+| _(no prefix)_                    | **patch** (default) | Minor refactor, docs, tooling             |
+
+**Format**: `<prefix>: [KIP-###] short description`
+
+```
+feat: [KIP-498] add ArcGIS scheduling UI        → minor bump
+fix: [KIP-502] fix IES connection timeout        → patch bump
+breaking: [KIP-510] remove v1 API endpoints     → major bump
+[KIP-472] update sidebar layout                 → patch (default)
+```
+
+### Labels (Override PR title — highest priority)
+
+Add label to PR when you need to override the title-based detection:
+
+| Label        | Bump  | Use When                                      |
+| ------------ | ----- | --------------------------------------------- |
+| `bump:major` | major | Title says `feat:` but it's actually breaking |
+| `bump:minor` | minor | Explicit override                             |
+| `bump:patch` | patch | Explicit override                             |
+
+**Create labels once** (only needed first time per repo):
+
+```bash
+gh label create "bump:patch" --color "#0075ca" --description "Bug fix or minor change"
+gh label create "bump:minor" --color "#e4e669" --description "New feature, non-breaking"
+gh label create "bump:major" --color "#d93f0b" --description "Breaking change"
+```
+
+**Add label to existing PR**:
+
+```bash
+gh pr edit <PR-number> --add-label "bump:minor"
+```
+
+### Resolution Order (in `release-versioning.yml`)
+
+1. `bump:major` / `bump:minor` / `bump:patch` label → **wins**
+2. PR title prefix (`breaking:`, `feat:`, `fix:`) → fallback
+3. No label, no prefix → **patch** (safe default)
+
+### Only Changed Modules Are Bumped
+
+Each component has its own independent version:
+
+- Web: `web/package.json` → `version`
+- IMS: `api/gradle.properties` → `imsVersion`
+- IES: `api/gradle.properties` → `iesVersion`
+- Contract: `api/gradle.properties` → `contractVersion`
+
+If only `web/**` files changed → only Web bumps. IMS/IES unchanged.
+
+---
+
 ## 🔍 GitHub Repository Search
 
 ### When to Use `github_repo`

@@ -191,6 +191,15 @@ describe('ArcGISIntegrationWizard', () => {
     mode: 'create' as const,
   };
 
+  const defaultStubs = {
+    FieldMappingStep: { template: '<div></div>' },
+    BasicDetailsStep: { template: '<div></div>' },
+    DocumentSelectionStep: { template: '<div></div>' },
+    ScheduleConfigurationStep: { template: '<div></div>' },
+    ConnectionStep: { template: '<div></div>' },
+    ReviewSummary: { template: '<div></div>' },
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     hoisted.wizardState = createWizardState();
@@ -337,6 +346,20 @@ describe('ArcGISIntegrationWizard', () => {
 
       const stepLabels = wrapper.findAll('.jw-step-label');
       expect(stepLabels[4].text()).toContain('Review & Clone');
+    });
+
+    it('defaults to create mode labels when mode is omitted', () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          open: true,
+        },
+        global: {
+          stubs: defaultStubs,
+        },
+      });
+
+      const stepLabels = wrapper.findAll('.jw-step-label');
+      expect(stepLabels[4].text()).toContain('Review & Create');
     });
   });
 
@@ -677,6 +700,66 @@ describe('ArcGISIntegrationWizard', () => {
       expect(hoisted.loadAllNamesMock).toHaveBeenCalledTimes(1);
     });
 
+    it('prefixes the integration name when prefilling clone mode', async () => {
+      hoisted.getArcGISIntegrationByIdMock.mockResolvedValueOnce({
+        name: 'Existing ArcGIS Integration',
+        description: 'Existing description',
+        itemType: 'DOCUMENT',
+        itemSubtype: 'SUBTYPE',
+        itemSubtypeLabel: 'Subtype',
+        dynamicDocumentType: 'REPORT',
+        dynamicDocumentTypeLabel: 'Report',
+        schedule: {
+          executionTime: '03:00',
+          frequencyPattern: 'DAILY',
+          executionDate: null,
+          dailyExecutionInterval: 24,
+          daySchedule: [],
+          monthSchedule: [],
+          isExecuteOnMonthEnd: false,
+          cronExpression: undefined,
+        },
+        connectionId: 'connection-1',
+      });
+      hoisted.getFieldMappingsMock.mockResolvedValueOnce([]);
+
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          open: false,
+          mode: 'clone',
+          integrationId: 'arcgis-1',
+        },
+        global: {
+          stubs: defaultStubs,
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+
+      expect(hoisted.wizardState.formData.name).toBe('Copy of Existing ArcGIS Integration');
+      expect(hoisted.originalNameRef.value).toBe('Existing ArcGIS Integration');
+    });
+
+    it('loads names without prefilling when edit mode opens without an integration id', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: {
+          open: false,
+          mode: 'edit',
+        },
+        global: {
+          stubs: defaultStubs,
+        },
+      });
+
+      await wrapper.setProps({ open: true });
+      await flushPromises();
+
+      expect(hoisted.getArcGISIntegrationByIdMock).not.toHaveBeenCalled();
+      expect(hoisted.ensureEmptyMappingSlotMock).not.toHaveBeenCalled();
+      expect(hoisted.loadAllNamesMock).toHaveBeenCalledTimes(1);
+    });
+
     it('shows an error toast when loading names fails on open', async () => {
       hoisted.loadAllNamesMock.mockRejectedValueOnce(new Error('names failed'));
 
@@ -757,14 +840,7 @@ describe('ArcGISIntegrationWizard', () => {
       const wrapper = mount(ArcGISIntegrationWizard, {
         props: { ...defaultProps, open: true },
         global: {
-          stubs: {
-            FieldMappingStep: { template: '<div></div>' },
-            BasicDetailsStep: { template: '<div></div>' },
-            DocumentSelectionStep: { template: '<div></div>' },
-            ScheduleConfigurationStep: { template: '<div></div>' },
-            ConnectionStep: { template: '<div></div>' },
-            ReviewSummary: { template: '<div></div>' },
-          },
+          stubs: defaultStubs,
         },
       });
 
@@ -776,21 +852,43 @@ describe('ArcGISIntegrationWizard', () => {
       expect((wrapper.vm as any).currentStep).toBe(1);
     });
 
+    it('clamps nextStep to the last step when currentStep exceeds the step count', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: defaultStubs,
+        },
+      });
+
+      hoisted.wizardState.stepValidation[99] = true;
+      (wrapper.vm as any).currentStep = 99;
+      (wrapper.vm as any).nextStep();
+
+      expect((wrapper.vm as any).currentStep).toBe(5);
+    });
+
+    it('keeps nextStep on the final step when already at the end of the wizard', async () => {
+      const wrapper = mount(ArcGISIntegrationWizard, {
+        props: { ...defaultProps, open: true },
+        global: {
+          stubs: defaultStubs,
+        },
+      });
+
+      hoisted.wizardState.stepValidation[5] = true;
+      (wrapper.vm as any).currentStep = 5;
+      (wrapper.vm as any).nextStep();
+
+      expect((wrapper.vm as any).currentStep).toBe(5);
+    });
+
     it('opens the cancel dialog when showCancelConfirmation is called directly', async () => {
       const wrapper = mount(ArcGISIntegrationWizard, {
         props: { ...defaultProps, open: true },
         global: {
-          stubs: {
-            FieldMappingStep: { template: '<div></div>' },
-            BasicDetailsStep: { template: '<div></div>' },
-            DocumentSelectionStep: { template: '<div></div>' },
-            ScheduleConfigurationStep: { template: '<div></div>' },
-            ConnectionStep: { template: '<div></div>' },
-            ReviewSummary: { template: '<div></div>' },
-          },
+          stubs: defaultStubs,
         },
       });
-
       (wrapper.vm as any).showCancelConfirmation();
       await wrapper.vm.$nextTick();
 
@@ -801,17 +899,9 @@ describe('ArcGISIntegrationWizard', () => {
       const wrapper = mount(ArcGISIntegrationWizard, {
         props: { ...defaultProps, open: true },
         global: {
-          stubs: {
-            FieldMappingStep: { template: '<div></div>' },
-            BasicDetailsStep: { template: '<div></div>' },
-            DocumentSelectionStep: { template: '<div></div>' },
-            ScheduleConfigurationStep: { template: '<div></div>' },
-            ConnectionStep: { template: '<div></div>' },
-            ReviewSummary: { template: '<div></div>' },
-          },
+          stubs: defaultStubs,
         },
       });
-
       (wrapper.vm as any).showCancelDialog = true;
       (wrapper.vm as any).confirmCancel();
 

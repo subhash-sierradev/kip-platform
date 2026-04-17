@@ -1,9 +1,7 @@
 package com.integration.management.model.dto.response;
 
 import com.integration.execution.contract.model.enums.FrequencyPattern;
-import jakarta.validation.Validation;
-import jakarta.validation.Validator;
-import jakarta.validation.ValidatorFactory;
+import com.integration.execution.contract.rest.response.IntegrationScheduleResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -43,19 +41,16 @@ class IntegrationScheduleResponseTest {
     }
 
     @Test
-    @DisplayName("bean validation rejects null required schedule fields")
-    void beanValidationRejectsNullRequiredScheduleFields() {
-        IntegrationScheduleResponse invalid = IntegrationScheduleResponse.builder()
+    @DisplayName("builder allows null fields — contract response carries no validation constraints")
+    void builderAllowsNullFields() {
+        IntegrationScheduleResponse response = IntegrationScheduleResponse.builder()
                 .executionDate(null)
                 .executionTime(null)
                 .frequencyPattern(null)
                 .build();
 
-        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
-            Validator validator = factory.getValidator();
-            assertThat(validator.validate(invalid))
-                    .extracting(v -> v.getPropertyPath().toString())
-                    .contains("executionDate", "executionTime", "frequencyPattern");
-        }
+        assertThat(response.getExecutionDate()).isNull();
+        assertThat(response.getExecutionTime()).isNull();
+        assertThat(response.getFrequencyPattern()).isNull();
     }
 }

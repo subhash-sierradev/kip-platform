@@ -93,4 +93,42 @@ class IntegrationJobExecutionMapperTest {
         assertThat(dto.getFailedRecordsMetadata().getFirst().errorMessage()).isEqualTo("boom");
         assertThat(dto.getTotalRecordsMetadata()).hasSize(1);
     }
+
+    @Test
+    @DisplayName("toRetryExecution returns null for null input")
+    void toRetryExecution_null_returnsNull() {
+        IntegrationJobExecutionMapper mapper = new IntegrationJobExecutionMapperImpl();
+        assertThat(mapper.toRetryExecution(null)).isNull();
+    }
+
+    @Test
+    @DisplayName("toRetryExecution maps only scheduleId; resets counters to 0")
+    void toRetryExecution_mapsScheduleIdAndResetsCounts() {
+        IntegrationJobExecutionMapper mapper = new IntegrationJobExecutionMapperImpl();
+
+        UUID scheduleId = UUID.randomUUID();
+        IntegrationJobExecution source = IntegrationJobExecution.builder()
+                .id(UUID.randomUUID())
+                .scheduleId(scheduleId)
+                .triggeredBy(TriggerType.API)
+                .status(JobExecutionStatus.FAILED)
+                .addedRecords(5)
+                .updatedRecords(3)
+                .failedRecords(2)
+                .totalRecords(10)
+                .errorMessage("original error")
+                .build();
+
+        IntegrationJobExecution retry = mapper.toRetryExecution(source);
+
+        assertThat(retry.getScheduleId()).isEqualTo(scheduleId);
+        assertThat(retry.getAddedRecords()).isZero();
+        assertThat(retry.getUpdatedRecords()).isZero();
+        assertThat(retry.getFailedRecords()).isZero();
+        assertThat(retry.getTotalRecords()).isZero();
+        assertThat(retry.getId()).isNull();
+        assertThat(retry.getStatus()).isNull();
+        assertThat(retry.getErrorMessage()).isNull();
+    }
 }
+

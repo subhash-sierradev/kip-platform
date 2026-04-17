@@ -108,6 +108,10 @@ describe('notification composables', () => {
     await c.fetchRules();
     expect(c.rules.value).toHaveLength(1);
 
+    (mockAdminService.getRules as any).mockRejectedValueOnce(new Error('fetch failed'));
+    await c.fetchRules();
+    expect(mockAlert.error).toHaveBeenCalledWith('Failed to load notification rules');
+
     (mockAdminService.createRule as any).mockResolvedValueOnce({});
     (mockAdminService.getRules as any).mockResolvedValueOnce([
       { id: 'r1', isEnabled: true },
@@ -122,6 +126,12 @@ describe('notification composables', () => {
     (mockAdminService.deleteRule as any).mockResolvedValueOnce(undefined);
     await c.deleteRule('r2');
     expect(c.rules.value.find(r => r.id === 'r2')).toBeUndefined();
+
+    c.rules.value = [{ id: 'r1', isEnabled: true } as any];
+    (mockAdminService.deleteRule as any).mockRejectedValueOnce(new Error('delete failed'));
+    await c.deleteRule('r1');
+    expect(mockAlert.error).toHaveBeenCalledWith('Failed to delete rule');
+    expect(c.rules.value).toEqual([{ id: 'r1', isEnabled: true }]);
 
     (mockAdminService.toggleRule as any).mockResolvedValueOnce({ id: 'r1', isEnabled: false });
     (mockAdminService.getRules as any).mockResolvedValueOnce([{ id: 'r1', isEnabled: false }]);

@@ -3,8 +3,8 @@ import { isValidCron } from 'cron-validator';
 import { buildCronFieldDescription, getMostCommonLocalTime } from './useCronFieldDescription';
 import {
   collectDayOfMonthMatches,
-  normalizeOffsetLabel,
   parseMonthField,
+  parseNumericField,
   toOrdinal,
 } from './useCronFieldParsers';
 import {
@@ -17,6 +17,15 @@ import {
   type Result,
   validateTimeZone,
 } from './useCronOccurrenceEngine';
+import {
+  DEFAULT_LOOKAHEAD_DAYS,
+  detectDateShift,
+  EXTENDED_LOOKAHEAD_DAYS,
+  formatTimezoneLabel,
+  getHourMinuteParts,
+  getReferenceDate,
+  shouldRetryWithExtendedLookahead,
+} from './useCronOccurrenceUtils';
 export {
   analyzeLocalPattern,
   generateOccurrences,
@@ -178,7 +187,7 @@ export function cronToTextWithTimezoneUniversal(
   cron: string,
   timezone: string,
   referenceDate?: string | Date,
-  lookaheadDays: number = 400
+  lookaheadDays: number = DEFAULT_LOOKAHEAD_DAYS
 ): ScheduleDescriptionResult {
   const tzResult = validateTimeZone(timezone);
   if (!tzResult.success) {
@@ -207,18 +216,19 @@ export function cronToTextWithTimezoneUniversal(
     const endDate = new Date(startDate);
     endDate.setUTCDate(endDate.getUTCDate() + lookaheadDays);
 
-    const occResult = generateOccurrences(cron, startDate, endDate, timezone, 100);
-    if (!occResult.success) {
-      return {
-        success: false,
-        text: '',
-        timezoneLabel: timezone,
-        isDateRangeShift: false,
-        error: occResult.error,
-      };
+    const occurrenceResult = resolveOccurrencesForDescription(
+      cron,
+      startDate,
+      endDate,
+      timezone,
+      lookaheadDays
+    );
+    if (!occurrenceResult.success) {
+      return occurrenceResult.errorResult;
     }
 
-    const occurrences = occResult.data || [];
+    const occurrences = occurrenceResult.occurrences;
+
     if (occurrences.length === 0) {
       return {
         success: true,
@@ -250,6 +260,58 @@ export function cronToTextWithTimezoneUniversal(
       error: `Failed to process cron: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
+}
+
+function buildOccurrenceErrorResult(
+  timezone: string,
+  error: string | undefined
+): { success: false; errorResult: ScheduleDescriptionResult } {
+  return {
+    success: false,
+    errorResult: {
+      success: false,
+      text: '',
+      timezoneLabel: timezone,
+      isDateRangeShift: false,
+      error,
+    },
+  };
+}
+
+function resolveOccurrencesForDescription(
+  cron: string,
+  startDate: Date,
+  endDate: Date,
+  timezone: string,
+  lookaheadDays: number
+):
+  | {
+      success: true;
+      occurrences: LocalOccurrence[];
+    }
+  | {
+      success: false;
+      errorResult: ScheduleDescriptionResult;
+    } {
+  let occResult = generateOccurrences(cron, startDate, endDate, timezone, 100);
+  if (!occResult.success) {
+    return buildOccurrenceErrorResult(timezone, occResult.error);
+  }
+
+  let occurrences = occResult.data || [];
+  if (occurrences.length > 0 || !shouldRetryWithExtendedLookahead(lookaheadDays)) {
+    return { success: true, occurrences };
+  }
+
+  const extendedEndDate = new Date(startDate);
+  extendedEndDate.setUTCDate(extendedEndDate.getUTCDate() + EXTENDED_LOOKAHEAD_DAYS);
+  occResult = generateOccurrences(cron, startDate, extendedEndDate, timezone, 100);
+  if (!occResult.success) {
+    return buildOccurrenceErrorResult(timezone, occResult.error);
+  }
+
+  occurrences = occResult.data || [];
+  return { success: true, occurrences };
 }
 
 function sanitizeDomField(parts: string[]): string[] {
@@ -383,7 +445,27 @@ function hasPotentialCalendarMatch(dayOfMonth: string, monthField: string): bool
 }
 
 function hasValidCronPartCount(parts: string[]): boolean {
-  return parts.length === 6;
+  return parts.length >= 5 && parts.length <= 7;
+}
+
+function normalizePartsForQuartzValidation(parts: string[]): string[] {
+  if (parts.length === 7) {
+    return parts.slice(0, 6);
+  }
+
+  if (parts.length === 6) {
+    return parts;
+  }
+
+  return ['0', ...parts];
+}
+
+function isValidYearField(yearField: string | undefined): boolean {
+  if (!yearField || yearField === '*' || yearField === '?') {
+    return true;
+  }
+
+  return parseNumericField(yearField, 1970, 2199).length > 0;
 }
 
 function passesCustomQuartzValidation(parts: string[]): boolean {
@@ -480,99 +562,15 @@ export function isValidQuartzCronExpression(expression: string): boolean {
     return false;
   }
 
-  if (!passesCustomQuartzValidation(parts)) {
+  if (!isValidYearField(parts[6])) {
     return false;
   }
 
-  return validateQuartzSpecialOrSanitized(parts);
-}
+  const normalizedParts = normalizePartsForQuartzValidation(parts);
 
-function getReferenceDate(referenceDate?: string | Date): Date {
-  if (referenceDate instanceof Date && !Number.isNaN(referenceDate.getTime())) return referenceDate;
-
-  if (typeof referenceDate === 'string' && referenceDate.trim()) {
-    const isoDateMatch = referenceDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (isoDateMatch) {
-      const [, year, month, day] = isoDateMatch;
-      return new Date(
-        Date.UTC(parseInt(year, 10), parseInt(month, 10) - 1, parseInt(day, 10), 12, 0, 0)
-      );
-    }
-
-    const parsed = new Date(referenceDate);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-
-  return new Date();
-}
-
-function getHourMinuteParts(cron: string): { hour: number; minute: number } | null {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5 && parts.length !== 6) {
-    return null;
-  }
-
-  const [, min, hour] = parts.length === 6 ? parts : ['', ...parts];
-  if (!min || !hour || !/^\d+$/.test(min) || !/^\d+$/.test(hour)) {
-    return null;
-  }
-
-  return {
-    hour: parseInt(hour, 10),
-    minute: parseInt(min, 10),
-  };
-}
-
-function detectDateShift(
-  utcHour: number,
-  utcMinute: number,
-  timezone: string,
-  referenceDate: Date
-): boolean {
-  try {
-    const utcDate = new Date(
-      Date.UTC(
-        referenceDate.getUTCFullYear(),
-        referenceDate.getUTCMonth(),
-        referenceDate.getUTCDate(),
-        utcHour,
-        utcMinute,
-        0
-      )
-    );
-
-    const localParts = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(utcDate);
-
-    const localDay = localParts.find(p => p.type === 'day')?.value;
-    const localMonth = localParts.find(p => p.type === 'month')?.value;
-    const localYear = localParts.find(p => p.type === 'year')?.value;
-
-    const utcDay = String(referenceDate.getUTCDate()).padStart(2, '0');
-    const utcMonth = String(referenceDate.getUTCMonth() + 1).padStart(2, '0');
-    const utcYear = String(referenceDate.getUTCFullYear());
-
-    return localDay !== utcDay || localMonth !== utcMonth || localYear !== utcYear;
-  } catch {
+  if (!passesCustomQuartzValidation(normalizedParts)) {
     return false;
   }
-}
 
-function formatTimezoneLabel(timezone: string, referenceDate: Date): string {
-  try {
-    const offsetPart = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      timeZoneName: 'shortOffset',
-    })
-      .formatToParts(referenceDate)
-      .find(part => part.type === 'timeZoneName')?.value;
-    if (!offsetPart) return timezone;
-    return `${timezone} (${normalizeOffsetLabel(offsetPart)})`;
-  } catch {
-    return timezone;
-  }
+  return validateQuartzSpecialOrSanitized(normalizedParts);
 }

@@ -200,6 +200,35 @@ npm run sanity
 
 ---
 
+## Versioning
+
+Each component is versioned independently using [Semantic Versioning](https://semver.org/). Source files are the single source of truth — CI/CD reads versions directly from these files at build and release time.
+
+| Component                | Source File             | Property          |
+| ------------------------ | ----------------------- | ----------------- |
+| Web (Vue.js)             | `web/package.json`      | `version`         |
+| Management Service (IMS) | `api/gradle.properties` | `imsVersion`      |
+| Execution Service (IES)  | `api/gradle.properties` | `iesVersion`      |
+| Execution Contract       | `api/gradle.properties` | `contractVersion` |
+
+### Release Workflow
+
+1. **Feature branches → Release branch** — branch names are free-form (`release/022026`, `release/1.0.0`, `release/q1-2026`, etc.).
+2. **Release branch → `main`** — versions are bumped automatically based on the merged PR signal:
+
+| Signal                                         | Bump                    | Example             |
+| ---------------------------------------------- | ----------------------- | ------------------- |
+| Label `bump:major` or title prefix `breaking:` | Major (`1.x.x → 2.0.0`) | Breaking API change |
+| Label `bump:minor` or title prefix `feat:`     | Minor (`x.1.x → x.2.0`) | New feature         |
+| Label `bump:patch` or title prefix `fix:`      | Patch (`x.x.1 → x.x.2`) | Bug fix             |
+| _(no signal)_                                  | Patch (default)         | Housekeeping        |
+
+> Label takes priority over title prefix when both are present.
+
+See [docs/KIP-472-versioning.md](docs/KIP-472-versioning.md) for the full specification.
+
+---
+
 ## Core Features
 
 - **Multi-tenant architecture** with isolated configurations and data
@@ -225,7 +254,7 @@ npm run sanity
 cd api
 ./gradlew clean build
 
-# Run tests with coverage (80% minimum)
+# Run tests with coverage (90% minimum)
 ./gradlew test
 ./gradlew jacocoTestReport
 

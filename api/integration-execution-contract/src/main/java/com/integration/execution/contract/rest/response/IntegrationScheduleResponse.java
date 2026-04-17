@@ -1,6 +1,7 @@
 package com.integration.execution.contract.rest.response;
 
 import com.integration.execution.contract.model.enums.FrequencyPattern;
+import com.integration.execution.contract.model.enums.TimeCalculationMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,4 +28,5 @@ public class IntegrationScheduleResponse {
     private Boolean isExecuteOnMonthEnd;
     private String cronExpression;
     private String businessTimeZone;
+    private TimeCalculationMode timeCalculationMode;
 }

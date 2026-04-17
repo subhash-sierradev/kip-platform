@@ -270,6 +270,18 @@ class ConfluencePageRendererTest {
         assertThat(html).isNotBlank();
     }
 
+    @Test
+    void buildPageContent_differentTimezones_produceDifferentTimestampOutput() {
+        List<KwMonitoringDocument> docs = List.of(docWithClient("Corp", "HIGH", "T"));
+
+        String htmlUtc = renderer.buildPageContent(docs, ZoneId.of("UTC"));
+        String htmlNewYork = renderer.buildPageContent(docs, ZoneId.of("America/New_York"));
+
+        assertThat(htmlUtc).isNotBlank();
+        assertThat(htmlNewYork).isNotBlank();
+        assertThat(htmlUtc).isNotEqualTo(htmlNewYork);
+    }
+
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------

@@ -189,6 +189,31 @@ describe('ScheduleInfoTab', () => {
     expect(wrapper.text()).toContain('Unknown');
   });
 
+  it('parses comma-delimited day schedules and preserves custom window labels', async () => {
+    const wrapper = mount(ScheduleInfoTab, {
+      props: {
+        integrationData: {
+          schedule: {
+            frequencyPattern: FrequencyPattern.WEEKLY,
+            daySchedule: ' mon,FRIDAY , holiday ' as any,
+            executionDate: '2026-02-01',
+            executionTime: '10:00',
+            timeCalculationMode: 'CUSTOM_WINDOW' as any,
+            isExecuteOnMonthEnd: false,
+          },
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await nextTick();
+    expect(wrapper.text()).toContain('Monday');
+    expect(wrapper.text()).toContain('Friday');
+    expect(wrapper.text()).toContain('Holiday');
+    expect(wrapper.text()).toContain('CUSTOM_WINDOW');
+  });
+
   it('shows monthly labels, sorted months, and month-end flag', async () => {
     const wrapper = mount(ScheduleInfoTab, {
       props: {
@@ -213,6 +238,29 @@ describe('ScheduleInfoTab', () => {
     expect(text).toContain('Run on Last Day of Month:');
     expect(text).toContain('Enabled');
     expect(text.indexOf('February')).toBeLessThan(text.indexOf('December'));
+  });
+
+  it('parses comma-delimited month schedules before sorting them', async () => {
+    const wrapper = mount(ScheduleInfoTab, {
+      props: {
+        integrationData: {
+          schedule: {
+            frequencyPattern: FrequencyPattern.MONTHLY,
+            monthSchedule: ' December,March , January ' as any,
+            executionDate: '2026-01-15',
+            executionTime: '08:30',
+            isExecuteOnMonthEnd: false,
+          },
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await nextTick();
+    const text = wrapper.text();
+    expect(text.indexOf('January')).toBeLessThan(text.indexOf('March'));
+    expect(text.indexOf('March')).toBeLessThan(text.indexOf('December'));
   });
 
   it('shows fixed day boundary labels and business timezone chip', async () => {
@@ -283,6 +331,28 @@ describe('ScheduleInfoTab', () => {
     expect(wrapper.text()).toContain('Something_else');
     expect(wrapper.text()).toContain('not-a-time');
     expect(wrapper.text()).toContain('Invalid Date');
+  });
+
+  it('returns the raw execution time when timezone formatting throws', async () => {
+    mockedTimezone = 'Invalid/Timezone';
+
+    const wrapper = mount(ScheduleInfoTab, {
+      props: {
+        integrationData: {
+          schedule: {
+            frequencyPattern: FrequencyPattern.DAILY,
+            executionDate: '2026-02-10',
+            executionTime: '12:30',
+            isExecuteOnMonthEnd: false,
+          },
+        },
+        integrationId: 'abc',
+        loading: false,
+      },
+    });
+
+    await nextTick();
+    expect(wrapper.text()).toContain('12:30');
   });
 
   it('renders not-set and not-configured fallbacks when schedule is sparse', async () => {

@@ -227,6 +227,17 @@ describe('ActionMenu', () => {
 
       expect(wrapper.emitted('action')).toBeFalsy();
     });
+
+    it('covers the disabled toggle branch directly', () => {
+      wrapper = mount(ActionMenu, {
+        props: { items: mockItems, disabled: true },
+      });
+
+      const setupState = (wrapper.vm as any).$?.setupState;
+      setupState.toggleMenu();
+
+      expect(wrapper.find('.action-menu-dropdown').exists()).toBe(false);
+    });
   });
 
   describe('Click Outside Handling', () => {
@@ -316,6 +327,49 @@ describe('ActionMenu', () => {
       }
 
       expect(wrapper.find('.action-menu-dropdown').exists()).toBe(true);
+    });
+
+    it('ignores outside-click handling when the menu container ref is missing', () => {
+      wrapper = mount(ActionMenu, {
+        props: { items: mockItems },
+      });
+
+      const setupState = (wrapper.vm as any).$?.setupState;
+      setupState.menuContainer = undefined;
+      setupState.handleClickOutside(new Event('click'));
+
+      expect(wrapper.find('.action-menu-dropdown').exists()).toBe(false);
+    });
+
+    describe('Menu Coordination', () => {
+      it('closes an open menu when another menu instance opens', async () => {
+        const first = mount(ActionMenu, { props: { items: mockItems } });
+        const second = mount(ActionMenu, { props: { items: mockItems } });
+
+        await first.find('.action-menu-trigger').trigger('click');
+        expect(first.find('.action-menu-dropdown').exists()).toBe(true);
+
+        await second.find('.action-menu-trigger').trigger('click');
+
+        expect(first.find('.action-menu-dropdown').exists()).toBe(false);
+        expect(second.find('.action-menu-dropdown').exists()).toBe(true);
+
+        first.unmount();
+        second.unmount();
+      });
+
+      it('skips dropdown positioning when the dropdown ref is unavailable', async () => {
+        wrapper = mount(ActionMenu, {
+          props: { items: mockItems },
+        });
+
+        const setupState = (wrapper.vm as any).$?.setupState;
+        setupState.dropdownElement = undefined;
+        setupState.toggleMenu();
+        await wrapper.vm.$nextTick();
+
+        expect(wrapper.find('.action-menu-dropdown').exists()).toBe(true);
+      });
     });
   });
 

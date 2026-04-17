@@ -757,20 +757,21 @@
 .sidebar-footer {
   flex-shrink: 0;
   padding: 0.75rem 1rem;
-  border-top: 1px solid var(--kw-layout-border, #1a1a1a);
-  background: var(--kw-sidebar-bg, #383838);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.15);
 }
 
-.powered-by {
+.footer-brand {
   text-align: center;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .powered-text {
   display: block;
-  font-size: 9px;
-  color: #666;
-  letter-spacing: 0.5px;
+  font-size: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   margin-bottom: 0.25rem;
 }
 
@@ -778,42 +779,29 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 0.3rem;
 }
 
 .brand-logo {
-  height: 16px;
+  height: 14px;
   width: auto;
+  opacity: 0.85;
 }
 
 .brand-text {
   font-size: 11px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: 0.5px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.8px;
 }
 
 /* AppVersion Component Styles */
-.app-version {
-  flex-shrink: 0;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: rgba(0, 0, 0, 0.2);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.app-version .version-text {
-  color: #ffffff;
-  font-family: monospace;
-  font-size: 0.7rem;
-  font-weight: 500;
-}
-
-.app-version .copyright-text {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.6rem;
+.sidebar-footer .app-version {
+  padding: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 0.6rem;
+  background: transparent;
+  display: block;
 }
 
 /* Collapsed state */

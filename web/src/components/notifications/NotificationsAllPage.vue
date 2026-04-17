@@ -462,7 +462,9 @@ onUnmounted(() => {
   if (activeFilterTab.value === 'unread' && selectedNotificationId.value) {
     void markNotificationsAsRead([selectedNotificationId.value]);
   }
-  stopResize();
+  document.removeEventListener('mousemove', resizePanels);
+  document.removeEventListener('mouseup', stopResize);
+  isResizing.value = false;
 });
 </script>
 

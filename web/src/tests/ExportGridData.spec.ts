@@ -272,6 +272,39 @@ describe('resolveGridItems', () => {
     const res = await resolveGridItems<Row>({ instance: gridInst });
     expect(res).toEqual([{ id: 77 }]);
   });
+
+  it('returns fallback data when a filtered data source resolves to no rows', async () => {
+    const ds = makeDataSource({
+      filter: { status: 'ACTIVE' },
+      loadResult: { data: [] },
+      items: [],
+    });
+    const gridInst = makeGridInst();
+    gridInst.getDataSource = vi.fn(() => ds);
+
+    const fallback = [{ id: 333 }];
+    const res = await resolveGridItems<Row>({ instance: gridInst }, fallback);
+
+    expect(res).toEqual(fallback);
+  });
+
+  it('returns an empty array when load resolves to a non-array payload and no fallbacks exist', async () => {
+    const ds: DataSourceLike<Row> = {
+      items: () => undefined as unknown as Row[],
+      load: () => Promise.resolve({ totalCount: 5 } as unknown as { data?: Row[] }),
+    };
+    const gridInst = makeGridInst();
+    gridInst.getDataSource = vi.fn(() => ds);
+
+    const res = await resolveGridItems<Row>({ instance: gridInst });
+
+    expect(res).toEqual([]);
+  });
+
+  it('returns an empty array when no fallback data is provided and the grid reference cannot resolve a data source', async () => {
+    const res = await resolveGridItems<Row>({ instance: {} });
+    expect(res).toEqual([]);
+  });
 });
 
 describe('exportGridData', () => {
@@ -355,6 +388,31 @@ describe('exportGridData', () => {
     expect(setAttributeSpy).toHaveBeenCalledWith(
       'download',
       expect.stringMatching(/^grid-export_.*\.csv$/)
+    );
+  });
+
+  it('uses the provided filename prefix during export', async () => {
+    const createElementSpy = vi.spyOn(document, 'createElement');
+    createElementSpy.mockImplementation((tagName: any) => {
+      const el = document.createElementNS('http://www.w3.org/1999/xhtml', tagName);
+      Object.defineProperty(el, 'click', { value: vi.fn() });
+      return el as unknown as HTMLElement;
+    });
+
+    const setAttributeSpy = vi.spyOn(HTMLAnchorElement.prototype, 'setAttribute');
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:prefixed');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+
+    await exportGridData<{ a: string }>({
+      fallbackData: [{ a: 'row' }],
+      headers: ['A'],
+      pickFields: row => [row.a],
+      filenamePrefix: 'custom-prefix',
+    });
+
+    expect(setAttributeSpy).toHaveBeenCalledWith(
+      'download',
+      expect.stringMatching(/^custom-prefix_.*\.csv$/)
     );
   });
 });

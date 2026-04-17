@@ -9,6 +9,7 @@
     <suppress checks="MissingJavadocMethod" files=".*Test\.java"/>
     <suppress checks="JavadocMethod" files=".*Test\.java"/>
     <suppress checks="MethodName" files=".*Test\.java"/>
+    <suppress checks="MethodName" files=".*IT\.java"/>
 
     <!-- Suppress Javadoc checks for configuration classes -->
     <suppress checks="MissingJavadocType" files=".*[Cc]onfig.*\.java"/>

@@ -616,4 +616,142 @@ describe('JiraWebhookWizard', () => {
 
     expect((wrapper.vm as any).selectedParentLabel).toBe('');
   });
+
+  it('builds a Jira connection request only when all required credentials are present', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div />' },
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: { template: '<div />' },
+          PreviewStep: { template: '<div />' },
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    (wrapper.vm as any).connectionData.baseUrl = 'https://jira.example';
+    (wrapper.vm as any).connectionData.username = 'alice';
+    await nextTick();
+
+    expect((wrapper.vm as any).jiraConnectionRequest).toBeUndefined();
+
+    (wrapper.vm as any).connectionData.password = 'secret';
+    await nextTick();
+
+    expect((wrapper.vm as any).jiraConnectionRequest).toEqual({
+      jiraBaseUrl: 'https://jira.example',
+      integrationSecret: {
+        baseUrl: 'https://jira.example',
+        authType: 'BASIC_AUTH',
+        credentials: {
+          authType: 'BASIC_AUTH',
+          username: 'alice',
+          password: 'secret',
+        },
+      },
+      organizationKey: '',
+    });
+  });
+
+  it('does not move before the first step when previous is triggered at step zero', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div />' },
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: { template: '<div />' },
+          PreviewStep: { template: '<div />' },
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    (wrapper.vm as any).activeStep = 0;
+    (wrapper.vm as any).handlePrevious();
+
+    expect((wrapper.vm as any).activeStep).toBe(0);
+  });
+
+  it('clears the selected parent label when the emitted parent key is blank', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div />' },
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: { template: '<div />' },
+          PreviewStep: { template: '<div />' },
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    (wrapper.vm as any).selectedParentKey = 'PRJ-101';
+    (wrapper.vm as any).selectedParentLabel = 'Parent 101';
+    await nextTick();
+
+    (wrapper.vm as any).onParentLabelChange({ value: '', label: 'Ignored' });
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedParentKey).toBe('');
+    expect((wrapper.vm as any).selectedParentLabel).toBe('');
+  });
+
+  it('preserves the parent label when mapping updates keep the same extracted parent key', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div />' },
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: { template: '<div />' },
+          PreviewStep: { template: '<div />' },
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+
+    (wrapper.vm as any).selectedParentKey = 'PRJ-101';
+    (wrapper.vm as any).selectedParentLabel = 'Parent 101';
+    await nextTick();
+
+    (wrapper.vm as any).onMappingDataUpdate({
+      customFields: [
+        {
+          jiraFieldKey: 'parent',
+          jiraFieldLabel: 'Parent',
+          type: 'object',
+          value: '{"key":"PRJ-101"}',
+          valueSource: 'literal',
+        },
+      ],
+    });
+    await nextTick();
+
+    expect((wrapper.vm as any).selectedParentKey).toBe('PRJ-101');
+    expect((wrapper.vm as any).selectedParentLabel).toBe('Parent 101');
+  });
 });

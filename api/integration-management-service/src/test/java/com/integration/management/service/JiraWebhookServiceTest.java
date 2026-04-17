@@ -981,4 +981,185 @@ class JiraWebhookServiceTest {
         assertThatThrownBy(() -> jiraWebhookService.toggleActiveStatus("w-dae", "t1", "u2"))
                 .isInstanceOf(IntegrationPersistenceException.class);
     }
+
+    @Test
+    @DisplayName("toggleActiveStatus: webhook with null name and null id uses empty strings in metadata")
+    void toggleActiveStatus_nullNameAndNullId_usesEmptyStringsInMetadata() {
+        // Covers toggleActiveStatus: webhook.getName() == null → "" and webhook.getId() == null → ""
+        JiraWebhook webhook = JiraWebhook.builder()
+                .tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .webhookUrl("url").connectionId(UUID.randomUUID())
+                .samplePayload("{}").isEnabled(true).build();
+        when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(null, "t1"))
+                .thenReturn(Optional.of(webhook));
+        when(jiraWebhookRepository.save(any())).thenReturn(webhook);
+
+        boolean newStatus = jiraWebhookService.toggleActiveStatus(null, "t1", "u2");
+
+        assertThat(newStatus).isFalse();
+    }
+
+    @Test
+    @DisplayName("update: snapshot null mappings - uses empty set")
+    void update_nullMappings_usesEmptySnapshot() {
+        UUID connectionId = UUID.randomUUID();
+        JiraWebhookCreateUpdateRequest request;
+        JiraWebhook existing;
+
+        // Test snapshot(null): pass null existing mappings with empty incoming mappings
+        // snapshot(null) = Set.of(), snapshot([]) = Set.of() → not changed → no clear() NPE
+        existing = JiraWebhook.builder()
+                .id("wh-null-maps").tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .name("Old").connectionId(connectionId).webhookUrl("url")
+                .samplePayload("{}").isEnabled(true)
+                .jiraFieldMappings(null)  // null mappings → snapshot returns empty set
+                .build();
+        when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse("wh-null-maps", "t1"))
+                .thenReturn(Optional.of(existing));
+        when(jiraWebhookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        // Empty incoming list → snapshot returns Set.of() → matches null existing → no change
+        when(jiraFieldMappingMapper.toEntity(List.of())).thenReturn(List.of());
+
+        request = JiraWebhookCreateUpdateRequest.builder()
+                .name("New").connectionId(connectionId).samplePayload("{}")
+                .fieldsMapping(List.of())  // empty list, not null
+                .build();
+        doNothing().when(jiraWebhookMapper).updateEntity(any(), any());
+
+        jiraWebhookService.update("wh-null-maps", request, "t1", "u1");
+
+        verify(jiraWebhookRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("update: snapshot with empty existing mappings treats empty list same as null")
+    void update_emptyExistingMappings_usesEmptySnapshot() {
+        UUID connectionId = UUID.randomUUID();
+        JiraFieldMappingDto incomingDto = JiraFieldMappingDto.builder()
+                .jiraFieldId("f2").jiraFieldName("F2").displayLabel("L2")
+                .dataType(JiraDataType.STRING).required(false).build();
+        JiraFieldMapping incomingMapping = JiraFieldMapping.builder()
+                .jiraFieldId("f2").jiraFieldName("F2").displayLabel("L2")
+                .dataType(JiraDataType.STRING).required(false).build();
+
+        JiraWebhook existing = JiraWebhook.builder()
+                .id("wh-empty-maps").tenantId("t1").createdBy("u").lastModifiedBy("u")
+                .name("Old2").connectionId(connectionId).webhookUrl("url")
+                .samplePayload("{}").isEnabled(true)
+                .jiraFieldMappings(new ArrayList<>())  // empty → snapshot(empty) → returns empty set
+                .build();
+        when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse("wh-empty-maps", "t1"))
+                .thenReturn(Optional.of(existing));
+        when(jiraWebhookRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        when(jiraFieldMappingMapper.toEntity(List.of(incomingDto))).thenReturn(List.of(incomingMapping));
+        doNothing().when(jiraWebhookMapper).updateEntity(any(), any());
+
+        com.integration.management.model.dto.request.JiraWebhookCreateUpdateRequest request =
+                com.integration.management.model.dto.request.JiraWebhookCreateUpdateRequest.builder()
+                        .name("New2").connectionId(connectionId).samplePayload("{}")
+                        .fieldsMapping(List.of(incomingDto))
+                        .build();
+
+        jiraWebhookService.update("wh-empty-maps", request, "t1", "u1");
+
+        verify(jiraWebhookRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("create: entity with null jiraFieldMappings logs 0 field mappings")
+    void create_entityWithNullJiraFieldMappings_logsZero() {
+        // Covers the null branch in: saved.getJiraFieldMappings() != null ? size() : 0
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("NullMappings").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        JiraWebhook entity = JiraWebhook.builder()
+                .name("NullMappings").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(null)  // null jiraFieldMappings
+                .build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        when(jiraWebhookRepository.save(any(JiraWebhook.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        JiraWebhook saved = jiraWebhookService.create(request, "t1", "u1");
+        assertThat(saved.getJiraFieldMappings()).isNull();
+    }
+
+    @Test
+    @DisplayName("isUniqueConstraintViolation: cause message with 'duplicate entry' throws IntegrationNameAlreadyExistsException")
+    void isUniqueConstraintViolation_duplicateEntry_throwsNameAlreadyExists() {
+        // Covers the "duplicate entry" branch in isUniqueConstraintViolation (true path not previously exercised)
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("DupEntry").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        when(jiraWebhookMapper.toEntity(any())).thenReturn(JiraWebhook.builder()
+                .tenantId("t1").name("DupEntry").connectionId(UUID.randomUUID()).samplePayload("{}").build());
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        // "duplicate entry" is the MySQL-style constraint message
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("violation",
+                        new RuntimeException("Duplicate entry 'webhook-name' for key 'uq_webhook_name'")));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(IntegrationNameAlreadyExistsException.class);
+    }
+
+    @Test
+    @DisplayName("create: with non-null fieldsMapping processes field mappings")
+    void create_nonNullFieldsMapping_processesFieldMappings() {
+        JiraFieldMappingDto fieldDto = JiraFieldMappingDto.builder()
+                .jiraFieldId("f1").jiraFieldName("Field1").displayLabel("Label1")
+                .dataType(JiraDataType.STRING).required(true).build();
+        JiraWebhookCreateUpdateRequest request = JiraWebhookCreateUpdateRequest.builder()
+                .name("WH with mappings")
+                .connectionId(UUID.randomUUID())
+                .samplePayload("{}")
+                .fieldsMapping(List.of(fieldDto))
+                .build();
+
+        JiraFieldMapping mappingEntity = JiraFieldMapping.builder()
+                .jiraFieldId("f1").jiraFieldName("Field1").displayLabel("Label1")
+                .dataType(JiraDataType.STRING).required(true).build();
+        JiraWebhook entity = JiraWebhook.builder()
+                .name("WH with mappings").connectionId(request.getConnectionId())
+                .samplePayload("{}").jiraFieldMappings(new ArrayList<>()).build();
+
+        when(jiraWebhookMapper.toEntity(request)).thenReturn(entity);
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        when(jiraFieldMappingMapper.toEntity(List.of(fieldDto))).thenReturn(List.of(mappingEntity));
+        when(jiraWebhookRepository.save(any(JiraWebhook.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        JiraWebhook saved = jiraWebhookService.create(request, "t1", "u1");
+
+        assertThat(saved.getJiraFieldMappings()).hasSize(1);
+        assertThat(saved.getJiraFieldMappings().get(0).getJiraWebhook()).isSameAs(saved);
+    }
+
+    @Test
+    @DisplayName("isUniqueConstraintViolation: cause message does not match any keyword returns false")
+    void isUniqueConstraintViolation_noMatchingMessage_returnsFalse() {
+        // Covers isUniqueConstraintViolation: cause message has non-null but no unique/duplicate keyword → returns false
+        // DataIntegrityViolationException caught by outer catch → throws IntegrationPersistenceException
+        com.integration.management.model.dto.request.JiraWebhookCreateUpdateRequest request =
+                com.integration.management.model.dto.request.JiraWebhookCreateUpdateRequest.builder()
+                        .name("N").connectionId(UUID.randomUUID()).samplePayload("{}").build();
+        when(jiraWebhookMapper.toEntity(any())).thenReturn(JiraWebhook.builder()
+                .tenantId("t1").name("N").connectionId(UUID.randomUUID()).samplePayload("{}").build());
+        when(jiraWebhookProperties.getMaxRetries()).thenReturn(1);
+        when(jiraWebhookProperties.getIdLength()).thenReturn(8);
+        when(jiraWebhookProperties.getUrlTemplate()).thenReturn("https://host/{webhookId}");
+        // foreign key violation - not a unique/duplicate constraint
+        when(jiraWebhookRepository.save(any())).thenThrow(
+                new DataIntegrityViolationException("violation",
+                        new RuntimeException("foreign key constraint failed")));
+
+        assertThatThrownBy(() -> jiraWebhookService.create(request, "t1", "u1"))
+                .isInstanceOf(com.integration.management.exception.IntegrationPersistenceException.class);
+    }
 }
