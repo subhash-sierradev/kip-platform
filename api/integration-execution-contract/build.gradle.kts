@@ -3,7 +3,7 @@ plugins {
     checkstyle
 }
 
-version = "0.0.2"
+version = "0.0.3"
 description = "Pure contract module - DTOs, enums, and models"
 
 dependencies {
