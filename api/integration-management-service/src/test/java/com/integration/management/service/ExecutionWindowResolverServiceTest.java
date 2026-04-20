@@ -155,9 +155,9 @@ class ExecutionWindowResolverServiceTest {
         Instant expectedStart = ZonedDateTime.of(2024, 3, 14, 0, 0, 0, 0,
                 ZoneId.of("America/New_York")).toInstant();
 
-        // windowEnd should be 2024-03-15 00:00 EDT (04:00 UTC) — exclusive midnight
+        // windowEnd should be 2024-03-15 00:00 EDT minus 1ms (03:59:59.999 UTC)
         Instant expectedEnd = ZonedDateTime.of(2024, 3, 15, 0, 0, 0, 0,
-                ZoneId.of("America/New_York")).toInstant();
+                ZoneId.of("America/New_York")).toInstant().minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -184,8 +184,8 @@ class ExecutionWindowResolverServiceTest {
         // windowStart: 2024-03-10 00:00 UTC
         Instant expectedStart = Instant.parse("2024-03-10T00:00:00Z");
 
-        // windowEnd: 2024-03-13 00:00 UTC — exclusive midnight
-        Instant expectedEnd = Instant.parse("2024-03-13T00:00:00Z");
+        // windowEnd: 2024-03-13 00:00 UTC minus 1ms
+        Instant expectedEnd = Instant.parse("2024-03-13T00:00:00Z").minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -232,7 +232,7 @@ class ExecutionWindowResolverServiceTest {
                 ZoneId.of("America/Los_Angeles")).toInstant();
 
         Instant expectedEnd = ZonedDateTime.of(2024, 3, 11, 0, 0, 0, 0,
-                ZoneId.of("America/Los_Angeles")).toInstant();
+                ZoneId.of("America/Los_Angeles")).toInstant().minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -258,7 +258,7 @@ class ExecutionWindowResolverServiceTest {
                 ZoneId.of("Europe/London")).toInstant();
 
         Instant expectedEnd = ZonedDateTime.of(2024, 3, 15, 0, 0, 0, 0,
-                ZoneId.of("Europe/London")).toInstant();
+                ZoneId.of("Europe/London")).toInstant().minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -285,8 +285,8 @@ class ExecutionWindowResolverServiceTest {
         // Fallback 2024-03-10 15:30 should align to 2024-03-10 00:00 UTC
         Instant expectedStart = Instant.parse("2024-03-10T00:00:00Z");
 
-        // Trigger 2024-03-12 10:00 should align to 2024-03-12 00:00 UTC — exclusive midnight
-        Instant expectedEnd = Instant.parse("2024-03-12T00:00:00Z");
+        // Trigger 2024-03-12 10:00 should align to 2024-03-12 00:00 minus 1ms
+        Instant expectedEnd = Instant.parse("2024-03-12T00:00:00Z").minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -351,7 +351,7 @@ class ExecutionWindowResolverServiceTest {
         // Assert
         // Should stay at midnight
         Instant expectedStart = Instant.parse("2024-03-14T00:00:00Z");
-        Instant expectedEnd = Instant.parse("2024-03-15T00:00:00Z");
+        Instant expectedEnd = Instant.parse("2024-03-15T00:00:00Z").minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);
@@ -375,7 +375,7 @@ class ExecutionWindowResolverServiceTest {
 
         // Assert
         Instant expectedStart = Instant.parse("2024-03-14T00:00:00Z");
-        Instant expectedEnd = Instant.parse("2024-03-16T00:00:00Z");
+        Instant expectedEnd = Instant.parse("2024-03-16T00:00:00Z").minusMillis(1);
 
         assertThat(result.windowStart()).isEqualTo(expectedStart);
         assertThat(result.windowEnd()).isEqualTo(expectedEnd);

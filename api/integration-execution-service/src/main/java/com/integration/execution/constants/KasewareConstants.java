@@ -14,16 +14,6 @@ public final class KasewareConstants {
 
     public static final String DOCUMENT_FINAL_DYNAMIC = "DOCUMENT_FINAL_DYNAMIC";
 
-    // Monitoring Document Field Keys
-    /** JSON field name for the dynamic-data object in a Kaseware monitoring document. */
-    public static final String DYNAMIC_DATA_FIELD = "dynamicData";
-
-    /**
-     * Key inside the {@code dynamicData} object used by Kaseware to store internal
-     * hidden-field markers. This key is always excluded from resolved attribute maps.
-     */
-    public static final String HIDDEN_FIELDS_KEY = "hiddenFields";
-
     private KasewareConstants() {
         throw new IllegalStateException("KasewareConstants is a utility class and cannot be instantiated");
     }

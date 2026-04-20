@@ -2,7 +2,7 @@ package com.integration.management.constants;
 
 /**
  * Security-related constants for Integration Management Service.
- * Includes authentication, authorization, and multi-tenant security concerns test -8.
+ * Includes authentication, authorization, and multi-tenant security concerns.
  */
 public final class ManagementSecurityConstants {
 

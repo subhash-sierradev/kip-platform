@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "0.0.1-rc.7"
+version = "0.0.2-rc.1"
 description = "Integration Execution Service - Processing Engine (port 8081)"
 
 dependencyManagement {
@@ -132,7 +132,7 @@ tasks.jacocoTestReport {
     }
 }
 
-val jacocoMinCoverage = providers.gradleProperty("jacocoMinimumCoverage").get().toBigDecimal()
+val jacocoMinCoverage = "0.90".toBigDecimal()
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)

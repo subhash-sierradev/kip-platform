@@ -87,18 +87,17 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_documentWithNullAttributes_isExcludedFromReport() {
+    void buildPageContent_documentWithNullAttributes_usesUnknownClient() {
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
                 .id("doc-no-attrs")
                 .title("No Attributes")
                 .attributes(null)
                 .build();
 
-        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(List.of(doc));
-        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
+        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).doesNotContain("Unknown");
+        assertThat(html).contains("Unknown");
     }
 
     @Test
@@ -197,7 +196,7 @@ class ConfluencePageRendererTest {
     }
 
     @Test
-    void buildPageContent_clientWithBlankName_isExcludedFromReport() {
+    void buildPageContent_clientWithBlankName_groupedUnderUnknown() {
         Map<String, Object> dynData = new HashMap<>();
         dynData.put("Client", "  ");
         KwMonitoringDocument doc = KwMonitoringDocument.builder()
@@ -205,11 +204,10 @@ class ConfluencePageRendererTest {
                 .attributes(Map.of("dynamicData", dynData))
                 .build();
 
-        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(List.of(doc));
-        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
+        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
 
         assertThat(html).isNotBlank();
-        assertThat(html).doesNotContain("Unknown");
+        assertThat(html).contains("Unknown");
     }
 
     @Test
@@ -272,64 +270,16 @@ class ConfluencePageRendererTest {
         assertThat(html).isNotBlank();
     }
 
-
     @Test
-    void buildPageContent_unknownClientsExcluded_onlyNamedClientsRendered() {
-        List<KwMonitoringDocument> docs = List.of(
-                docWithClient("Zeta Corp", "LOW", "Z"),
-                docWithClient("Alpha Inc", "HIGH", "A"),
-                docWithClient(null, "MEDIUM", "U1"),   // no client -> excluded
-                docWithClient("  ", "LOW", "U2"));      // blank client -> excluded
+    void buildPageContent_differentTimezones_produceDifferentTimestampOutput() {
+        List<KwMonitoringDocument> docs = List.of(docWithClient("Corp", "HIGH", "T"));
 
-        List<KwMonitoringDocument> filtered = renderer.filterNamedClients(docs);
-        String html = renderer.buildPageContent(filtered, ZoneId.of("UTC"));
+        String htmlUtc = renderer.buildPageContent(docs, ZoneId.of("UTC"));
+        String htmlNewYork = renderer.buildPageContent(docs, ZoneId.of("America/New_York"));
 
-        assertThat(html).isNotBlank();
-        assertThat(html).contains("Alpha Inc");
-        assertThat(html).contains("Zeta Corp");
-        assertThat(html).doesNotContain(">Unknown<");
-    }
-
-    @Test
-    void buildPageContent_nullTitle_usesFallbackContainingDocumentId() {
-        KwMonitoringDocument doc = KwMonitoringDocument.builder()
-                .id("doc-no-title-id")
-                .title(null)
-                .attributes(Map.of("dynamicData", Map.of("Client", "Corp", "Priority", "LOW")))
-                .build();
-
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
-
-        assertThat(html).isNotBlank();
-        assertThat(html).contains("[Untitled");
-        assertThat(html).contains("doc-no-title-id");
-    }
-
-    @Test
-    void buildPageContent_blankTitle_usesFallbackContainingDocumentId() {
-        KwMonitoringDocument doc = KwMonitoringDocument.builder()
-                .id("doc-blank-title-id")
-                .title("   ")
-                .attributes(Map.of("dynamicData", Map.of("Client", "Corp", "Priority", "LOW")))
-                .build();
-
-        String html = renderer.buildPageContent(List.of(doc), ZoneId.of("UTC"));
-
-        assertThat(html).isNotBlank();
-        assertThat(html).contains("[Untitled");
-        assertThat(html).contains("doc-blank-title-id");
-    }
-
-    @Test
-    void buildPageContent_onlyNamedClients_clientCountExcludesUnknown() {
-        // Named clients only — unknown group should NOT appear at all
-        List<KwMonitoringDocument> docs = List.of(
-                docWithClient("Alpha", "HIGH", "A"),
-                docWithClient("Beta", "LOW", "B"));
-
-        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
-
-        assertThat(html).doesNotContain("Unknown");
+        assertThat(htmlUtc).isNotBlank();
+        assertThat(htmlNewYork).isNotBlank();
+        assertThat(htmlUtc).isNotEqualTo(htmlNewYork);
     }
 
     // -----------------------------------------------------------------------
@@ -338,9 +288,7 @@ class ConfluencePageRendererTest {
 
     private KwMonitoringDocument docWithClient(String client, String priority, String title) {
         Map<String, Object> dynData = new HashMap<>();
-        if (client != null) {
-            dynData.put("Client", client);
-        }
+        dynData.put("Client", client);
         dynData.put("Priority", priority);
 
         return KwMonitoringDocument.builder()

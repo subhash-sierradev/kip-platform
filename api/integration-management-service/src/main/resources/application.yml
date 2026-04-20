@@ -112,10 +112,6 @@ management:
 app:
   messaging:
     transport: ${APP_MESSAGING_TRANSPORT:rabbitmq}
-  # Path to the root version.json manifest.
-  # Override via VERSION_FILE_PATH env variable in deployment (e.g. /app/version.json).
-  # Default is relative to the working directory (repo root when running locally).
-  version-file-path: ${VERSION_FILE_PATH:../version.json}
 
 # General application timeout configuration
 application:
