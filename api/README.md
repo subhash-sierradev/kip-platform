@@ -153,6 +153,52 @@ open integration-management-service/build/reports/jacoco/test/html/index.html
 ./gradlew clean check
 ```
 
+---
+
+## Security & Dependency Hygiene
+
+### 1. OWASP CVE Scanning (`dependencyCheckAnalyze`)
+
+Scans all direct and transitive dependencies against the NIST NVD. **Fails the build** if any CVE with CVSS ≥ 7.0 is detected.
+
+```bash
+# Run CVE scan (downloads NVD database on first run — allow ~5 min)
+./gradlew dependencyCheckAnalyze
+
+# HTML report location
+open build/reports/dependency-check/dependency-check-report.html
+```
+
+**NVD API Key (recommended)** — without a key, NVD rate-limits downloads to ~10 req/min, which can cause timeouts in CI. Obtain a free key at <https://nvd.nist.gov/developers/request-an-api-key> and configure it via **one** of:
+
+```bash
+# Option A — Gradle property (local, never commit to VCS)
+echo "nvd.api.key=YOUR_KEY" >> ~/.gradle/gradle.properties
+
+# Option B — environment variable (CI/CD)
+export NVD_API_KEY=YOUR_KEY
+```
+
+**Suppressing false positives** — add entries to `api/owasp-suppressions.xml` with a justification comment and expiry date. See the scaffold in that file for the format.
+
+### 2. Outdated Dependency Report (`dependencyUpdates`)
+
+Produces an **informational** HTML/JSON report of libraries that have newer stable releases available. Does **not** fail the build.
+
+```bash
+# Generate the report
+./gradlew dependencyUpdates
+
+# HTML report location
+open build/reports/dependencyUpdates/dependency-updates.html
+```
+
+Non-stable versions (alpha, beta, RC, milestone) are automatically excluded — only stable upgrade candidates are surfaced.
+
+### 3. Compiler Deprecation Flags (automatic)
+
+`-Xlint:deprecation` and `-Xlint:unchecked` are applied globally to every `compileJava` task. Deprecation and unchecked-cast warnings appear in the compiler output on every `./gradlew build` — no extra command needed.
+
 **Current Coverage**: IMS ~39% (Target: 80%) · IES: 0% (Target: 80%)
 
 ---
