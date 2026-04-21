@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "0.0.2-rc.1"
+version = "0.0.1-rc.7"
 description = "Integration Execution Service - Processing Engine (port 8081)"
 
 dependencyManagement {
