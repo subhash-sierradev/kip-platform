@@ -1,6 +1,6 @@
 ﻿name: Release Versioning
 
-# main / main-2 -> label-driven semantic bump (bump:patch / bump:minor / bump:major)
+# main -> label-driven semantic bump (bump:patch / bump:minor / bump:major)
 #              - bump type set via PR label; defaults to patch if no label present
 #              - per-module tags created from the NEW bumped version in source files
 #              - release branch name is free-form (e.g. release/022026)
@@ -15,7 +15,6 @@ on:
   pull_request:
     branches:
       - main
-      - main-2 # Added main-2 to trigger frontend CI for PRs targeting main-2 branch
       - 'release/**'
     types: [closed]
 
@@ -36,8 +35,7 @@ jobs:
   release-version-bump:
     if: >-
       github.event.pull_request.merged == true &&
-      (github.event.pull_request.base.ref == 'main' ||
-       github.event.pull_request.base.ref == 'main-2')
+      github.event.pull_request.base.ref == 'main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
