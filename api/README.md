@@ -157,16 +157,22 @@ open integration-management-service/build/reports/jacoco/test/html/index.html
 
 ## Security & Dependency Hygiene
 
-### 1. OWASP CVE Scanning (`dependencyCheckAnalyze`)
+### 1. OWASP CVE Scanning
 
-Scans all direct and transitive dependencies against the NIST NVD. **Fails the build** if any CVE with CVSS ≥ 7.0 is detected.
+Scans all direct and transitive dependencies against the NIST NVD. **Fails the build** if any CVE with CVSS ≥ 7.0 is detected. The plugin is applied to every subproject so individual modules can be scanned in isolation.
 
 ```bash
-# Run CVE scan (downloads NVD database on first run — allow ~5 min)
-./gradlew dependencyCheckAnalyze
+# Scan all modules — aggregated report (preferred for CI)
+./gradlew dependencyCheckAggregate
 
-# HTML report location
-open build/reports/dependency-check/dependency-check-report.html
+# Scan a single module in isolation (developer workflow)
+./gradlew :integration-management-service:dependencyCheckAnalyze
+./gradlew :integration-execution-service:dependencyCheckAnalyze
+./gradlew :integration-execution-contract:dependencyCheckAnalyze
+
+# HTML report locations
+open integration-management-service/build/reports/dependency-check/dependency-check-report.html
+open integration-execution-service/build/reports/dependency-check/dependency-check-report.html
 ```
 
 **NVD API Key (recommended)** — without a key, NVD rate-limits downloads to ~10 req/min, which can cause timeouts in CI. Obtain a free key at <https://nvd.nist.gov/developers/request-an-api-key> and configure it via **one** of:
@@ -179,25 +185,33 @@ echo "nvd.api.key=YOUR_KEY" >> ~/.gradle/gradle.properties
 export NVD_API_KEY=YOUR_KEY
 ```
 
-**Suppressing false positives** — add entries to `api/owasp-suppressions.xml` with a justification comment and expiry date. See the scaffold in that file for the format.
+**Suppressing false positives** — add entries to `api/owasp-suppressions.xml` with a justification comment and expiry date. The same file is shared by all subproject scans. See the scaffold in that file for the format.
+
+**Forced transitive upgrades** — some CVEs are remediated by overriding a transitive dependency version. All forced versions are declared in `gradle/libs.versions.toml` (e.g., `commonsLang3`, `plexusUtils`) and referenced from the root `build.gradle.kts` `resolutionStrategy` block — a single-line bump in the catalog propagates to all modules automatically.
 
 ### 2. Outdated Dependency Report (`dependencyUpdates`)
 
-Produces an **informational** HTML/JSON report of libraries that have newer stable releases available. Does **not** fail the build.
+Produces **informational** HTML/JSON reports of libraries that have newer stable releases available. Does **not** fail the build. The plugin is applied per-subproject so each module's report reflects its own declared dependencies.
 
 ```bash
-# Generate the report
+# Run across all modules at once (root aggregate shim)
 ./gradlew dependencyUpdates
 
-# HTML report location
-open build/reports/dependencyUpdates/dependency-updates.html
+# Or per-module
+./gradlew :integration-management-service:dependencyUpdates
+./gradlew :integration-execution-service:dependencyUpdates
+
+# HTML report locations (one per module)
+open integration-management-service/build/reports/dependencyUpdates/dependency-updates.html
+open integration-execution-service/build/reports/dependencyUpdates/dependency-updates.html
+open integration-execution-contract/build/reports/dependencyUpdates/dependency-updates.html
 ```
 
 Non-stable versions (alpha, beta, RC, milestone) are automatically excluded — only stable upgrade candidates are surfaced.
 
 ### 3. Compiler Deprecation Flags (automatic)
 
-`-Xlint:deprecation` and `-Xlint:unchecked` are applied globally to every `compileJava` task. Deprecation and unchecked-cast warnings appear in the compiler output on every `./gradlew build` — no extra command needed.
+`-Xlint:deprecation` and `-Xlint:unchecked` are applied globally to every `compileJava` task across all subprojects. Deprecation and unchecked-cast warnings appear in the compiler output on every `./gradlew build` — no extra command needed.
 
 **Current Coverage**: IMS ~39% (Target: 80%) · IES: 0% (Target: 80%)
 
