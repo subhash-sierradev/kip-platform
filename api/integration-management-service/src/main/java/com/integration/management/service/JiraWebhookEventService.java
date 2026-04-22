@@ -81,12 +81,14 @@ public class JiraWebhookEventService {
         log.info("Executing webhook: {} with payload length: {} for caller tenant: {} by user: {}",
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
-        JiraWebhook webhook = ManagementSecurityConstants.GLOBAL.equals(tenantId)
-                ? findWebhookByIdIgnoringTenant(id)
-                : findWebhook(id, tenantId);
+        JiraWebhook webhook;
+        if (ManagementSecurityConstants.GLOBAL.equals(tenantId)) {
+            webhook = findWebhookByIdIgnoringTenant(id);
+        } else {
+            webhook = findWebhook(id, tenantId);
+        }
         String effectiveTenantId = webhook.getTenantId();
-        log.info("Executing webhook: {} for effective tenant: {} (caller tenant: {})",
-                id, effectiveTenantId, tenantId);
+        log.info("Effective tenant for webhook {}: {} (caller tenant: {})", id, effectiveTenantId, tenantId);
 
         JiraWebhookEvent event = recordJiraWebhookEvent(
                 id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
