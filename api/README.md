@@ -173,6 +173,7 @@ Scans all direct and transitive dependencies against the NIST NVD. **Fails the b
 # HTML report locations
 open integration-management-service/build/reports/dependency-check/dependency-check-report.html
 open integration-execution-service/build/reports/dependency-check/dependency-check-report.html
+open integration-execution-contract/build/reports/dependency-check/dependency-check-report.html
 ```
 
 **NVD API Key (recommended)** — without a key, NVD rate-limits downloads to ~10 req/min, which can cause timeouts in CI. Obtain a free key at <https://nvd.nist.gov/developers/request-an-api-key> and configure it via **one** of:
