@@ -225,8 +225,6 @@ Each component is versioned independently using [Semantic Versioning](https://se
 
 > Label takes priority over title prefix when both are present.
 
-See [docs/KIP-472-versioning.md](docs/KIP-472-versioning.md) for the full specification.
-
 ---
 
 ## Core Features

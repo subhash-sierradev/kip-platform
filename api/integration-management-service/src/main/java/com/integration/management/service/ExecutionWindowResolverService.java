@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 
 import static com.integration.management.constants.IntegrationManagementConstants.CONFIG_KEY_ARCGIS_INITIAL_SYNC_START;
 import static com.integration.management.constants.IntegrationManagementConstants.CONFIG_KEY_CONFLUENCE_INITIAL_SYNC_START;
@@ -61,12 +62,11 @@ public class ExecutionWindowResolverService {
         // Align windowEnd to midnight of trigger day in business timezone (exclusive)
         Instant alignedEnd = triggerTime.atZone(zoneId).toLocalDate()
                 .atStartOfDay(zoneId)
+                .minus(1, ChronoUnit.MILLIS)
                 .toInstant();
 
-        // Validate window: throw error if start is not before end.
-        // With a half-open [start, end) interval, start == end means zero-length window
-        // which happens when the job is triggered on the same calendar day as the last execution.
-        if (!alignedStart.isBefore(alignedEnd)) {
+        // Validate window: throw error if start is after end
+        if (alignedStart.isAfter(alignedEnd)) {
             log.warn("Skipping job run for schedule {}: alignedStart ({}) is after alignedEnd ({}). "
                     + "This typically means the job was triggered on the same day as the last execution. "
                     + "Timezone: {}", schedule.getId(), alignedStart, alignedEnd, zoneId);

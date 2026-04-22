@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "0.0.3"
+version = "0.0.2-rc.2"
 description = "Integration Management Service - REST API (port 8085)"
 
 dependencyManagement {
@@ -128,7 +128,7 @@ tasks.jacocoTestReport {
     }
 }
 
-val jacocoMinCoverage = providers.gradleProperty("jacocoMinimumCoverage").get().toBigDecimal()
+val jacocoMinCoverage = "0.90".toBigDecimal()
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
