@@ -70,6 +70,15 @@ describe('BasicDetailsStep', () => {
       expect(nameInput.attributes('placeholder')).toBe('Jira Webhook Name');
     });
 
+    it('sets the webhook name maxlength to the configured max', () => {
+      const wrapper = mount(BasicDetailsStep, {
+        props: { integrationName: '', description: '' },
+      });
+
+      const nameInput = wrapper.find('input.bd-input');
+      expect(nameInput.attributes('maxlength')).toBe(String(100));
+    });
+
     it('renders description textarea with placeholder', () => {
       const wrapper = mount(BasicDetailsStep, {
         props: { integrationName: '', description: '' },
@@ -272,6 +281,24 @@ describe('BasicDetailsStep', () => {
       await nextTick();
 
       expect(wrapper.find('.bd-helper-error').exists()).toBe(true);
+    });
+
+    it('truncates webhook names longer than the configured max before emitting', async () => {
+      const wrapper = mount(BasicDetailsStep, {
+        props: { integrationName: '', description: '' },
+      });
+
+      const nameInput = wrapper.find('input.bd-input');
+      const longName = 'a'.repeat(100 + 25);
+
+      await nameInput.setValue(longName);
+      await vi.runAllTimersAsync();
+      await nextTick();
+
+      const nameEmits = wrapper.emitted('update:integrationName');
+      expect(nameEmits).toBeTruthy();
+      expect(String(nameEmits?.at(-1)?.[0]).length).toBe(100);
+      expect((nameInput.element as HTMLInputElement).value.length).toBe(100);
     });
   });
 

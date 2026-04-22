@@ -15,6 +15,7 @@
           :class="{ 'bd-input-error': validationError }"
           type="text"
           v-model="localData.name"
+          maxlength="100"
           placeholder="Enter ArcGIS integration name"
           @input="onNameInput"
         />
@@ -55,6 +56,7 @@ import { ref, watch, computed } from 'vue';
 import type { BasicDetailsData } from '@/types/ArcGISFormData';
 import { useCharacterCounter } from '@/composables/useCharacterCounter';
 import { checkDuplicateName } from '@/utils/globalNormalizedUtils';
+import { syncTextInputValue } from '@/utils/textInputUtils';
 
 defineOptions({ name: 'BasicDetailsStep' });
 
@@ -140,8 +142,11 @@ function validateName(name: string) {
 // Input handler
 function onNameInput(event: Event) {
   hasInteracted.value = true; // Mark field as touched
-  const target = event.target as HTMLInputElement;
-  validateName(target.value);
+  const value = syncTextInputValue(event);
+  if (localData.value.name !== value) {
+    localData.value.name = value;
+  }
+  validateName(value);
 }
 
 // Validation

@@ -50,6 +50,7 @@
 import { BellRing, X } from 'lucide-vue-next';
 import { useRouter } from 'vue-router';
 
+import { useAuthStore } from '@/store/auth';
 import { useNotificationStore } from '@/store/notification';
 import type { AppNotification } from '@/types/notification';
 import { getPrimaryAction } from '@/utils/notificationDisplay';
@@ -57,13 +58,14 @@ import { localizeEmbeddedIsoTimestamps } from '@/utils/notificationMessageUtils'
 
 const router = useRouter();
 const notificationStore = useNotificationStore();
+const authStore = useAuthStore();
 
 function formatToastMessage(message: string): string {
   return localizeEmbeddedIsoTimestamps(message);
 }
 
 function getToastPrimaryAction(notification: AppNotification) {
-  return getPrimaryAction(notification);
+  return getPrimaryAction(notification, authStore.userRoles);
 }
 
 function handleToastPrimaryAction(notification: AppNotification): void {

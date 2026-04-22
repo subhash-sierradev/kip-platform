@@ -6,6 +6,7 @@ import com.integration.execution.contract.rest.request.IntegrationConnectionRequ
 import com.integration.execution.contract.rest.request.IntegrationConnectionSecretRotateRequest;
 import com.integration.execution.contract.rest.response.ConnectionTestResponse;
 import com.integration.execution.contract.rest.response.IntegrationConnectionResponse;
+import com.integration.management.config.aspect.AuditLoggable;
 import com.integration.management.controller.advice.FeignClientExceptionHandler;
 import com.integration.management.controller.advice.GenericExceptionHandler;
 import com.integration.management.controller.advice.SpecificExceptionHandler;
@@ -25,13 +26,17 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.integration.execution.contract.model.enums.AuditActivity.CREATE;
+import static com.integration.execution.contract.model.enums.EntityType.INTEGRATION_CONNECTION;
 import static com.integration.management.constants.ManagementSecurityConstants.X_TENANT_ID;
 import static com.integration.management.constants.ManagementSecurityConstants.X_USER_ID;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
@@ -73,6 +78,22 @@ class IntegrationConnectionControllerTest {
     @Nested
     @DisplayName("POST /api/integrations/connections/test-connection")
     class TestAndCreateConnection {
+
+        @Test
+        @DisplayName("should be audit logged as connection creation")
+        void testAndCreateConnection_hasAuditLogAnnotation() throws Exception {
+            Method method = IntegrationConnectionController.class.getMethod(
+                    "testAndCreateConnection",
+                    IntegrationConnectionRequest.class,
+                    String.class,
+                    String.class);
+
+            AuditLoggable auditLoggable = method.getAnnotation(AuditLoggable.class);
+
+            assertThat(auditLoggable).isNotNull();
+            assertThat(auditLoggable.entityType()).isEqualTo(INTEGRATION_CONNECTION);
+            assertThat(auditLoggable.action()).isEqualTo(CREATE);
+        }
 
         @Test
         @DisplayName("should return service response (created)")
