@@ -36,7 +36,7 @@
     <suppress until="2026-10-22Z">
         <notes>False positive CPE match for msal4j 1.23.1. CVE-2024-35255 does not affect this version
             per GitHub Advisory Database.</notes>
-        <packageUrl regex="true">^pkg:maven/com\.microsoft\.azure/msal4j@.*$</packageUrl>
+        <packageUrl regex="true">^pkg:maven/com\.microsoft\.azure/msal4j@1\.23\.1$</packageUrl>
         <cve>CVE-2024-35255</cve>
     </suppress>
 
