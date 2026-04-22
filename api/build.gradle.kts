@@ -82,6 +82,7 @@ tasks.register("dependencyUpdates") {
 val commonsLang3Version = libs.versions.commonsLang3.get()
 val commonsBeanutilsVersion = libs.versions.commonsBeanutils.get()
 val plexusUtilsVersion = libs.versions.plexusUtils.get()
+val tomcatVersion = libs.versions.tomcat.get()
 
 allprojects {
     group = "com.integration"
@@ -121,7 +122,7 @@ subprojects {
     configureOwaspDependencyCheck(this)
 
     // Override Spring Boot BOM-managed Tomcat version for CVE-2026-34483/86/87/500
-    ext["tomcat.version"] = libs.versions.tomcat.get()
+    ext["tomcat.version"] = tomcatVersion
 
     java {
         toolchain {

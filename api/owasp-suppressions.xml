@@ -13,5 +13,31 @@
 -->
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
 
+    <!--
+        FALSE POSITIVE: CVE-2023-36415 and CVE-2024-35255 are matched against azure-identity via an incorrect CPE
+        (cpe:2.3:a:microsoft:azure_identity_sdk / azure_sdk_for_java). The CVE advisory applies to older Azure
+        Identity SDK versions <= 1.10.x. azure-identity 1.18.2 is not affected — confirmed by GitHub Advisory
+        Database which reports no known CVEs for com.azure:azure-identity@1.18.2.
+        Expiry: 2026-10-22 — re-evaluate if a newer advisory changes the affected range.
+    -->
+    <suppress until="2026-10-22Z">
+        <notes>False positive CPE match for azure-identity 1.18.2. CVE-2023-36415 and CVE-2024-35255 do not
+            affect this version per GitHub Advisory Database.</notes>
+        <packageUrl regex="true">^pkg:maven/com\.azure/azure\-identity@.*$</packageUrl>
+        <cve>CVE-2023-36415</cve>
+    </suppress>
+    <suppress until="2026-10-22Z">
+        <notes>False positive CPE match for azure-identity 1.18.2. CVE-2024-35255 does not affect this version
+            per GitHub Advisory Database. The msal4j transitive dependency CVE-2024-35255 is also a false
+            positive as msal4j 1.23.1 is not in the affected range.</notes>
+        <packageUrl regex="true">^pkg:maven/com\.azure/azure\-identity@.*$</packageUrl>
+        <cve>CVE-2024-35255</cve>
+    </suppress>
+    <suppress until="2026-10-22Z">
+        <notes>False positive CPE match for msal4j 1.23.1. CVE-2024-35255 does not affect this version
+            per GitHub Advisory Database.</notes>
+        <packageUrl regex="true">^pkg:maven/com\.microsoft\.azure/msal4j@.*$</packageUrl>
+        <cve>CVE-2024-35255</cve>
+    </suppress>
 
 </suppressions>
