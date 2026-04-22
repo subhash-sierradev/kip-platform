@@ -80,6 +80,7 @@ tasks.register("dependencyUpdates") {
 
 // Capture CVE-forced versions at root scope — libs accessor not available inside allprojects subproject closures.
 val commonsLang3Version = libs.versions.commonsLang3.get()
+val commonsBeanutilsVersion = libs.versions.commonsBeanutils.get()
 val plexusUtilsVersion = libs.versions.plexusUtils.get()
 
 allprojects {
@@ -92,7 +93,9 @@ allprojects {
         resolutionStrategy {
             // CVE-2025-48924 — commons-lang3 < 3.17.0 (transitive via jolt-core)
             force("org.apache.commons:commons-lang3:$commonsLang3Version")
-            // CVE-2025-67030 — plexus-utils (transitive via build plugins) — suppressed in owasp-suppressions.xml
+            // CVE-2025-48734 — commons-beanutils < 1.10.0 (transitive via commons-validator/checkstyle)
+            force("commons-beanutils:commons-beanutils:$commonsBeanutilsVersion")
+            // CVE-2025-67030 — plexus-utils (transitive via build plugins)
             force("org.codehaus.plexus:plexus-utils:$plexusUtilsVersion")
         }
     }
