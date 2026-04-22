@@ -121,7 +121,7 @@ subprojects {
     configureOwaspDependencyCheck(this)
 
     // Override Spring Boot BOM-managed Tomcat version for CVE-2026-34483/86/87/500
-    ext["tomcat.version"] = "11.0.21"
+    ext["tomcat.version"] = libs.versions.tomcat.get()
 
     java {
         toolchain {
