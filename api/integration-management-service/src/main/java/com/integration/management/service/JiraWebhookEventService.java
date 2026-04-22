@@ -78,11 +78,15 @@ public class JiraWebhookEventService {
         if (!StringUtils.hasText(id)) {
             throw new IllegalArgumentException("Webhook ID must not be null or empty");
         }
-        log.info("Executing webhook: {} with payload length: {} for tenant: {} by user: {}",
+        log.info("Executing webhook: {} with payload length: {} for caller tenant: {} by user: {}",
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
-        JiraWebhook webhook = findWebhookById(id);
+        JiraWebhook webhook = ManagementSecurityConstants.GLOBAL.equals(tenantId)
+                ? findWebhookByIdIgnoringTenant(id)
+                : findWebhook(id, tenantId);
         String effectiveTenantId = webhook.getTenantId();
+        log.info("Executing webhook: {} for effective tenant: {} (caller tenant: {})",
+                id, effectiveTenantId, tenantId);
 
         JiraWebhookEvent event = recordJiraWebhookEvent(
                 id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
@@ -106,8 +110,8 @@ public class JiraWebhookEventService {
                         "Jira webhook not found with ID: " + webhookId + " for tenant: " + tenantId));
     }
 
-    private JiraWebhook findWebhookById(final String webhookId) {
-        return jiraWebhookRepository.findByIdAndIsDeletedFalse(webhookId)
+    private JiraWebhook findWebhookByIdIgnoringTenant(final String webhookId) {
+        return jiraWebhookRepository.findByIdIgnoringTenantAndIsDeletedFalse(webhookId)
                 .orElseThrow(() -> new IntegrationNotFoundException(
                         "Jira webhook not found with ID: " + webhookId));
     }

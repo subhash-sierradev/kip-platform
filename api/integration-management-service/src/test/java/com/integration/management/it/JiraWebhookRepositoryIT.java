@@ -177,11 +177,11 @@ class JiraWebhookRepositoryIT extends AbstractImsIT {
     }
 
     @Test
-    @DisplayName("findByIdAndIsDeletedFalse returns webhook regardless of tenant context")
-    void findByIdAndIsDeletedFalse_returnsWebhook() {
+    @DisplayName("findByIdIgnoringTenantAndIsDeletedFalse returns webhook regardless of tenant context")
+    void findByIdIgnoringTenantAndIsDeletedFalse_returnsWebhook() {
         JiraWebhook saved = jiraWebhookRepository.save(buildWebhook("Execute IT Webhook"));
 
-        Optional<JiraWebhook> found = jiraWebhookRepository.findByIdAndIsDeletedFalse(saved.getId());
+        Optional<JiraWebhook> found = jiraWebhookRepository.findByIdIgnoringTenantAndIsDeletedFalse(saved.getId());
 
         assertThat(found).isPresent();
         assertThat(found.get().getId()).isEqualTo(saved.getId());
@@ -189,14 +189,14 @@ class JiraWebhookRepositoryIT extends AbstractImsIT {
     }
 
     @Test
-    @DisplayName("findByIdAndIsDeletedFalse returns empty for soft-deleted webhook")
-    void findByIdAndIsDeletedFalse_excludesSoftDeleted() {
+    @DisplayName("findByIdIgnoringTenantAndIsDeletedFalse returns empty for soft-deleted webhook")
+    void findByIdIgnoringTenantAndIsDeletedFalse_excludesSoftDeleted() {
         JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Soft Delete Execute IT"));
 
         webhook.setIsDeleted(true);
         jiraWebhookRepository.save(webhook);
 
-        Optional<JiraWebhook> found = jiraWebhookRepository.findByIdAndIsDeletedFalse(webhook.getId());
+        Optional<JiraWebhook> found = jiraWebhookRepository.findByIdIgnoringTenantAndIsDeletedFalse(webhook.getId());
 
         assertThat(found).isEmpty();
     }
