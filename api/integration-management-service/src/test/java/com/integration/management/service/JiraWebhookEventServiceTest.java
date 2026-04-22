@@ -5,7 +5,6 @@ import com.integration.execution.contract.message.JiraWebhookExecutionResult;
 import com.integration.execution.contract.messaging.MessagePublisher;
 import com.integration.execution.contract.queue.QueueNames;
 import com.integration.execution.contract.model.enums.TriggerStatus;
-import com.integration.management.constants.ManagementSecurityConstants;
 import com.integration.management.entity.JiraWebhook;
 import com.integration.management.entity.JiraWebhookEvent;
 import com.integration.management.exception.IntegrationNotFoundException;
@@ -100,7 +99,7 @@ class JiraWebhookEventServiceTest {
                     .samplePayload("{}")
                     .isEnabled(true)
                     .build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(
                     webhook.getConnectionId().toString(), TENANT_ID))
@@ -148,7 +147,7 @@ class JiraWebhookEventServiceTest {
                     .name("Webhook Z").connectionId(UUID.randomUUID())
                     .webhookUrl("https://example.test").samplePayload("{}").isEnabled(true)
                     .jiraFieldMappings(null).build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(
                     webhook.getConnectionId().toString(), TENANT_ID)).thenReturn("secret-z");
@@ -165,55 +164,9 @@ class JiraWebhookEventServiceTest {
         }
 
         @Test
-        @DisplayName("uses webhook's own tenant when caller token carries GLOBAL")
-        void executeWebhook_usesWebhookTenant_notCallerTenant() {
-            String webhookTenant = "kaseware-application-tn";
-            UUID connId = UUID.randomUUID();
-            JiraWebhook webhook = JiraWebhook.builder()
-                    .id(WEBHOOK_ID)
-                    .tenantId(webhookTenant)
-                    .createdBy(USER_ID)
-                    .lastModifiedBy(USER_ID)
-                    .name("Webhook Tenant Check")
-                    .connectionId(connId)
-                    .webhookUrl("https://example.test")
-                    .samplePayload("{}")
-                    .isEnabled(true)
-                    .build();
-            when(jiraWebhookRepository.findByIdIgnoringTenantAndIsDeletedFalse(WEBHOOK_ID))
-                    .thenReturn(Optional.of(webhook));
-            when(integrationConnectionService.getIntegrationConnectionNameById(
-                    connId.toString(), webhookTenant))
-                    .thenReturn("secret-kn");
-            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
-                JiraWebhookEvent e = inv.getArgument(0);
-                if (e.getId() == null) {
-                    e.setId(UUID.randomUUID());
-                }
-                return e;
-            });
-            when(mapper.toResponse(any(JiraWebhookEvent.class)))
-                    .thenReturn(JiraWebhookEventResponse.builder().id("tc").build());
-
-            jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{}", ManagementSecurityConstants.GLOBAL, USER_ID);
-
-            var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
-            verify(messagePublisher).publish(
-                    eq(QueueNames.JIRA_WEBHOOK_EXCHANGE),
-                    eq(QueueNames.JIRA_WEBHOOK_EXECUTION_COMMAND_QUEUE),
-                    cmdCaptor.capture());
-            assertThat(cmdCaptor.getValue().getTenantId()).isEqualTo(webhookTenant);
-            assertThat(cmdCaptor.getValue().getConnectionSecretName()).isEqualTo("secret-kn");
-
-            var savedCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookEvent.class);
-            verify(triggerHistoryRepository).save(savedCaptor.capture());
-            assertThat(savedCaptor.getValue().getTenantId()).isEqualTo(webhookTenant);
-        }
-
-        @Test
         @DisplayName("throws IntegrationNotFoundException when webhook id is not found")
         void executeWebhook_unknownId_throwsIntegrationNotFoundException() {
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse("unknown-id", TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse("unknown-id"))
                     .thenReturn(Optional.empty());
 
             assertThatThrownBy(() ->
@@ -221,20 +174,6 @@ class JiraWebhookEventServiceTest {
                     .isInstanceOf(IntegrationNotFoundException.class)
                     .hasMessageContaining("unknown-id");
 
-            verify(triggerHistoryRepository, never()).save(any());
-            verify(messagePublisher, never()).publish(anyString(), anyString(), any());
-        }
-
-        @Test
-        @DisplayName("throws IntegrationNotFoundException when non-GLOBAL caller accesses another tenant's webhook")
-        void executeWebhook_nonGlobalCaller_cannotAccessOtherTenantWebhook() {
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
-                    .thenReturn(Optional.empty());
-
-            assertThatThrownBy(() ->
-                    jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{}", TENANT_ID, USER_ID))
-                    .isInstanceOf(IntegrationNotFoundException.class)
-                    .hasMessageContaining(WEBHOOK_ID);
 
             verify(triggerHistoryRepository, never()).save(any());
             verify(messagePublisher, never()).publish(anyString(), anyString(), any());
@@ -276,7 +215,7 @@ class JiraWebhookEventServiceTest {
                     .samplePayload("{}")
                     .isEnabled(true)
                     .build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(
                     webhook.getConnectionId().toString(), TENANT_ID))
@@ -683,7 +622,7 @@ class JiraWebhookEventServiceTest {
                     .lastModifiedBy(USER_ID).name("Webhook A")
                     .connectionId(UUID.randomUUID()).webhookUrl("https://example.test")
                     .samplePayload("{}").isEnabled(true).build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(java.util.Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(
                     webhook.getConnectionId().toString(), TENANT_ID)).thenReturn("sec");
@@ -746,7 +685,7 @@ class JiraWebhookEventServiceTest {
                     .webhookUrl("https://example2.test").samplePayload("{}").isEnabled(true)
                     .jiraFieldMappings(null)  // explicit null
                     .build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
                     .thenReturn("secret-b");
@@ -776,7 +715,7 @@ class JiraWebhookEventServiceTest {
                     .webhookUrl("https://example3.test").samplePayload("{}").isEnabled(true)
                     .jiraFieldMappings(java.util.List.of())  // non-null but empty
                     .build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
                     .thenReturn("secret-c");
@@ -806,7 +745,7 @@ class JiraWebhookEventServiceTest {
                     .name("Webhook D").connectionId(UUID.randomUUID())
                     .webhookUrl("https://example4.test").samplePayload("{}").isEnabled(true)
                     .jiraFieldMappings(null).build();
-            when(jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(WEBHOOK_ID, TENANT_ID))
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
                     .thenReturn(Optional.of(webhook));
             when(integrationConnectionService.getIntegrationConnectionNameById(anyString(), anyString()))
                     .thenReturn("secret-d");
