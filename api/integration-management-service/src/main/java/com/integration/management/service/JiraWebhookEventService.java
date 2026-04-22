@@ -81,12 +81,15 @@ public class JiraWebhookEventService {
         log.info("Executing webhook: {} with payload length: {} for tenant: {} by user: {}",
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
-        JiraWebhook webhook = findWebhook(id, tenantId);
+        JiraWebhook webhook = findWebhookById(id);
+        String effectiveTenantId = webhook.getTenantId();
+
         JiraWebhookEvent event = recordJiraWebhookEvent(
-                id, tenantId, userId, jiraWebhookPayload, null, 0);
+                id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, event, jiraWebhookPayload, tenantId, userId);
+                webhook, event, jiraWebhookPayload, effectiveTenantId, userId);
+
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
@@ -101,6 +104,12 @@ public class JiraWebhookEventService {
         return jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(webhookId, tenantId)
                 .orElseThrow(() -> new IntegrationNotFoundException(
                         "Jira webhook not found with ID: " + webhookId + " for tenant: " + tenantId));
+    }
+
+    private JiraWebhook findWebhookById(final String webhookId) {
+        return jiraWebhookRepository.findByIdAndIsDeletedFalse(webhookId)
+                .orElseThrow(() -> new IntegrationNotFoundException(
+                        "Jira webhook not found with ID: " + webhookId));
     }
 
     private JiraWebhookExecutionCommand buildCommand(
