@@ -78,7 +78,7 @@ public class JiraWebhookEventService {
         if (!StringUtils.hasText(id)) {
             throw new IllegalArgumentException("Webhook ID must not be null or empty");
         }
-        log.info("Executing webhook: {} with payload length: {} for caller tenant: {} by user: {}",
+        log.info("Executing webhook: {} with payload length: {} for tenant: {} by user: {}",
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
         JiraWebhook webhook = ManagementSecurityConstants.GLOBAL.equals(tenantId)
