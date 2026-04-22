@@ -205,6 +205,7 @@ import { useRouter } from 'vue-router';
 import { DxButton } from 'devextreme-vue/button';
 import { UserNotificationService } from '@/api/services/UserNotificationService';
 import { type NotificationFilterTab, useNotificationStore } from '@/store/notification';
+import { useAuthStore } from '@/store/auth';
 import type { AppNotification } from '@/types/notification';
 import {
   formatAbsoluteTime,
@@ -221,6 +222,7 @@ defineOptions({ name: 'NotificationsAllPage' });
 
 const router = useRouter();
 const store = useNotificationStore();
+const authStore = useAuthStore();
 
 const activeFilterTab = ref<NotificationFilterTab>('all');
 const selectedNotificationId = ref<string | null>(null);
@@ -259,7 +261,7 @@ const selectedNotification = computed<AppNotification | null>(() =>
 
 const primaryAction = computed(() => {
   if (!selectedNotification.value) return null;
-  return getPrimaryAction(selectedNotification.value);
+  return getPrimaryAction(selectedNotification.value, authStore.userRoles);
 });
 
 const parsedMessage = computed(() => {

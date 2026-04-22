@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.UUID;
-
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DisplayName("JiraWebhookCreateUpdateRequest")
@@ -51,6 +50,26 @@ class JiraWebhookCreateUpdateRequestTest {
             assertThat(validator.validate(invalid))
                     .extracting(v -> v.getPropertyPath().toString())
                     .contains("name", "fieldsMapping");
+        }
+    }
+
+    @Test
+    @DisplayName("bean validation rejects names longer than the max allowed length")
+    void beanValidationRejectsNamesLongerThan100Characters() {
+        JiraWebhookCreateUpdateRequest invalid = JiraWebhookCreateUpdateRequest.builder()
+                .name("a".repeat(100 + 1))
+                .description("desc")
+                .connectionId(UUID.randomUUID())
+                .fieldsMapping(validMappings())
+                .samplePayload("{\"a\":1}")
+                .requestedTenantId("tenant-1")
+                .build();
+
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+            assertThat(validator.validate(invalid))
+                    .extracting(v -> v.getPropertyPath().toString())
+                    .contains("name");
         }
     }
 
