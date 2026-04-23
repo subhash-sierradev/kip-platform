@@ -150,17 +150,14 @@ public class IntegrationConnectionService {
                 .build();
     }
 
-    @Cacheable(value = "integrationConnectionNamesCache", key = "#id + '_' + #tenantId")
+    @Cacheable(value = "integrationConnectionNamesCache", key = "#id + '_' + #tenantId",
+               unless = "#result == null")
     public String getIntegrationConnectionNameById(String id, String tenantId) {
         log.info("Fetching Integration connection name for id: {}", id);
-        try {
-            UUID connectionId = UUID.fromString(id);
-            return connectionRepository.findSecretNameByIdAndTenantId(connectionId, tenantId).orElseThrow(
-                    () -> new IntegrationNotFoundException("Integration connection not found for id=" + id));
-        } catch (Exception e) {
-            log.error("Error fetching Integration connection name for id: {}", id, e);
-            return null;
-        }
+        UUID connectionId = UUID.fromString(id);
+        return connectionRepository.findSecretNameByIdAndTenantId(connectionId, tenantId)
+                .orElseThrow(() -> new IntegrationNotFoundException(
+                        "Integration connection not found for id=" + id + " tenant=" + tenantId));
     }
 
     @Transactional

@@ -14,5 +14,5 @@ public class JiraWebhookProperties {
 
     private int idLength = 11;
     private int maxRetries = 5;
-    private String urlTemplate = "https://kaseware.sierradev.com/api/webhooks/jira/execute/{webhookId}";
+    private String urlTemplate = "https://kaseware.sierradev.com/backend/api/webhooks/jira/execute/{webhookId}";
 }

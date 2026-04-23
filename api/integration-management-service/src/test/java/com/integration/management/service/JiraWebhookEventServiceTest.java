@@ -42,7 +42,6 @@ import static org.mockito.Mockito.when;
 class JiraWebhookEventServiceTest {
 
     private static final String TENANT_ID = "tenant-abc";
-    private static final String OTHER_TENANT_ID = "tenant-xyz";
     private static final String WEBHOOK_ID = "webhook-001";
     private static final String USER_ID = "user-001";
 
@@ -364,8 +363,8 @@ class JiraWebhookEventServiceTest {
     class GetWebhookEventsByWebhookId {
 
         @Test
-        @DisplayName("matchingTenantId_returnsLatestMappedEvents")
-        void getWebhookEventsByWebhookId_matchingTenantId_returnsLatestMappedEvents() {
+        @DisplayName("returnsLatestMappedEvents")
+        void getWebhookEventsByWebhookId_returnsLatestMappedEvents() {
             JiraWebhookEvent event1 = buildEvent(WEBHOOK_ID, "orig-1");
             JiraWebhookEvent event2 = buildEvent(WEBHOOK_ID, "orig-2");
 
@@ -373,7 +372,7 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEventResponse response2 = buildEventResponse(event2.getId().toString());
 
             when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of(event1, event2));
+                    WEBHOOK_ID)).thenReturn(List.of(event1, event2));
             when(mapper.toResponse(event1)).thenReturn(response1);
             when(mapper.toResponse(event2)).thenReturn(response2);
 
@@ -381,32 +380,14 @@ class JiraWebhookEventServiceTest {
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
 
             assertThat(result).hasSize(2).containsExactly(response1, response2);
-            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(
-                    eq(WEBHOOK_ID), eq(TENANT_ID));
-        }
-
-        @Test
-        @DisplayName("wrongTenantId_returnsEmptyList")
-        void getWebhookEventsByWebhookId_wrongTenantId_returnsEmptyList() {
-            // The JOIN in the query filters out rows where jw.tenantId != :tenantId,
-            // so the repository returns an empty list for a cross-tenant request.
-            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID, OTHER_TENANT_ID)).thenReturn(List.of());
-
-            List<JiraWebhookEventResponse> result = jiraWebhookEventService
-                    .getWebhookEventsByWebhookId(WEBHOOK_ID, OTHER_TENANT_ID);
-
-            assertThat(result).isEmpty();
-            verify(mapper, never()).toResponse(any());
+            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(eq(WEBHOOK_ID));
         }
 
         @Test
         @DisplayName("softDeletedWebhook_returnsEmptyList")
         void getWebhookEventsByWebhookId_softDeletedWebhook_returnsEmptyList() {
-            // The JOIN excludes soft-deleted webhooks (jw.isDeleted = false),
-            // so events for a deleted webhook are never returned.
             when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of());
+                    WEBHOOK_ID)).thenReturn(List.of());
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
@@ -419,14 +400,13 @@ class JiraWebhookEventServiceTest {
         @DisplayName("noEventsExist_returnsEmptyList")
         void getWebhookEventsByWebhookId_noEventsExist_returnsEmptyList() {
             when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of());
+                    WEBHOOK_ID)).thenReturn(List.of());
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
 
             assertThat(result).isEmpty();
-            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(
-                    eq(WEBHOOK_ID), eq(TENANT_ID));
+            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(eq(WEBHOOK_ID));
         }
 
         @Test
@@ -436,7 +416,7 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEventResponse response = buildEventResponse(event.getId().toString());
 
             when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of(event));
+                    WEBHOOK_ID)).thenReturn(List.of(event));
             when(mapper.toResponse(event)).thenReturn(response);
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService

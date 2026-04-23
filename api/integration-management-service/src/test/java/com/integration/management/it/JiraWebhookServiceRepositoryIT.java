@@ -217,7 +217,7 @@ class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
 
         List<JiraWebhookEvent> latest =
                 jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                        webhook.getId(), TENANT);
+                        webhook.getId());
 
         // Only the latest event for that original event should be returned
         List<UUID> latestIds = latest.stream().map(JiraWebhookEvent::getId).toList();

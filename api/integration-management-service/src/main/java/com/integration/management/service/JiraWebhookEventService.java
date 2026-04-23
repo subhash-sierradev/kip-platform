@@ -107,7 +107,7 @@ public class JiraWebhookEventService {
             final JiraWebhook webhook, final JiraWebhookEvent event,
             final String incomingPayload, final String tenantId, final String userId) {
         String secretName = integrationConnectionService
-                .getIntegrationConnectionNameById(webhook.getConnectionId().toString(), tenantId);
+                .getIntegrationConnectionNameById(webhook.getConnectionId().toString(), webhook.getTenantId());
         return JiraWebhookExecutionCommand.builder()
                 .webhookId(webhook.getId())
                 .connectionSecretName(secretName)
@@ -216,7 +216,7 @@ public class JiraWebhookEventService {
     }
 
     public List<JiraWebhookEventResponse> getWebhookEventsByWebhookId(final String webhookId, final String tenantId) {
-        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(webhookId, tenantId)
+        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(webhookId)
                 .stream().map(mapper::toResponse).toList();
     }
 

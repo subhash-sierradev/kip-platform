@@ -16,21 +16,17 @@ import java.util.UUID;
 @Repository
 public interface JiraWebhookEventRepository extends JpaRepository<JiraWebhookEvent, UUID> {
 
-    // Find latest events per original trigger, filtered by tenantId on the event
-    // itself
+    // Find latest events per original trigger, filtered by webhookId
     @Query("SELECT jwe FROM JiraWebhookEvent jwe "
             + "WHERE jwe.webhookId = :webhookId "
-            + "AND jwe.tenantId = :tenantId "
             + "AND NOT EXISTS ("
             + "    SELECT 1 FROM JiraWebhookEvent newer "
             + "    WHERE newer.webhookId = :webhookId "
-            + "    AND newer.tenantId = :tenantId "
             + "    AND newer.originalEventId = jwe.originalEventId "
             + "    AND (newer.triggeredAt > jwe.triggeredAt "
             + "         OR (newer.triggeredAt = jwe.triggeredAt AND newer.id > jwe.id))"
             + ") ORDER BY jwe.triggeredAt DESC")
-    List<JiraWebhookEvent> findLatestEventsPerOriginalTriggerByWebhook(@Param("webhookId") String webhookId,
-                                                                       @Param("tenantId") String tenantId);
+    List<JiraWebhookEvent> findLatestEventsPerOriginalTriggerByWebhook(@Param("webhookId") String webhookId);
 
     Optional<JiraWebhookEvent> findTopByOriginalEventIdOrderByRetryAttemptDesc(String originalEventId);
 
