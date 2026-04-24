@@ -117,7 +117,8 @@ public class ConfluencePageRenderer {
         }
         String normalizedPriority = priority.toUpperCase(Locale.ENGLISH);
 
-        String title = item.getTitle();
+        String rawTitle = item.getTitle();
+        String title = (rawTitle != null && !rawTitle.isBlank()) ? rawTitle : "[Untitled - " + item.getId() + "]";
 
         List<DynamicField> dynamicFields = buildDynamicFields(dynamicData);
         List<String> authors = extractAuthors(attributes);
