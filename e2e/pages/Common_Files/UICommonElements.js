@@ -13,7 +13,6 @@ class UICommonElements {
       outboundMenu: this.page.locator('div').filter({ hasText: /^Outbound$/ }),
       jiraWebhookMenu: this.page.locator('div').filter({ hasText: /^Jira Webhook$/ }),
       arcgisMenu: this.page.locator('div').filter({ hasText: /^ArcGIS Integration$/ }),
-      confluenceMenu: this.page.locator('div').filter({ hasText: /^Confluence Integration$/ }),
     };
   }
   // Admin Navigation

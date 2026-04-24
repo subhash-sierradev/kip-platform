@@ -17,7 +17,6 @@
               type="text"
               v-model="localData.name"
               :placeholder="config.integrationNamePlaceholder"
-              maxlength="100"
               @input="onNameInput"
             />
             <div
@@ -142,7 +141,6 @@ import type {
   UnifiedIntegrationStepData,
 } from '@/types/UnifiedIntegrationStep';
 import { checkDuplicateName } from '@/utils/globalNormalizedUtils';
-import { syncTextInputValue } from '@/utils/textInputUtils';
 
 defineOptions({ name: 'IntegrationDetailsStep' });
 
@@ -161,8 +159,6 @@ const emit = defineEmits<{
 }>();
 
 const localData = ref<UnifiedIntegrationStepData>({ ...props.modelValue });
-
-const INTEGRATION_NAME_MAX_LENGTH = 100;
 
 const validationError = ref(false);
 const validationHelperText = ref(' ');
@@ -198,13 +194,6 @@ function validateName(name: string) {
     return;
   }
 
-  if (trimmed.length > INTEGRATION_NAME_MAX_LENGTH) {
-    validationError.value = true;
-    validationHelperText.value = `Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`;
-    emit('validation-change', false);
-    return;
-  }
-
   validationError.value = false;
   validationHelperText.value = ' ';
 
@@ -225,17 +214,14 @@ function validateName(name: string) {
 
     validationError.value = false;
     validationHelperText.value = ' ';
-    emit('validation-change', isValid.value);
+    emit('validation-change', true);
   }, 300);
 }
 
 function onNameInput(event: Event) {
   hasInteracted.value = true;
-  const value = syncTextInputValue(event);
-  if (localData.value.name !== value) {
-    localData.value.name = value;
-  }
-  validateName(value);
+  const target = event.target as HTMLInputElement;
+  validateName(target.value);
 }
 
 const updateSubtypeLabel = () => {
@@ -321,13 +307,11 @@ const handleDynamicDocChange = (event: Event) => {
 };
 
 const isValid = computed(() => {
-  const trimmedName = localData.value.name.trim();
-  const hasName = !!trimmedName;
-  const nameNotTooLong = trimmedName.length <= INTEGRATION_NAME_MAX_LENGTH;
+  const hasName = !!localData.value.name.trim();
   const hasSubtype = !!localData.value.subType;
   const hasDynamicDoc =
     !isDynamicSubtype(localData.value.subType) || !!localData.value.dynamicDocument;
-  return hasName && nameNotTooLong && !validationError.value && hasSubtype && hasDynamicDoc;
+  return hasName && !validationError.value && hasSubtype && hasDynamicDoc;
 });
 
 watch(
@@ -351,9 +335,6 @@ watch(
   newValue => {
     if (JSON.stringify(newValue) !== JSON.stringify(localData.value)) {
       localData.value = { ...newValue };
-      if (newValue.name.trim()) {
-        validateName(newValue.name);
-      }
       if (newValue.subType && isDynamicSubtype(newValue.subType)) {
         void loadDynamicDocuments(newValue.subType);
       }

@@ -169,106 +169,39 @@ describe('notificationDisplay utilities', () => {
       expect(getPrimaryAction(n)).toBeNull();
     });
 
-    it('derives ArcGIS connection route for tenant_admin users', () => {
+    it('derives ArcGIS connection route from non-empty connectionId + serviceType ARCGIS', () => {
       const n: AppNotification = {
         ...baseNotification,
         type: 'INTEGRATION_CONNECTION_CREATED',
         metadata: { connectionId: 'conn-arcgis-1', serviceType: 'ARCGIS' },
       };
-      expect(getPrimaryAction(n, ['tenant_admin'])).toEqual({
+      expect(getPrimaryAction(n)).toEqual({
         label: 'Open ArcGIS Connection',
         target: ROUTES.arcgisConnection,
         external: false,
       });
     });
 
-    it('suppresses Open ArcGIS Connection button when no roles provided', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-arcgis-1', serviceType: 'ARCGIS' },
-      };
-      expect(getPrimaryAction(n)).toBeNull();
-    });
-
-    it('suppresses Open ArcGIS Connection button for non-tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-arcgis-1', serviceType: 'ARCGIS' },
-      };
-      expect(getPrimaryAction(n, ['feature_arcgis_integration'])).toBeNull();
-    });
-
-    it('derives Jira connection route for tenant_admin users', () => {
+    it('derives Jira connection route from non-empty connectionId + serviceType JIRA', () => {
       const n: AppNotification = {
         ...baseNotification,
         type: 'INTEGRATION_CONNECTION_CREATED',
         metadata: { connectionId: 'conn-jira-1', serviceType: 'JIRA' },
       };
-      expect(getPrimaryAction(n, ['tenant_admin'])).toEqual({
+      expect(getPrimaryAction(n)).toEqual({
         label: 'Open Jira Connection',
         target: ROUTES.jiraConnection,
         external: false,
       });
     });
 
-    it('suppresses Open Jira Connection button when no roles provided', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-jira-1', serviceType: 'JIRA' },
-      };
-      expect(getPrimaryAction(n)).toBeNull();
-    });
-
-    it('suppresses Open Jira Connection button for non-tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-jira-1', serviceType: 'JIRA' },
-      };
-      expect(getPrimaryAction(n, ['feature_jira_webhook'])).toBeNull();
-    });
-
-    it('derives Confluence connection route for tenant_admin users', () => {
+    it('derives Confluence connection route from non-empty connectionId + serviceType CONFLUENCE', () => {
       const n: AppNotification = {
         ...baseNotification,
         type: 'INTEGRATION_CONNECTION_CREATED',
         metadata: { connectionId: 'conn-confluence-1', serviceType: 'CONFLUENCE' },
       };
-      expect(getPrimaryAction(n, ['tenant_admin'])).toEqual({
-        label: 'Open Confluence Connection',
-        target: ROUTES.confluenceConnection,
-        external: false,
-      });
-    });
-
-    it('suppresses Open Confluence Connection button when no roles provided', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-confluence-1', serviceType: 'CONFLUENCE' },
-      };
-      expect(getPrimaryAction(n)).toBeNull();
-    });
-
-    it('suppresses Open Confluence Connection button for non-tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-confluence-1', serviceType: 'CONFLUENCE' },
-      };
-      expect(getPrimaryAction(n, ['feature_confluence_integration'])).toBeNull();
-    });
-
-    it('shows Open Confluence Connection button for tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { connectionId: 'conn-confluence-1', serviceType: 'CONFLUENCE' },
-      };
-      expect(getPrimaryAction(n, ['tenant_admin', 'feature_confluence_integration'])).toEqual({
+      expect(getPrimaryAction(n)).toEqual({
         label: 'Open Confluence Connection',
         target: ROUTES.confluenceConnection,
         external: false,
@@ -311,28 +244,6 @@ describe('notificationDisplay utilities', () => {
       expect(getPrimaryAction(n)).toEqual({
         label: 'Custom',
         target: '/custom/path',
-        external: false,
-      });
-    });
-
-    it('suppresses explicit admin connection actionUrl for non-tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { actionLabel: 'Open Confluence Connection', actionUrl: ROUTES.confluenceConnection },
-      };
-      expect(getPrimaryAction(n, ['feature_confluence_integration'])).toBeNull();
-    });
-
-    it('shows explicit admin connection actionUrl for tenant_admin users', () => {
-      const n: AppNotification = {
-        ...baseNotification,
-        type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { actionLabel: 'Open Confluence Connection', actionUrl: ROUTES.confluenceConnection },
-      };
-      expect(getPrimaryAction(n, ['tenant_admin'])).toEqual({
-        label: 'Open Confluence Connection',
-        target: ROUTES.confluenceConnection,
         external: false,
       });
     });

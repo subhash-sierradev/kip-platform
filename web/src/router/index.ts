@@ -138,7 +138,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: ROUTES.confluenceConnection,
     component: ConfluenceConnectionPage,
-    beforeEnter: roleGuard(['tenant_admin']),
+    beforeEnter: roleGuard(['tenant_admin', 'feature_confluence_integration']),
   },
   {
     path: ROUTES.adminNotifications,

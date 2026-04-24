@@ -42,7 +42,8 @@ class BasePage {
   async isVisible(selector, timeout = 5000) {
     try {
       const locator = typeof selector === 'string' ? this.page.locator(selector) : selector;
-      return await locator.isVisible();
+      await locator.waitFor({ state: 'visible', timeout });
+      return true;
     } catch {
       return false;
     }
@@ -141,7 +142,7 @@ class BasePage {
   }
 
   // Dismiss all visible persistent notifications (e.g. INFO alerts with a Dismiss button)
-
+  // that may intercept pointer events on other elements.
   async dismissAllNotifications() {
     const dismissButtons = this.page
       .locator('[aria-label="Incoming notifications"] button[aria-label="Dismiss"], [aria-label="Incoming notifications"] button:has-text("Dismiss")');

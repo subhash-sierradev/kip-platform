@@ -267,32 +267,4 @@ describe('useJiraWebhookSubmit', () => {
     );
     expect(serviceHoisted.createWebhook).not.toHaveBeenCalled();
   });
-
-  it('keeps submit disabled when duplicate name is detected', () => {
-    const { isSubmitDisabled } = useJiraWebhookSubmit({
-      editMode: false,
-      cloneMode: false,
-      integrationName: ref('Test'),
-      webhookDescription: ref(''),
-      isBasicDetailsValid: ref(true),
-      jsonSample: ref('{"ok":true}'),
-      connectionId: ref('conn-1'),
-      mappingData: ref({ ...baseMapping }),
-      projects: ref([]),
-      issueTypes: ref([]),
-      users: ref([]),
-      isCreating: ref(false),
-      showSuccess: ref(false),
-      createdWebhook: ref(null),
-      isDuplicateName: ref(true),
-      originalNameForValidation: computed(() => undefined),
-      selectedParentLabel: ref(''),
-      resetAllFields: vi.fn(),
-      showToast: vi.fn(),
-      emitClose: vi.fn(),
-      emitCreated: vi.fn(),
-    });
-
-    expect(isSubmitDisabled.value).toBe(true);
-  });
 });

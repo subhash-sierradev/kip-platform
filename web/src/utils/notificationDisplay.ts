@@ -194,42 +194,27 @@ export function getNotificationCreatedBy(notification: AppNotification): string 
   return 'System';
 }
 
-function extractLabel(metadata: Record<string, unknown>): string {
-  return (
-    normalizeMetadataValue(metadata.actionLabel) ||
-    normalizeMetadataValue(metadata.ctaLabel) ||
-    normalizeMetadataValue(metadata.buttonText)
-  );
-}
-
-function extractExplicitTarget(metadata: Record<string, unknown>): string {
-  return (
-    normalizeMetadataValue(metadata.actionUrl) ||
-    normalizeMetadataValue(metadata.url) ||
-    normalizeMetadataValue(metadata.targetUrl) ||
-    normalizeMetadataValue(metadata.route)
-  );
-}
-
-export function getPrimaryAction(
-  notification: AppNotification,
-  userRoles?: string[]
-): NotificationAction | null {
+export function getPrimaryAction(notification: AppNotification): NotificationAction | null {
   const metadata = notification.metadata as Record<string, unknown> | undefined;
   if (!metadata) return null;
 
-  const label = extractLabel(metadata);
-  const explicitTarget = extractExplicitTarget(metadata);
+  const label =
+    normalizeMetadataValue(metadata.actionLabel) ||
+    normalizeMetadataValue(metadata.ctaLabel) ||
+    normalizeMetadataValue(metadata.buttonText);
+
+  const explicitTarget =
+    normalizeMetadataValue(metadata.actionUrl) ||
+    normalizeMetadataValue(metadata.url) ||
+    normalizeMetadataValue(metadata.targetUrl) ||
+    normalizeMetadataValue(metadata.route);
 
   if (label && explicitTarget) {
-    // Suppress admin-only connection routes for non-admins even when URL is explicit
-    const effectiveRolesExplicit = userRoles ?? [];
-    if (isAdminConnectionRoute(explicitTarget) && !effectiveRolesExplicit.includes('tenant_admin')) return null;
     return { label, target: explicitTarget, external: /^https?:\/\//i.test(explicitTarget) };
   }
 
   // Derive route from semantic metadata fields so the frontend owns all paths
-  const derived = deriveActionFromMetadata(metadata, notification.type, userRoles);
+  const derived = deriveActionFromMetadata(metadata, notification.type);
   if (!derived) return null;
 
   // Allow an explicit label override even when the target is derived
@@ -244,26 +229,11 @@ function isValidUuid(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-const ADMIN_CONNECTION_ROUTES = new Set<string>([
-  ROUTES.arcgisConnection,
-  ROUTES.jiraConnection,
-  ROUTES.confluenceConnection,
-]);
-
-function isAdminConnectionRoute(target: string): boolean {
-  return ADMIN_CONNECTION_ROUTES.has(target);
-}
-
 function resolveConnectionAction(
-  metadata: Record<string, unknown>,
-  userRoles?: string[]
+  metadata: Record<string, unknown>
 ): { target: string; label: string } | null {
   const connectionId = normalizeMetadataValue(metadata.connectionId);
   if (!connectionId) return null;
-
-  // Connection management pages are admin-only — suppress for non-admins
-  const effectiveUserRoles = userRoles ?? [];
-  if (!effectiveUserRoles.includes('tenant_admin')) return null;
 
   const serviceType = normalizeMetadataValue(metadata.serviceType).toUpperCase();
   if (serviceType === 'ARCGIS') {
@@ -280,8 +250,7 @@ function resolveConnectionAction(
 
 function deriveActionFromMetadata(
   metadata: Record<string, unknown>,
-  eventType: string | undefined,
-  userRoles?: string[]
+  eventType: string | undefined
 ): { target: string; label: string } | null {
   // Deleted entities no longer exist — no navigation link
   if (eventType?.endsWith('_DELETED')) return null;
@@ -305,5 +274,5 @@ function deriveActionFromMetadata(
     return { target: ROUTES.jiraWebhookDetails(webhookId), label: 'Open Jira Webhook' };
   }
 
-  return resolveConnectionAction(metadata, userRoles);
+  return resolveConnectionAction(metadata);
 }

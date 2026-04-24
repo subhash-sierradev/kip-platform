@@ -16,7 +16,6 @@
           :class="{ 'bd-input-error': validationError }"
           type="text"
           :value="integrationName"
-          maxlength="100"
           placeholder="Jira Webhook Name"
           @input="onNameInput"
         />
@@ -54,7 +53,6 @@
 import { computed, ref, watch, onMounted } from 'vue';
 import { useCharacterCounter } from '../../../../composables/useCharacterCounter';
 import { checkDuplicateName } from '@/utils/globalNormalizedUtils';
-import { syncTextInputValue } from '@/utils/textInputUtils';
 
 const props = defineProps<{
   integrationName: string;
@@ -126,7 +124,7 @@ function validateName(name: string) {
 
 function onNameInput(event: Event) {
   hasInteracted.value = true; // Mark field as touched
-  const value = syncTextInputValue(event);
+  const value = (event.target as HTMLInputElement).value;
   emit('update:integrationName', value);
   validateName(value);
 }

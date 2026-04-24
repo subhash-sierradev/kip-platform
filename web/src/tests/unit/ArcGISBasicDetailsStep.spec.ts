@@ -6,8 +6,6 @@ import { ARCGIS_UNIFIED_STEP_CONFIG } from '@/utils/unifiedIntegrationStepConfig
 import IntegrationDetailsStep from '@/components/common/combinedstep/IntegrationDetailsStep.vue';
 import { KwDocService } from '@/api/services/KwIntegrationService';
 
-const INTEGRATION_NAME_MAX_LENGTH = 100;
-
 vi.mock('@/api/services/KwIntegrationService', () => ({
   KwDocService: {
     getSubItemTypes: vi.fn().mockResolvedValue([]),
@@ -36,7 +34,7 @@ describe('ArcGIS BasicDetailsStep', () => {
   it('emits updates and validation-change as user types', async () => {
     const wrapper = mount(IntegrationDetailsStep, {
       props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
+        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
         config: ARCGIS_UNIFIED_STEP_CONFIG,
         normalizedNames: ['existing_integration'],
       },
@@ -53,13 +51,7 @@ describe('ArcGIS BasicDetailsStep', () => {
     const updates = wrapper.emitted()['update:modelValue'];
     expect(updates?.length).toBeGreaterThan(0);
     expect(updates?.at(-1)).toEqual([
-      {
-        name: 'My ArcGIS',
-        description: '',
-        itemType: 'DOCUMENT',
-        subType: 'DOCUMENT_PDF',
-        subTypeLabel: '',
-      },
+      { name: 'My ArcGIS', description: '', itemType: 'DOCUMENT', subType: '' },
     ]);
 
     const validations = wrapper.emitted('validation-change') as
@@ -90,10 +82,10 @@ describe('ArcGIS BasicDetailsStep', () => {
     expect(validations?.some(args => args[0] === false)).toBe(true);
   });
 
-  it('allows unique name and emits true validation when subtype is also selected', async () => {
+  it('allows unique name and emits true validation', async () => {
     const wrapper = mount(IntegrationDetailsStep, {
       props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
+        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
         config: ARCGIS_UNIFIED_STEP_CONFIG,
         normalizedNames: ['existing_integration'],
       },
@@ -112,15 +104,10 @@ describe('ArcGIS BasicDetailsStep', () => {
     expect(validations?.some(args => args[0] === true)).toBe(true);
   });
 
-  it('allows original name in edit mode when subtype is selected', async () => {
+  it('allows original name in edit mode', async () => {
     const wrapper = mount(IntegrationDetailsStep, {
       props: {
-        modelValue: {
-          name: 'Original Name',
-          description: '',
-          itemType: 'DOCUMENT',
-          subType: 'DOCUMENT_PDF',
-        },
+        modelValue: { name: 'Original Name', description: '', itemType: 'DOCUMENT', subType: '' },
         config: ARCGIS_UNIFIED_STEP_CONFIG,
         editMode: true,
         originalName: 'Original Name',
@@ -144,7 +131,7 @@ describe('ArcGIS BasicDetailsStep', () => {
   it('handles missing normalizedNames prop gracefully', async () => {
     const wrapper = mount(IntegrationDetailsStep, {
       props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
+        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
         config: ARCGIS_UNIFIED_STEP_CONFIG,
       },
     });
@@ -160,41 +147,6 @@ describe('ArcGIS BasicDetailsStep', () => {
       | Array<[boolean, ...any[]]>
       | undefined;
     expect(validations?.some(args => args[0] === true)).toBe(true);
-  });
-
-  it('sets the integration name maxlength to the configured max', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-      },
-    });
-
-    await nextTick();
-
-    expect(wrapper.find('input.uis-input').attributes('maxlength')).toBe('100');
-  });
-
-  it('truncates integration names longer than the configured max before emitting', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-      },
-    });
-
-    const input = wrapper.find('input.uis-input');
-    const longName = 'a'.repeat(125);
-
-    await input.setValue(longName);
-    vi.advanceTimersByTime(350);
-    await nextTick();
-
-    const updateEvents = wrapper.emitted('update:modelValue');
-    expect(updateEvents).toBeTruthy();
-    const lastModel = updateEvents?.at(-1)?.[0] as { name?: string } | undefined;
-    expect(String(lastModel?.name).length).toBe(100);
-    expect((input.element as HTMLInputElement).value.length).toBe(100);
   });
 
   it('shows the required-name validation after the user clears the field', async () => {
@@ -250,179 +202,6 @@ describe('ArcGIS BasicDetailsStep', () => {
     const validations = wrapper.emitted('validation-change') as
       | Array<[boolean, ...any[]]>
       | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(false);
-  });
-
-  // ── Bug 1: Next button should stay disabled until Item Subtype is selected ──
-
-  it('emits false when name is valid but Item Subtype is not selected', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    const input = wrapper.find('input.uis-input');
-    await input.setValue('My Integration');
-
-    vi.advanceTimersByTime(350);
-    await nextTick();
-
-    const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(false);
-  });
-
-  it('emits true only after both name and Item Subtype are provided', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    // Type a name — Next should still be disabled because subType is empty
-    const input = wrapper.find('input.uis-input');
-    await input.setValue('My Integration');
-    vi.advanceTimersByTime(350);
-    await nextTick();
-
-    const validationsAfterName = wrapper.emitted('validation-change') as
-      | Array<[boolean]>
-      | undefined;
-    expect(validationsAfterName?.at(-1)?.[0]).toBe(false);
-
-    // Simulate parent updating the prop with the selected subtype
-    await wrapper.setProps({
-      modelValue: {
-        name: 'My Integration',
-        description: '',
-        itemType: 'DOCUMENT',
-        subType: 'DOCUMENT_PDF',
-      },
-    });
-    await nextTick();
-
-    const validationsAfterSubtype = wrapper.emitted('validation-change') as
-      | Array<[boolean]>
-      | undefined;
-    expect(validationsAfterSubtype?.at(-1)?.[0]).toBe(true);
-  });
-
-  // ── Bug 2: Integration Name max-length validation ──
-
-  it('shows max-length error and emits false when name exceeds 100 characters', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    // Use setProps to bypass the HTML maxlength truncation — the prop watcher
-    // calls validateName directly with the raw value, triggering the JS error.
-    await wrapper.setProps({
-      modelValue: {
-        name: 'A'.repeat(INTEGRATION_NAME_MAX_LENGTH + 1),
-        description: '',
-        itemType: 'DOCUMENT',
-        subType: 'DOCUMENT_PDF',
-      },
-    });
-    await nextTick();
-
-    expect(wrapper.text()).toContain(`Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`);
-
-    const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(false);
-  });
-
-  it('allows a name of exactly 100 characters and emits true when subtype is selected', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    const input = wrapper.find('input.uis-input');
-    await input.setValue('A'.repeat(INTEGRATION_NAME_MAX_LENGTH));
-
-    vi.advanceTimersByTime(350);
-    await nextTick();
-
-    expect(wrapper.text()).not.toContain(
-      `Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`
-    );
-
-    const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(true);
-  });
-
-  it('sets the maxlength attribute on the name input to the configured max', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: '' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-      },
-    });
-    await nextTick();
-
-    const input = wrapper.find('input.uis-input');
-    expect(input.attributes('maxlength')).toBe('100');
-  });
-
-  it('emits false when modelValue is prefilled with a name exceeding the max length', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: {
-          name: 'A'.repeat(INTEGRATION_NAME_MAX_LENGTH + 1),
-          description: '',
-          itemType: 'DOCUMENT',
-          subType: 'DOCUMENT_PDF',
-        },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(false);
-  });
-
-  it('shows max-length error immediately when name is updated via prop (clone/edit prefill)', async () => {
-    const wrapper = mount(IntegrationDetailsStep, {
-      props: {
-        modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
-        config: ARCGIS_UNIFIED_STEP_CONFIG,
-        normalizedNames: [],
-      },
-    });
-    await nextTick();
-
-    // Simulate wizard programmatically setting the name (e.g. "Copy of <long name>" in clone)
-    await wrapper.setProps({
-      modelValue: {
-        name: 'A'.repeat(INTEGRATION_NAME_MAX_LENGTH + 1),
-        description: '',
-        itemType: 'DOCUMENT',
-        subType: 'DOCUMENT_PDF',
-      },
-    });
-    await nextTick();
-
-    expect(wrapper.text()).toContain(`Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`);
-
-    const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
     expect(validations?.at(-1)?.[0]).toBe(false);
   });
 

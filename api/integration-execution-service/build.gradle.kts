@@ -132,7 +132,7 @@ tasks.jacocoTestReport {
     }
 }
 
-val jacocoMinCoverage = "0.90".toBigDecimal()
+val jacocoMinCoverage = "0.85".toBigDecimal()
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)

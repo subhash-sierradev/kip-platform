@@ -38,16 +38,10 @@ export function useJiraWebhookNameValidation(options: UseJiraWebhookNameValidati
   };
 
   watch(
-    [
-      () => options.integrationName.value,
-      allWebhookNormalizedNames,
-      () => options.originalName.value,
-      () => options.editMode,
-    ],
-    ([newName]) => {
+    () => options.integrationName.value,
+    newName => {
       isDuplicateName.value = computeDuplicate(newName || '');
-    },
-    { immediate: true }
+    }
   );
 
   return {

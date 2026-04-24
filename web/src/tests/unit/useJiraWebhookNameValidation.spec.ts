@@ -31,24 +31,6 @@ describe('useJiraWebhookNameValidation', () => {
     expect(isDuplicateName.value).toBe(true);
   });
 
-  it('recomputes duplicate names when normalized names load after the name is already set', async () => {
-    serviceHoisted.getAllJiraNormalizedNames.mockResolvedValueOnce(['Example Webhook']);
-    const integrationName = ref('Example Webhook');
-
-    const { isDuplicateName, loadNormalizedNames } = useJiraWebhookNameValidation({
-      integrationName,
-      editMode: false,
-      originalName: computed(() => undefined),
-    });
-
-    expect(isDuplicateName.value).toBe(false);
-
-    await loadNormalizedNames();
-    await nextTick();
-
-    expect(isDuplicateName.value).toBe(true);
-  });
-
   it('allows original name in edit mode', async () => {
     serviceHoisted.getAllJiraNormalizedNames.mockResolvedValueOnce(['Example Webhook']);
     const integrationName = ref('');

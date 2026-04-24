@@ -103,27 +103,6 @@ class JiraWebhookControllerTest {
         }
 
         @Test
-        @DisplayName("should return 400 when webhook name exceeds the maximum allowed length")
-        void create_nameLongerThan100Characters_returnsBadRequest() throws Exception {
-            JiraWebhookCreateUpdateRequest invalidRequest = JiraWebhookCreateUpdateRequest.builder()
-                    .name("a".repeat(100 + 1))
-                    .description("Creates incidents from Jira issues")
-                    .connectionId(UUID.randomUUID())
-                    .fieldsMapping(buildValidCreateRequest().getFieldsMapping())
-                    .samplePayload("{\"issue\":{\"key\":\"TEST-123\"}}")
-                    .build();
-
-            mockMvc.perform(post(BASE_URL)
-                    .requestAttr(X_TENANT_ID, TENANT_ID)
-                    .requestAttr(X_USER_ID, USER_ID)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(invalidRequest)))
-                    .andExpect(status().isBadRequest());
-
-            verify(jiraWebhookService, never()).create(any(), any(), any());
-        }
-
-        @Test
         @DisplayName("should propagate service exceptions")
         void create_serviceThrowsException_propagatesException() throws Exception {
             JiraWebhookCreateUpdateRequest request = buildValidCreateRequest();

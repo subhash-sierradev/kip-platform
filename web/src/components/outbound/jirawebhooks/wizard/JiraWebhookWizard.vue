@@ -256,18 +256,6 @@ const { allWebhookNormalizedNames, isDuplicateName, loadNormalizedNames } =
     originalName: originalNameForValidation,
   });
 
-const isBasicDetailsStepValid = computed(
-  () => integrationName.value.trim() !== '' && !isDuplicateName.value
-);
-
-watch(
-  isBasicDetailsStepValid,
-  isValid => {
-    setBasicDetailsValid(isValid);
-  },
-  { immediate: true }
-);
-
 const { handleOpenChange } = useJiraWebhookPrefill({
   editMode: toRef(props, 'editMode'),
   cloneMode: toRef(props, 'cloneMode'),

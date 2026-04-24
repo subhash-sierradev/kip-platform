@@ -46,11 +46,32 @@ public class KwToConfluenceOrchestrator {
                     offset,
                     limit);
 
+            // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
+            // ExecutionWindow.windowEnd is exclusive (half-open interval), so filter
+            // out any record whose updatedTimestamp falls on the boundary second.
+            Instant windowEnd = cmd.getWindowEnd();
+            if (windowEnd != null) {
+                long exclusiveEndSeconds = windowEnd.getEpochSecond();
+                monitoringData = monitoringData.stream()
+                        .filter(doc -> doc.getUpdatedTimestamp() < exclusiveEndSeconds)
+                        .toList();
+            }
+
             log.info("Confluence integration {} — monitoring records fetched={} startTs={} endTs={} start={} limit={}",
                     cmd.getIntegrationId(), monitoringData.size(), startTimestamp, endTimestamp, offset, limit);
 
             if (monitoringData.isEmpty()) {
                 log.info("Confluence integration {} — no monitoring data found for requested window",
+                        cmd.getIntegrationId());
+                return ConfluenceJobExecutionResult.success(0, null, null);
+            }
+
+            List<KwMonitoringDocument> namedClientData = confluencePageRenderer.filterNamedClients(monitoringData);
+            log.info("Confluence integration {} _ records after unknown-client filter: fetched={} included={}",
+                    cmd.getIntegrationId(), monitoringData.size(), namedClientData.size());
+
+            if (namedClientData.isEmpty()) {
+                log.info("Confluence integration {} _ all fetched records have unknown client, no page published",
                         cmd.getIntegrationId());
                 return ConfluenceJobExecutionResult.success(0, null, null);
             }
@@ -64,7 +85,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — using timezone: {}",
                     cmd.getIntegrationId(), confluenceTimezone.getId());
 
-            String pageContent = confluencePageRenderer.buildPageContent(monitoringData, confluenceTimezone);
+            String pageContent = confluencePageRenderer.buildPageContent(namedClientData, confluenceTimezone);
 
             ConfluenceApiClient.ConfluencePublishResult publishResult =
                     confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
@@ -77,7 +98,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — published monitoring page", cmd.getIntegrationId());
 
             return ConfluenceJobExecutionResult.success(
-                    monitoringData.size(),
+                    namedClientData.size(),
                     publishResult.confluencePageUrl(),
                     publishResult.confluencePageId());
 

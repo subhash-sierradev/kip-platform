@@ -8,7 +8,6 @@
     "regression": "npx playwright test --workers=1 --grep '@regression'",
     "regression:arcgis": "npx playwright test --workers=1 --grep '@ArcGIS'",
     "regression:jira": "npx playwright test --workers=1 --grep '@JiraWebhook'",
-    "regression:confluence": "npx playwright test --workers=1 --grep '@Confluence'",
     "report": "npx playwright show-report"
   },
   "keywords": [],
