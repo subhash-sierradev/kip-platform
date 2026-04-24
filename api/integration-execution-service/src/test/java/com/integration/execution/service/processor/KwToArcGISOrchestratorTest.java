@@ -201,6 +201,116 @@ class KwToArcGISOrchestratorTest {
     }
 
     @Test
+    void processExecution_nullWindowEnd_skipsFilteringAndProcessesAll() {
+        // windowEnd == null → the filtering branch is skipped entirely
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(null)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto doc = documentWithLocations("doc-1", 1);
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(List.of(doc));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(List.of(doc)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        orchestrator.processExecution(command);
+
+        // All docs passed through without timestamp filtering
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(eq(List.of(doc)), any());
+    }
+
+    @Test
+    void processExecution_documentWithNullLocations_treatedAsZeroLocations() {
+        // doc.getLocations() == null → ternary false branch; total = 0 → features.isEmpty + count==0 branch
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(null)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto docWithNullLocations = new KwDocumentDto("doc-null-loc", "D", "TYPE", 1L, 2L);
+        // locations field left null by default 5-arg constructor
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(List.of(docWithNullLocations));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(any(), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        // totalLocationCount = 0 (null locations treated as 0), so returns empty result directly
+        assertThat(result.totalRecords()).isZero();
+        assertThat(result.failedRecords()).isZero();
+    }
+
+    @Test
+    void processExecution_urlWithoutTrailingSlashOrNumericSuffix_usesUrlAsIs() {
+        // Covers false branches for both endsWith('/') and matches('.*/\\d+$')
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 1));
+
+        ArrayNode features = objectMapper.createArrayNode();
+        features.add(objectMapper.createObjectNode());
+
+        List<RecordMetadata> successMeta = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L));
+        ApplyEditsPartition partition = new ApplyEditsPartition(
+                objectMapper.createArrayNode(), objectMapper.createArrayNode());
+        PublishingResult publishingResult = new PublishingResult(0, 0, 0,
+                List.of(), List.of(), List.of());
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(features, successMeta, List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+        // URL with no trailing slash and no numeric suffix → both branches false
+        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer"));
+        when(mappingResolver.partitionFeaturesForAddOrUpdate(
+                features, "secret", "https://example.com/FeatureServer"))
+                .thenReturn(partition);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMeta))
+                .thenReturn(publishingResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.totalRecords()).isZero();
+        verify(mappingResolver).partitionFeaturesForAddOrUpdate(
+                features, "secret", "https://example.com/FeatureServer");
+    }
+
+    @Test
+    void processExecution_transformationFailuresWithEmptyErrorList_usesGenericFallback() {
+        // Covers buildIndividualErrorMessage when errors list is empty
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 2));
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        List<FailedRecordMetadata> failedMeta = List.of(
+                new FailedRecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L, "err"),
+                new FailedRecordMetadata("doc-1", "Doc", "loc-1", 1L, 2L, 1L, 2L, "err"));
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), failedMeta));
+        // Empty errors list → buildIndividualErrorMessage uses fallback text branch
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.errorMessage()).contains("Check application logs");
+        assertThat(result.failedRecords()).isEqualTo(2);
+    }
+
+    @Test
     void processExecution_allDocumentsAtOrAfterWindowEnd_returnsEmptyResult() {
         ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
                 .integrationId(UUID.randomUUID())

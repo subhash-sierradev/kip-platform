@@ -192,6 +192,42 @@ class JiraWebhookExecutionCommandListenerTest {
                     }));
         }
 
+        @Test
+        @DisplayName("should use empty fallback values for null webhook metadata on success path")
+        void handleExecutionCommand_success_nullWebhookMetadata_usesEmptyFallback() {
+            UUID eventId = UUID.randomUUID();
+            // null webhookName, webhookId, and originalEventId → covers three null ternary branches in success path
+            JiraWebhookExecutionCommand command = JiraWebhookExecutionCommand.builder()
+                    .webhookId(null)
+                    .webhookName(null)
+                    .samplePayload("{}")
+                    .fieldMappings(List.of())
+                    .incomingPayload("{}")
+                    .triggerEventId(eventId)
+                    .tenantId("tenant-xyz")
+                    .triggeredBy("user-xyz")
+                    .originalEventId(null)
+                    .retryAttempt(0)
+                    .build();
+
+            JiraWebhookExecutionResult successResult = JiraWebhookExecutionResult.builder()
+                    .triggerEventId(eventId)
+                    .success(true)
+                    .status(com.integration.execution.contract.model.enums.TriggerStatus.SUCCESS)
+                    .build();
+
+            when(jiraWebhookProcessor.processWebhookExecution(command)).thenReturn(successResult);
+
+            listener.handleExecutionCommand(command);
+
+            verify(notificationEventPublisher).publish(
+                    org.mockito.ArgumentMatchers.argThat(event ->
+                            "JIRAWEBHOOK_EVENT_COMPLETED".equals(event.getEventKey())
+                            && "".equals(event.getMetadata().get("webhookName"))
+                            && "".equals(event.getMetadata().get("webhookId"))
+                            && "".equals(event.getMetadata().get("issueKey"))));
+        }
+
         private JiraWebhookExecutionCommand buildCommand(final UUID eventId) {
             return JiraWebhookExecutionCommand.builder()
                     .webhookId("webhook-abc")
