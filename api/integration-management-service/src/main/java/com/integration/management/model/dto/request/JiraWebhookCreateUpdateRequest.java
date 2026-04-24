@@ -19,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class JiraWebhookCreateUpdateRequest {
     @NotBlank(message = "Name is required")
-    @Size(max = 50, message = "Name cannot exceed {max} characters")
+    @Size(max = 100, message = "Name cannot exceed {max} characters")
     private String name;
     @Size(max = 500, message = "Description cannot exceed {max} characters")
     private String description;

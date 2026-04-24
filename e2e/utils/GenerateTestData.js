@@ -148,6 +148,46 @@ getArcGISCronIntegrationConfig()
   };
 }
 
+// Confluence Integration Test Data
+generateConfluenceIntegrationName() 
+{
+  return `Confluence_Integration_${faker.lorem.word()}_${this.timestamp}`;
+}
+
+getConfluenceIntegrationConfig() 
+{
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const year  = tomorrow.getFullYear();
+  const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
+  const day   = String(tomorrow.getDate()).padStart(2, '0');
+  const tomorrowDate = `${year}-${month}-${day}`;
+
+  return {
+    name: this.generateConfluenceIntegrationName(),
+    description: this.generateDescription(),
+    schedule: {
+      mode: 'Rolling Window',
+      frequency: 'Weekly',
+      startDate: tomorrowDate,
+      executionTime: '09:00',
+      days: ['Mon'],
+      rollingWindowSize: '7'
+    },
+    connection: {
+      useExisting: true,
+      selectFirstActive: true
+    },
+    fieldMappings: [
+      {
+        sourceField: 'Title',
+        transformation: 'PASSTHROUGH',
+        confluenceField: 'Page Title'
+      }
+    ]
+  };
+}
+
 // ArcGIS Integration Update Test Data
 generateArcGISUpdatedIntegrationName()
 {

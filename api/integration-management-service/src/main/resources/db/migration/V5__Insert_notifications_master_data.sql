@@ -187,16 +187,16 @@ FROM (VALUES
 
     -- Integration connection templates
     ('INTEGRATION_CONNECTION_CREATED',
-     'Integration Connection Created: {{connectionName}}',
-     'A new integration connection "{{connectionName}}" was created by {{createdBy}} on {{timestamp}}.'),
+     '{{serviceType}} credentials created: {{connectionName}}',
+     '"{{connectionName}}" ({{serviceType}}) credentials were created by {{createdBy}} on {{timestamp}}.'),
 
     ('INTEGRATION_CONNECTION_SECRET_UPDATED',
-     'Integration Connection Credentials Updated: {{connectionName}}',
-     'The credentials for integration connection "{{connectionName}}" were updated by {{updatedBy}} on {{timestamp}}.'),
+     '{{serviceType}} credentials updated: {{connectionName}}',
+     'Credentials for "{{connectionName}}" ({{serviceType}}) were updated by {{updatedBy}} on {{timestamp}}.'),
 
     ('INTEGRATION_CONNECTION_DELETED',
-     'Integration Connection Deleted: {{connectionName}}',
-     'The integration connection "{{connectionName}}" was permanently deleted by {{deletedBy}} on {{timestamp}}.')
+     '{{serviceType}} credentials deleted: {{connectionName}}',
+     '"{{connectionName}}" ({{serviceType}}) credentials were permanently deleted by {{deletedBy}} on {{timestamp}}.')
 
 ) AS t(event_key, title_template, message_template)
 

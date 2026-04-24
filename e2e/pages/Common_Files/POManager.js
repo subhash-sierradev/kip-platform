@@ -21,6 +21,7 @@ import { ArcGISIntegrationCreatorPage } from '../ArcGIS_Integration/ArcGISIntegr
 import { ArcGISIntegrationManagementPage } from '../ArcGIS_Integration/ArcGISIntegrationManagementPage.js';
 import { ArcGISIntegrationEditorPage } from '../ArcGIS_Integration/ArcGISIntegrationEditorPage.js';
 import { ArcGISIntegrationViewPage } from '../ArcGIS_Integration/ArcGISIntegrationViewPage.js';
+import { ConfluenceIntegrationCreatorPage } from '../Confluence_Integration/Confluence_Integration_Creator_Page.js';
 
 class POManager {
   constructor(page) {
@@ -113,6 +114,11 @@ class POManager {
 
   get arcgisIntegrationViewPage() {
     return this._arcgisIntegrationViewPage = this._arcgisIntegrationViewPage || new ArcGISIntegrationViewPage(this.page);
+  }
+
+  // Confluence Integration page objects
+  get confluenceIntegrationCreatorPage() {
+    return this._confluenceIntegrationCreatorPage = this._confluenceIntegrationCreatorPage || new ConfluenceIntegrationCreatorPage(this.page);
   }
 }
 

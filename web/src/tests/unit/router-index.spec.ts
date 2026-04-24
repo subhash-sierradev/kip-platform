@@ -43,6 +43,13 @@ describe('router/index', () => {
     // admin pages
     expect(calls).toContainEqual(['tenant_admin', 'app_admin']);
     expect(calls).toContainEqual(['app_admin']);
+    // confluence connection: must require only tenant_admin — not feature_confluence_integration
+    const confluenceGuardCall = roleGuardMock.mock.calls.find(
+      ([roles]) =>
+        roles.length === 1 && roles[0] === 'tenant_admin'
+    );
+    expect(confluenceGuardCall).toBeDefined();
+    expect(calls).not.toContainEqual(['tenant_admin', 'feature_confluence_integration']);
   });
 
   it('creates history with configured base url', async () => {
