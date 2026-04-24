@@ -36,7 +36,7 @@ describe('JiraWebhookWizard', () => {
         stubs: {
           BasicDetailsStep: { template: '<div class="basic-stub" />' },
           SampleDataStep: { template: '<div class="sample-stub" />' },
-          ConnectStep: { template: '<div class="connect-stub" />' },
+          ConnectionStep: { template: '<div class="connect-stub" />' },
           MappingStep: { template: '<div class="mapping-stub" />' },
           PreviewStep: { template: '<div class="preview-stub" />' },
           WebhookSuccessDialog: { template: '<div class="success-stub" />' },
@@ -73,7 +73,7 @@ describe('JiraWebhookWizard', () => {
         stubs: {
           BasicDetailsStep: { template: '<div />' },
           SampleDataStep: { template: '<div />' },
-          ConnectStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
           MappingStep: { template: '<div />' },
           PreviewStep: { template: '<div />' },
           WebhookSuccessDialog: { template: '<div />' },
@@ -104,7 +104,7 @@ describe('JiraWebhookWizard', () => {
         stubs: {
           BasicDetailsStep: { template: '<div />' },
           SampleDataStep: { template: '<div />' },
-          ConnectStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
           MappingStep: { template: '<div />' },
           PreviewStep: { template: '<div />' },
           WebhookSuccessDialog: { template: '<div />' },
@@ -130,7 +130,7 @@ describe('JiraWebhookWizard', () => {
         stubs: {
           BasicDetailsStep: { template: '<div class="basic-stub" />' },
           SampleDataStep: { template: '<div class="sample-stub" />' },
-          ConnectStep: { template: '<div class="connect-stub" />' },
+          ConnectionStep: { template: '<div class="connect-stub" />' },
           MappingStep: { template: '<div class="mapping-stub" />' },
           PreviewStep: { template: '<div class="preview-stub" />' },
           WebhookSuccessDialog: { template: '<div class="success-stub" />' },
@@ -168,7 +168,7 @@ describe('JiraWebhookWizard', () => {
       global: {
         stubs: {
           SampleDataStep: { template: '<div />' },
-          ConnectStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
           MappingStep: { template: '<div />' },
           PreviewStep: { template: '<div />' },
           WebhookSuccessDialog: { template: '<div />' },
@@ -194,6 +194,77 @@ describe('JiraWebhookWizard', () => {
     vi.useRealTimers();
   });
 
+  it('enables Next when integration name is updated without relying on validation-change', async () => {
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          BasicDetailsStep: { template: '<div class="basic-stub" />' },
+          SampleDataStep: { template: '<div class="sample-stub" />' },
+          ConnectionStep: { template: '<div class="connect-stub" />' },
+          MappingStep: { template: '<div class="mapping-stub" />' },
+          PreviewStep: { template: '<div class="preview-stub" />' },
+          WebhookSuccessDialog: { template: '<div class="success-stub" />' },
+        },
+      },
+    });
+
+    await flushPromises();
+    await nextTick();
+
+    const nextButton = () => wrapper.find('button.jw-btn.jw-btn-primary');
+
+    expect(nextButton().attributes('disabled')).toBeDefined();
+
+    (wrapper.vm as any).onIntegrationNameUpdate('Webhook via autofill');
+    await nextTick();
+
+    expect(nextButton().attributes('disabled')).toBeUndefined();
+
+    (wrapper.vm as any).onIntegrationNameUpdate('   ');
+    await nextTick();
+
+    expect(nextButton().attributes('disabled')).toBeDefined();
+  });
+
+  it('keeps Next disabled for duplicate names through reactive basic-details validity', async () => {
+    vi.useFakeTimers();
+
+    (JiraWebhookService.getAllJiraNormalizedNames as any).mockResolvedValue([
+      normalizeIntegrationNameForCompare('Duplicate Webhook'),
+    ]);
+
+    const wrapper = mount(JiraWebhookWizard, {
+      props: { open: true },
+      global: {
+        stubs: {
+          SampleDataStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
+          MappingStep: { template: '<div />' },
+          PreviewStep: { template: '<div />' },
+          WebhookSuccessDialog: { template: '<div />' },
+        },
+      },
+    });
+
+    await flushPromises();
+    await nextTick();
+
+    const nameInput = wrapper.find('input.bd-input');
+    expect(nameInput.exists()).toBe(true);
+
+    await nameInput.setValue('Duplicate Webhook');
+    vi.advanceTimersByTime(350);
+    await nextTick();
+
+    const nextButton = wrapper.find('button.jw-btn.jw-btn-primary');
+    expect(nextButton.attributes('disabled')).toBeDefined();
+
+    vi.useRealTimers();
+  });
+
   it('handles getAllJiraNormalizedNames API error gracefully', async () => {
     (JiraWebhookService.getAllJiraNormalizedNames as any).mockRejectedValue(new Error('API Error'));
 
@@ -203,7 +274,7 @@ describe('JiraWebhookWizard', () => {
         stubs: {
           BasicDetailsStep: { template: '<div />' },
           SampleDataStep: { template: '<div />' },
-          ConnectStep: { template: '<div />' },
+          ConnectionStep: { template: '<div />' },
           MappingStep: { template: '<div />' },
           PreviewStep: { template: '<div />' },
           WebhookSuccessDialog: { template: '<div />' },

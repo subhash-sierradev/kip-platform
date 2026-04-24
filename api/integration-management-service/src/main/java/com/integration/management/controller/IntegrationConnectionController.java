@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static com.integration.execution.contract.model.enums.AuditActivity.CREATE;
 import static com.integration.execution.contract.model.enums.AuditActivity.DELETE;
 import static com.integration.execution.contract.model.enums.EntityType.INTEGRATION_CONNECTION;
 
@@ -44,6 +45,7 @@ public class IntegrationConnectionController {
 
     @PostMapping("/test-connection")
     @PreAuthorize("@serviceTypeAuth.hasAccessToServiceType(#request.serviceType)")
+    @AuditLoggable(entityType = INTEGRATION_CONNECTION, action = CREATE)
     public ResponseEntity<?> testAndCreateConnection(
             @Valid @RequestBody IntegrationConnectionRequest request,
             @RequestAttribute(X_TENANT_ID) String tenantId,

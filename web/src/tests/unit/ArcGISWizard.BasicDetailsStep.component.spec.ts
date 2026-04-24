@@ -42,6 +42,16 @@ describe('ArcGIS Wizard BasicDetailsStep.vue', () => {
     expect(validationEvents.at(-1)).toEqual([false]);
   });
 
+  it('sets the integration name maxlength to the configured max', () => {
+    const wrapper = mount(BasicDetailsStep, {
+      props: {
+        modelValue: { name: '', description: '' },
+      },
+    });
+
+    expect(wrapper.find('input.bd-input').attributes('maxlength')).toBe('100');
+  });
+
   it('shows duplicate-name error and emits invalid after debounce', async () => {
     checkDuplicateNameMock.mockReturnValueOnce(true);
 
@@ -269,5 +279,25 @@ describe('ArcGIS Wizard BasicDetailsStep.vue', () => {
 
     const validationEvents = wrapper.emitted('validation-change') ?? [];
     expect(validationEvents.at(-1)).toEqual([true]);
+  });
+
+  it('truncates integration names longer than the configured max before updating the model', async () => {
+    const wrapper = mount(BasicDetailsStep, {
+      props: {
+        modelValue: { name: '', description: '' },
+      },
+    });
+
+    const input = wrapper.find('input.bd-input');
+    const longName = 'a'.repeat(125);
+
+    await input.setValue(longName);
+    vi.advanceTimersByTime(350);
+    await nextTick();
+
+    const modelEvents = wrapper.emitted('update:modelValue') ?? [];
+    const lastModel = modelEvents.at(-1)?.[0] as { name?: string } | undefined;
+    expect(String(lastModel?.name).length).toBe(100);
+    expect((input.element as HTMLInputElement).value.length).toBe(100);
   });
 });
