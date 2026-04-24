@@ -51,17 +51,18 @@ public class JiraWebhookEventService {
 
         JiraWebhookEvent lastEvent = findByOriginalEventIdOrderByRetryAttempt(id);
         JiraWebhook webhook = findWebhook(lastEvent.getWebhookId());
+        String effectiveTenantId = webhook.getTenantId();
 
         String originalEventId = StringUtils.hasText(lastEvent.getOriginalEventId())
                 ? lastEvent.getOriginalEventId() : id;
         int nextRetry = lastEvent.getRetryAttempt() != null ? lastEvent.getRetryAttempt() + 1 : 1;
 
         JiraWebhookEvent retryEvent = recordJiraWebhookEvent(
-                lastEvent.getWebhookId(), tenantId, userId,
+                lastEvent.getWebhookId(), effectiveTenantId, userId,
                 lastEvent.getIncomingPayload(), originalEventId, nextRetry);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, retryEvent, lastEvent.getIncomingPayload(), tenantId, userId);
+                webhook, retryEvent, lastEvent.getIncomingPayload(), effectiveTenantId, userId);
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
@@ -82,11 +83,12 @@ public class JiraWebhookEventService {
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
         JiraWebhook webhook = findWebhook(id);
+        String effectiveTenantId = webhook.getTenantId();
         JiraWebhookEvent event = recordJiraWebhookEvent(
-                id, tenantId, userId, jiraWebhookPayload, null, 0);
+                id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, event, jiraWebhookPayload, tenantId, userId);
+                webhook, event, jiraWebhookPayload, effectiveTenantId, userId);
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
@@ -105,7 +107,7 @@ public class JiraWebhookEventService {
 
     private JiraWebhookExecutionCommand buildCommand(
             final JiraWebhook webhook, final JiraWebhookEvent event,
-            final String incomingPayload, final String tenantId, final String userId) {
+            final String incomingPayload, final String effectiveTenantId, final String userId) {
         String secretName = integrationConnectionService
                 .getIntegrationConnectionNameById(webhook.getConnectionId().toString(), webhook.getTenantId());
         return JiraWebhookExecutionCommand.builder()
@@ -120,7 +122,7 @@ public class JiraWebhookEventService {
                                 .collect(Collectors.toList()))
                 .incomingPayload(incomingPayload)
                 .triggerEventId(event.getId())
-                .tenantId(tenantId)
+                .tenantId(effectiveTenantId)
                 .triggeredBy(userId)
                 .originalEventId(event.getOriginalEventId())
                 .retryAttempt(event.getRetryAttempt() != null ? event.getRetryAttempt() : 0)
@@ -216,7 +218,7 @@ public class JiraWebhookEventService {
     }
 
     public List<JiraWebhookEventResponse> getWebhookEventsByWebhookId(final String webhookId, final String tenantId) {
-        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(webhookId)
+        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(webhookId, tenantId)
                 .stream().map(mapper::toResponse).toList();
     }
 

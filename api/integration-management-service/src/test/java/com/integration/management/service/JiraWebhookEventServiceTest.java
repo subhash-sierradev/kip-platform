@@ -42,6 +42,7 @@ import static org.mockito.Mockito.when;
 class JiraWebhookEventServiceTest {
 
     private static final String TENANT_ID = "tenant-abc";
+    private static final String CALLER_TENANT_ID = "GLOBAL";
     private static final String WEBHOOK_ID = "webhook-001";
     private static final String USER_ID = "user-001";
 
@@ -115,11 +116,16 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEventResponse response = JiraWebhookEventResponse.builder().id("x").build();
             when(mapper.toResponse(any(JiraWebhookEvent.class))).thenReturn(response);
 
-            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{\"k\":\"v\"}", TENANT_ID,
+            var out = jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{\"k\":\"v\"}", CALLER_TENANT_ID,
                     USER_ID);
 
             assertThat(out.getStatusCode().value()).isEqualTo(202);
             assertThat(out.getBody()).isSameAs(response);
+
+            var savedCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookEvent.class);
+            verify(triggerHistoryRepository).save(savedCaptor.capture());
+            JiraWebhookEvent saved = savedCaptor.getValue();
+            assertThat(saved.getTenantId()).isEqualTo(TENANT_ID);
 
             var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
             verify(messagePublisher).publish(
@@ -136,6 +142,46 @@ class JiraWebhookEventServiceTest {
             assertThat(cmd.getTriggerEventId()).isNotNull();
             assertThat(cmd.getOriginalEventId()).isNotBlank();
             assertThat(cmd.getRetryAttempt()).isEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("uses webhook tenant instead of caller tenant for persisted event and command")
+        void executeWebhook_usesWebhookTenantInsteadOfCallerTenant() {
+            JiraWebhook webhook = JiraWebhook.builder()
+                    .id(WEBHOOK_ID)
+                    .tenantId(TENANT_ID)
+                    .createdBy(USER_ID)
+                    .lastModifiedBy(USER_ID)
+                    .name("Webhook Owner Tenant")
+                    .connectionId(UUID.randomUUID())
+                    .webhookUrl("https://example.test")
+                    .samplePayload("{}")
+                    .isEnabled(true)
+                    .build();
+            when(jiraWebhookRepository.findByIdAndIsDeletedFalse(WEBHOOK_ID))
+                    .thenReturn(Optional.of(webhook));
+            when(integrationConnectionService.getIntegrationConnectionNameById(
+                    webhook.getConnectionId().toString(), TENANT_ID))
+                    .thenReturn("secret-owner");
+            when(triggerHistoryRepository.save(any(JiraWebhookEvent.class))).thenAnswer(inv -> {
+                JiraWebhookEvent e = inv.getArgument(0);
+                if (e.getId() == null) {
+                    e.setId(UUID.randomUUID());
+                }
+                return e;
+            });
+            when(mapper.toResponse(any(JiraWebhookEvent.class)))
+                    .thenReturn(JiraWebhookEventResponse.builder().id("resp").build());
+
+            jiraWebhookEventService.executeWebhook(WEBHOOK_ID, "{\"k\":\"v\"}", CALLER_TENANT_ID, USER_ID);
+
+            var savedCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookEvent.class);
+            verify(triggerHistoryRepository).save(savedCaptor.capture());
+            assertThat(savedCaptor.getValue().getTenantId()).isEqualTo(TENANT_ID);
+
+            var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
+            verify(messagePublisher).publish(anyString(), anyString(), cmdCaptor.capture());
+            assertThat(cmdCaptor.getValue().getTenantId()).isEqualTo(TENANT_ID);
         }
 
         @Test
@@ -229,7 +275,7 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEventResponse response = JiraWebhookEventResponse.builder().id("x").build();
             when(mapper.toResponse(any(JiraWebhookEvent.class))).thenReturn(response);
 
-            var out = jiraWebhookEventService.retryTrigger("orig-1", TENANT_ID, USER_ID);
+            var out = jiraWebhookEventService.retryTrigger("orig-1", CALLER_TENANT_ID, USER_ID);
             assertThat(out.getStatusCode().value()).isEqualTo(202);
 
             var savedCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookEvent.class);
@@ -238,11 +284,13 @@ class JiraWebhookEventServiceTest {
             assertThat(saved.getOriginalEventId()).isEqualTo("orig-1");
             assertThat(saved.getRetryAttempt()).isEqualTo(3);
             assertThat(saved.getIncomingPayload()).isEqualTo("{payload}");
+            assertThat(saved.getTenantId()).isEqualTo(TENANT_ID);
 
             var cmdCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookExecutionCommand.class);
             verify(messagePublisher).publish(anyString(), anyString(), cmdCaptor.capture());
             assertThat(cmdCaptor.getValue().getRetryAttempt()).isEqualTo(3);
             assertThat(cmdCaptor.getValue().getOriginalEventId()).isEqualTo("orig-1");
+            assertThat(cmdCaptor.getValue().getTenantId()).isEqualTo(TENANT_ID);
         }
     }
 
@@ -371,8 +419,8 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEventResponse response1 = buildEventResponse(event1.getId().toString());
             JiraWebhookEventResponse response2 = buildEventResponse(event2.getId().toString());
 
-            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID)).thenReturn(List.of(event1, event2));
+            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of(event1, event2));
             when(mapper.toResponse(event1)).thenReturn(response1);
             when(mapper.toResponse(event2)).thenReturn(response2);
 
@@ -380,14 +428,15 @@ class JiraWebhookEventServiceTest {
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
 
             assertThat(result).hasSize(2).containsExactly(response1, response2);
-            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(eq(WEBHOOK_ID));
+            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    eq(WEBHOOK_ID), eq(TENANT_ID));
         }
 
         @Test
         @DisplayName("softDeletedWebhook_returnsEmptyList")
         void getWebhookEventsByWebhookId_softDeletedWebhook_returnsEmptyList() {
-            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID)).thenReturn(List.of());
+            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of());
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
@@ -399,14 +448,15 @@ class JiraWebhookEventServiceTest {
         @Test
         @DisplayName("noEventsExist_returnsEmptyList")
         void getWebhookEventsByWebhookId_noEventsExist_returnsEmptyList() {
-            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID)).thenReturn(List.of());
+            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of());
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService
                     .getWebhookEventsByWebhookId(WEBHOOK_ID, TENANT_ID);
 
             assertThat(result).isEmpty();
-            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhook(eq(WEBHOOK_ID));
+            verify(triggerHistoryRepository).findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    eq(WEBHOOK_ID), eq(TENANT_ID));
         }
 
         @Test
@@ -415,8 +465,8 @@ class JiraWebhookEventServiceTest {
             JiraWebhookEvent event = buildEvent(WEBHOOK_ID, "orig-single");
             JiraWebhookEventResponse response = buildEventResponse(event.getId().toString());
 
-            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                    WEBHOOK_ID)).thenReturn(List.of(event));
+            when(triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                    WEBHOOK_ID, TENANT_ID)).thenReturn(List.of(event));
             when(mapper.toResponse(event)).thenReturn(response);
 
             List<JiraWebhookEventResponse> result = jiraWebhookEventService
@@ -614,7 +664,7 @@ class JiraWebhookEventServiceTest {
             when(mapper.toResponse(any(JiraWebhookEvent.class)))
                     .thenReturn(JiraWebhookEventResponse.builder().id("r").build());
 
-            var out = jiraWebhookEventService.retryTrigger("orig-1", TENANT_ID, USER_ID);
+            var out = jiraWebhookEventService.retryTrigger("orig-1", CALLER_TENANT_ID, USER_ID);
             assertThat(out.getStatusCode().value()).isEqualTo(202);
 
             var savedCaptor = org.mockito.ArgumentCaptor.forClass(JiraWebhookEvent.class);
@@ -622,6 +672,7 @@ class JiraWebhookEventServiceTest {
             assertThat(savedCaptor.getValue().getRetryAttempt()).isEqualTo(1);
             // originalEventId should fall back to "orig-1" (the id passed in)
             assertThat(savedCaptor.getValue().getOriginalEventId()).isEqualTo("orig-1");
+            assertThat(savedCaptor.getValue().getTenantId()).isEqualTo(TENANT_ID);
         }
     }
 

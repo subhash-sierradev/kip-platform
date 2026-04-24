@@ -564,7 +564,7 @@ class IntegrationConnectionServiceTest {
 
     @Test
     @DisplayName("getIntegrationConnectionNameById throws for invalid UUID")
-    void getIntegrationConnectionNameById_invalidUuid_returnsNull() {
+    void getIntegrationConnectionNameById_invalidUuid_throwsIllegalArgumentException() {
         assertThatThrownBy(() -> service.getIntegrationConnectionNameById("not-a-uuid", "t1"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
