@@ -199,7 +199,7 @@ class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
     }
 
     @Test
-    @DisplayName("findLatestEventsPerOriginalTriggerByWebhook returns most recent events for webhook")
+    @DisplayName("findLatestEventsPerOriginalTriggerByWebhookAndTenantId returns most recent events for webhook")
     void findLatestEvents_returnsMostRecentPerWebhook() {
         JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Latest Events IT"));
         String originalEventId = UUID.randomUUID().toString();
@@ -216,13 +216,48 @@ class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
         createdEventIds.add(retryEvent.getId());
 
         List<JiraWebhookEvent> latest =
-                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhook(
+                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
                         webhook.getId(), TENANT);
 
         // Only the latest event for that original event should be returned
         List<UUID> latestIds = latest.stream().map(JiraWebhookEvent::getId).toList();
         assertThat(latestIds).contains(retryEvent.getId());
         assertThat(latestIds).doesNotContain(firstEvent.getId());
+    }
+
+    @Test
+    @DisplayName("findLatestEventsPerOriginalTriggerByWebhookAndTenantId returns empty list for tenant mismatch")
+    void findLatestEvents_tenantMismatch_returnsEmptyList() {
+        JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Tenant Scoped Events IT"));
+        JiraWebhookEvent event = jiraWebhookEventRepository.save(
+                buildEvent(webhook.getId(), TriggerStatus.SUCCESS,
+                        UUID.randomUUID().toString(), 0, Instant.now()));
+        createdEventIds.add(event.getId());
+
+        List<JiraWebhookEvent> latest =
+                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                        webhook.getId(), "OTHER_TENANT");
+
+        assertThat(latest).isEmpty();
+    }
+
+    @Test
+    @DisplayName("findLatestEventsPerOriginalTriggerByWebhookAndTenantId excludes soft-deleted webhooks")
+    void findLatestEvents_softDeletedWebhook_returnsEmptyList() {
+        JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Deleted History IT"));
+        JiraWebhookEvent event = jiraWebhookEventRepository.save(
+                buildEvent(webhook.getId(), TriggerStatus.SUCCESS,
+                        UUID.randomUUID().toString(), 0, Instant.now()));
+        createdEventIds.add(event.getId());
+
+        webhook.setIsDeleted(true);
+        jiraWebhookRepository.save(webhook);
+
+        List<JiraWebhookEvent> latest =
+                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhookAndTenantId(
+                        webhook.getId(), TENANT);
+
+        assertThat(latest).isEmpty();
     }
 
     @Test

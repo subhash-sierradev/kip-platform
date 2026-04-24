@@ -41,6 +41,7 @@ public class JiraWebhookEventController {
         return ResponseEntity.ok(jiraWebhookEventService.getWebhookEventsByWebhookId(webhookId, tenantId));
     }
 
+    @PreAuthorize("hasRole('webhook_client')")
     @AuditLoggable(entityType = JIRA_WEBHOOK_EVENT, action = RETRY)
     @PostMapping("/triggers/retry/{id}")
     public ResponseEntity<JiraWebhookEventResponse> retryTrigger(
@@ -50,6 +51,7 @@ public class JiraWebhookEventController {
         return jiraWebhookEventService.retryTrigger(id, tenantId, userId);
     }
 
+    @PreAuthorize("hasRole('webhook_client')")
     @AuditLoggable(entityType = JIRA_WEBHOOK, action = EXECUTE)
     @PostMapping("/execute/{id}")
     public ResponseEntity<JiraWebhookEventResponse> executeWebhook(
