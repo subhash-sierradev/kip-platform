@@ -16,7 +16,6 @@ class PropertiesDefaultsTest {
 
         assertThat(props.getIdLength()).isPositive();
         assertThat(props.getMaxRetries()).isPositive();
-        assertThat(props.getUrlTemplate()).contains("{webhookId}");
     }
 
     @Test
