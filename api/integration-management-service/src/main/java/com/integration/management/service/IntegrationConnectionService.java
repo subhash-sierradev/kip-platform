@@ -89,7 +89,7 @@ public class IntegrationConnectionService {
                 .metadata(Map.of(
                         "connectionName", connection.getName() != null ? connection.getName() : "",
                         "connectionId", connection.getId().toString(),
-                        "serviceType", connection.getServiceType().name(),
+                        "serviceType", connection.getServiceType().getDisplayName(),
                         "createdBy", userId))
                 .build());
 
@@ -179,7 +179,7 @@ public class IntegrationConnectionService {
                 .metadata(Map.of(
                         "connectionName", connection.getName() != null ? connection.getName() : "",
                         "connectionId", connectionId.toString(),
-                        "serviceType", connection.getServiceType().name(),
+                        "serviceType", connection.getServiceType().getDisplayName(),
                         "deletedBy", userId))
                 .build());
 
@@ -289,7 +289,7 @@ public class IntegrationConnectionService {
                 .metadata(java.util.Map.of(
                         "connectionName", connection.getName() != null ? connection.getName() : "",
                         "connectionId", connectionId.toString(),
-                        "serviceType", connection.getServiceType().name(),
+                        "serviceType", connection.getServiceType().getDisplayName(),
                         "updatedBy", userId))
                 .build());
     }

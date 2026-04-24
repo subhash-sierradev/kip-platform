@@ -1,5 +1,6 @@
 package com.integration.management.service;
 
+import com.integration.execution.contract.message.NotificationEvent;
 import com.integration.execution.contract.model.BasicAuthCredential;
 import com.integration.execution.contract.model.IntegrationSecret;
 import com.integration.execution.contract.model.enums.ConnectionStatus;
@@ -138,7 +139,9 @@ class IntegrationConnectionServiceTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.getBody()).isSameAs(mapped);
-        verify(notificationEventPublisher).publish(any());
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getMetadata()).containsEntry("serviceType", "Jira");
     }
 
     @Test
@@ -278,7 +281,9 @@ class IntegrationConnectionServiceTest {
         ArgumentCaptor<IntegrationConnection> captor = ArgumentCaptor.forClass(IntegrationConnection.class);
         verify(connectionRepository).save(captor.capture());
         assertThat(captor.getValue().getIsDeleted()).isTrue();
-        verify(notificationEventPublisher).publish(any());
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getMetadata()).containsEntry("serviceType", "Jira");
     }
 
     @Test
@@ -331,7 +336,9 @@ class IntegrationConnectionServiceTest {
         service.rotateConnectionSecret(id, "t", "u", request);
 
         verify(iesConnectionClient).rotateConnectionSecret(eq(id), any(IntegrationConnectionSecretRotateRequest.class));
-        verify(notificationEventPublisher).publish(any());
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getMetadata()).containsEntry("serviceType", "Jira");
     }
 
     @Test
