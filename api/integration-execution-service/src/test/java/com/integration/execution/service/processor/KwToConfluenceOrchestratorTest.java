@@ -228,11 +228,12 @@ class KwToConfluenceOrchestratorTest {
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
                 .thenReturn(List.of(atBoundary, beforeBoundary));
+        when(confluencePageRenderer.filterNamedClients(List.of(beforeBoundary))).thenReturn(List.of());
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
-        // Both get filtered by filterNamedClients stub → returns empty → zero records published.
-        // The key assertion: filterNamedClients was called only with the non-boundary document.
+        // The non-boundary document is passed to filterNamedClients, which returns empty,
+        // so zero records are published.
         verify(confluencePageRenderer).filterNamedClients(List.of(beforeBoundary));
         assertThat(result.totalRecords()).isZero();
     }
