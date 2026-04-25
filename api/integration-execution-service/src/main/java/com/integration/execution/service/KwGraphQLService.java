@@ -61,6 +61,9 @@ public class KwGraphQLService {
     private static final String CACHE_FIELD_MAPPING      = "kwFieldMappingCache";
     private static final String CACHE_DYNAMIC_DOC_TYPES  = "kwDynamicDocTypeCache";
 
+    // --- Reusable TypeReference for list-typed attribute fields --------------
+    private static final TypeReference<List<Object>> LIST_OF_OBJECTS_REF = new TypeReference<>() { };
+
     // --- Attribute map key written by this service ---------------------------
     private static final String FORM_FIELD_LABELS_KEY = "formFieldLabels";
 
@@ -272,7 +275,7 @@ public class KwGraphQLService {
             if (requireNonEmpty && node.isEmpty()) {
                 return;
             }
-            attributes.put(key, objectMapper.convertValue(node, new TypeReference<List<Object>>() { }));
+            attributes.put(key, objectMapper.convertValue(node, LIST_OF_OBJECTS_REF));
             return;
         }
         attributes.put(key, objectMapper.convertValue(node, Object.class));
