@@ -349,6 +349,37 @@ class KwToArcGISOrchestratorTest {
     }
 
     @Test
+    void processExecution_documentAtBoundarySecond_isIncludedWhenWindowEndHasNanos() {
+        // windowEnd has a sub-second component → exactSecondBoundary = false → filter uses <=
+        // A document whose updatedTimestamp equals windowEnd.getEpochSecond() is still before
+        // windowEnd and must be included.
+        Instant windowEnd = Instant.ofEpochSecond(1000, 500_000_000); // 1000.5 s
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(windowEnd)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundarySecond = new KwDocumentDto("doc-boundary", "D", "TYPE", 1L, 1000L);
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundarySecond));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundarySecond)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        orchestrator.processExecution(command);
+
+        // Document at the boundary second is included (not filtered out) when windowEnd has nanos
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundarySecond)), any());
+    }
+
+    @Test
     void processExecution_allDocumentsAtOrAfterWindowEnd_returnsEmptyResult() {
         ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
                 .integrationId(UUID.randomUUID())

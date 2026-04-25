@@ -307,6 +307,39 @@ class KwToConfluenceOrchestratorTest {
     }
 
     @Test
+    void processExecution_documentAtBoundarySecond_isIncludedWhenWindowEndHasNanos() {
+        // windowEnd has a sub-second component → exactSecondBoundary = false → filter uses <=
+        // A document whose updatedTimestamp equals windowEnd.getEpochSecond() is still before
+        // windowEnd and must be included.
+        Instant windowEnd = Instant.ofEpochSecond(1000, 500_000_000); // 1000.5 s
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(windowEnd)
+                .businessTimeZone("UTC")
+                .build();
+
+        KwMonitoringDocument atBoundarySecond = KwMonitoringDocument.builder()
+                .id("doc-boundary").updatedTimestamp(1000L).build();
+
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(List.of(atBoundarySecond));
+        when(confluencePageRenderer.filterNamedClients(List.of(atBoundarySecond)))
+                .thenReturn(List.of());
+
+        orchestrator.processExecution(cmd);
+
+        // Document at the boundary second is included (not filtered out) when windowEnd has nanos
+        verify(confluencePageRenderer).filterNamedClients(List.of(atBoundarySecond));
+    }
+
+    @Test
     void processExecution_blankBusinessTimezone_passesNullFallbackToClient() {
         // Covers: businessTimeZone blank → fallbackTimezone = null (else branch of ternary)
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
