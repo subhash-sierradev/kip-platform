@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -69,7 +70,6 @@ public class ArcGISFeaturePublisher {
         List<RecordMetadata> addedMetadata = new ArrayList<>();
         List<RecordMetadata> updatedMetadata = new ArrayList<>();
         List<FailedRecordMetadata> failedMetadata = new ArrayList<>();
-        List<String> failureMessages = new ArrayList<>();
 
         // Process add results
         int addedCount = processAddResults(
@@ -77,8 +77,7 @@ public class ArcGISFeaturePublisher {
                 transformedMetadata,
                 // Start index for adds
                 addedMetadata,
-                failedMetadata,
-                failureMessages);
+                failedMetadata);
 
         // Process update results
         int updatedCount = processUpdateResults(
@@ -86,8 +85,7 @@ public class ArcGISFeaturePublisher {
                 transformedMetadata,
                 addFeatures, // Start index for updates (after adds)
                 updatedMetadata,
-                failedMetadata,
-                failureMessages);
+                failedMetadata);
 
         int addFailed = addFeatures - addedCount;
         int updateFailed = updateFeatures - updatedCount;
@@ -109,8 +107,7 @@ public class ArcGISFeaturePublisher {
             final JsonNode resultsNode,
             final List<RecordMetadata> transformedMetadata,
             final List<RecordMetadata> addedMetadata,
-            final List<FailedRecordMetadata> failedMetadata,
-            final List<String> failureMessages) {
+            final List<FailedRecordMetadata> failedMetadata) {
 
         if (resultsNode == null || !resultsNode.isArray()) {
             return 0;
@@ -128,7 +125,7 @@ public class ArcGISFeaturePublisher {
                     // Track failure
                     String errorMessage = extractErrorMessage(result);
                     failedMetadata.add(clone(originalMetadata, errorMessage));
-                    collectFailureMessage("ADD", result, failureMessages);
+                    log.warn("Feature ADD failed: {}", result.get("error"));
                 }
             }
         }
@@ -140,8 +137,7 @@ public class ArcGISFeaturePublisher {
             final List<RecordMetadata> transformedMetadata,
             final int startIndex,
             final List<RecordMetadata> updatedMetadata,
-            final List<FailedRecordMetadata> failedMetadata,
-            final List<String> failureMessages) {
+            final List<FailedRecordMetadata> failedMetadata) {
 
         if (resultsNode == null || !resultsNode.isArray()) {
             return 0;
@@ -161,7 +157,7 @@ public class ArcGISFeaturePublisher {
                     // Track failure
                     String errorMessage = extractErrorMessage(result);
                     failedMetadata.add(clone(originalMetadata, errorMessage));
-                    collectFailureMessage("UPDATE", result, failureMessages);
+                    log.warn("Feature UPDATE failed: {}", result.get("error"));
                 }
             }
         }
@@ -189,27 +185,6 @@ public class ArcGISFeaturePublisher {
         }
 
         return code >= 0 ? ("code=" + code + ": " + detail) : detail;
-    }
-
-    private void collectFailureMessage(
-            final String operation,
-            final JsonNode result,
-            final List<String> failureMessages) {
-
-        JsonNode error = result.get("error");
-        log.warn("Feature {} failed: {}", operation, error);
-
-        String description = error != null ? error.path("description").asText(null) : null;
-        String message = error != null ? error.path("message").asText(null) : null;
-        int code = error != null ? error.path("code").asInt(-1) : -1;
-
-        String detail = description != null ? description : message;
-        if (detail == null) {
-            detail = error != null ? error.toString() : "Unknown error";
-        }
-
-        String prefix = code >= 0 ? (operation + "(code=" + code + "): ") : (operation + ": ");
-        failureMessages.add(prefix + detail);
     }
 
     private FailedRecordMetadata clone(RecordMetadata original, String errorMessage) {
