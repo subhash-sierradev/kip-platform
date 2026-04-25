@@ -21,8 +21,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ArcGISFeaturePublisher {
 
-    private static final int MAX_ERROR_MESSAGE_LENGTH = 1000;
-
     private final ArcGISApiClient arcgisApiClient;
     private final ObjectMapper objectMapper;
 
@@ -212,24 +210,6 @@ public class ArcGISFeaturePublisher {
 
         String prefix = code >= 0 ? (operation + "(code=" + code + "): ") : (operation + ": ");
         failureMessages.add(prefix + detail);
-    }
-
-    private String buildErrorMessage(
-            final int failedCount,
-            final List<String> failureMessages) {
-
-        String message;
-
-        if (!failureMessages.isEmpty()) {
-            message = String.join(" | ", failureMessages);
-        } else {
-            message = "ArcGIS applyEdits had " + failedCount + " failed result(s).";
-        }
-        // Truncate if too long
-        if (message.length() > MAX_ERROR_MESSAGE_LENGTH) {
-            message = message.substring(0, MAX_ERROR_MESSAGE_LENGTH) + "...";
-        }
-        return message;
     }
 
     private FailedRecordMetadata clone(RecordMetadata original, String errorMessage) {

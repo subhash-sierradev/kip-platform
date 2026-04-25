@@ -311,6 +311,44 @@ class KwToArcGISOrchestratorTest {
     }
 
     @Test
+    void processExecution_publishFailureWithNoTransformFailures_setsArcGISErrorOnly() {
+        // Covers: combinedErrorMessage == null when publish fails (no transform failures)
+        // i.e. the false branch of: (combinedErrorMessage != null) ? ... : arcGisErrors
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 1));
+
+        ArrayNode features = objectMapper.createArrayNode();
+        features.add(objectMapper.createObjectNode());
+
+        List<RecordMetadata> successMeta = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L));
+
+        ApplyEditsPartition partition = new ApplyEditsPartition(
+                objectMapper.createArrayNode().add(objectMapper.createObjectNode()),
+                objectMapper.createArrayNode());
+
+        PublishingResult publishingResult = new PublishingResult(
+                0, 0, 1,
+                List.of(), List.of(),
+                List.of(new FailedRecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L, "arcgis err")));
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(features, successMeta, List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer/0"));
+        when(mappingResolver.partitionFeaturesForAddOrUpdate(features, "secret", "https://example.com/FeatureServer"))
+                .thenReturn(partition);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMeta))
+                .thenReturn(publishingResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.errorMessage()).contains("ArcGIS publish failed for 1 record(s)");
+        assertThat(result.errorMessage()).doesNotContain("|");  // no transform errors prepended
+    }
+
+    @Test
     void processExecution_allDocumentsAtOrAfterWindowEnd_returnsEmptyResult() {
         ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
                 .integrationId(UUID.randomUUID())

@@ -272,6 +272,73 @@ class KwToConfluenceOrchestratorTest {
         assertThat(result.errorMessage()).isNull();
     }
 
+    @Test
+    void processExecution_nullWindowEnd_pageTitleUsesNow() {
+        // Covers buildMonitoringPageTitle: windowEnd == null → Instant.now() used as fallback
+        // Also covers toEpochSeconds: instant == null → Instant.now() used
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}-Title")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .windowStart(null)
+                .windowEnd(null)
+                .businessTimeZone("UTC")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        ArgumentCaptor<ConfluencePublishRequest> requestCaptor =
+                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
+        when(confluenceApiClient.createOrUpdatePage(requestCaptor.capture()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.totalRecords()).isEqualTo(1);
+        // Title must be non-blank (exact date is 'now', so just verify it rendered)
+        assertThat(requestCaptor.getValue().pageTitle()).endsWith("-Title");
+    }
+
+    @Test
+    void processExecution_blankBusinessTimezone_passesNullFallbackToClient() {
+        // Covers: businessTimeZone blank → fallbackTimezone = null (else branch of ternary)
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("folder")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone("   ")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluencePageRenderer.filterNamedClients(docs)).thenReturn(docs);
+        // null fallback passed to getUserTimezone
+        when(confluenceApiClient.getUserTimezone(anyString(), org.mockito.ArgumentMatchers.isNull()))
+                .thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.totalRecords()).isEqualTo(1);
+        verify(confluenceApiClient).getUserTimezone(anyString(), org.mockito.ArgumentMatchers.isNull());
+    }
+
     private ConfluenceExecutionCommand buildCommand(
             String dynamicType, String reportTemplate, String timezone) {
         return ConfluenceExecutionCommand.builder()

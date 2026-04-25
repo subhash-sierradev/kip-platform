@@ -93,6 +93,27 @@ class AzureKeyVaultClientConfigTest {
     }
 
     @Test
+    void secretClient_withOnlyClientIdSet_usesDefaultCredential() {
+        // Covers false branch of resolveCredential: clientId present but clientSecret/tenantId absent
+        // → falls through to DefaultAzureCredentialBuilder
+        AzureKeyVaultProperties kvProperties = new AzureKeyVaultProperties();
+        kvProperties.setUrl("https://example-vault.vault.azure.net/");
+        kvProperties.setClientId("only-client-id");
+        // clientSecret and tenantId left blank → && short-circuits to DefaultAzureCredential
+
+        HttpClientProperties httpClientProperties = new HttpClientProperties();
+        HttpClientProperties.ProxyConfig proxy = new HttpClientProperties.ProxyConfig();
+        proxy.setEnabled(false);
+        httpClientProperties.setProxy(proxy);
+
+        AzureKeyVaultClientConfig config = new AzureKeyVaultClientConfig(kvProperties, httpClientProperties);
+
+        SecretClient client = config.secretClient();
+
+        assertThat(client).isNotNull();
+    }
+
+    @Test
     void secretClient_withBlankUrl_throwsIllegalStateException() {
         AzureKeyVaultProperties kvProperties = new AzureKeyVaultProperties();
         kvProperties.setUrl("   ");
