@@ -67,11 +67,11 @@ public class KwToConfluenceOrchestrator {
             }
 
             List<KwMonitoringDocument> namedClientData = confluencePageRenderer.filterNamedClients(monitoringData);
-            log.info("Confluence integration {} _ records after unknown-client filter: fetched={} included={}",
+            log.info("Confluence integration {} — records after unknown-client filter: fetched={} included={}",
                     cmd.getIntegrationId(), monitoringData.size(), namedClientData.size());
 
             if (namedClientData.isEmpty()) {
-                log.info("Confluence integration {} _ all fetched records have unknown client, no page published",
+                log.info("Confluence integration {} — all fetched records have unknown client, no page published",
                         cmd.getIntegrationId());
                 return ConfluenceJobExecutionResult.success(0, null, null);
             }
