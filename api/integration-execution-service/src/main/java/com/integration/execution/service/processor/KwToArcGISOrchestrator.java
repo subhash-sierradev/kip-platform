@@ -41,12 +41,22 @@ public class KwToArcGISOrchestrator {
         List<KwDocumentDto> documents = kwGraphqlClient.queryDocumentsWithLocations(cmd);
 
         // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
-        // ExecutionWindow.windowEnd is exclusive (half-open interval), so filter
-        // out any record whose updatedTimestamp falls on the boundary second.
+        // ExecutionWindow.windowEnd is exclusive (half-open interval). Because the
+        // API operates at second granularity, we compare updatedTimestamp (seconds)
+        // against windowEnd's epoch-second.
+        //
+        // If windowEnd is exactly on a second boundary (no sub-second component),
+        // records at that boundary second must be excluded (strict less-than).
+        // If windowEnd has a sub-second component, any record whose second equals
+        // windowEnd.getEpochSecond() is still before windowEnd, so they must be
+        // included (less-than-or-equal).
         if (cmd.getWindowEnd() != null) {
-            long exclusiveEndSeconds = cmd.getWindowEnd().getEpochSecond();
+            long windowEndSeconds = cmd.getWindowEnd().getEpochSecond();
+            boolean exactSecondBoundary = cmd.getWindowEnd().getNano() == 0;
             documents = documents.stream()
-                    .filter(doc -> doc.getUpdatedTimestamp() < exclusiveEndSeconds)
+                    .filter(doc -> exactSecondBoundary
+                            ? doc.getUpdatedTimestamp() < windowEndSeconds
+                            : doc.getUpdatedTimestamp() <= windowEndSeconds)
                     .toList();
         }
 

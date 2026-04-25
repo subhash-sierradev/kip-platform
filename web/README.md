@@ -268,7 +268,6 @@ Pinia stores in `src/store/`:
 - Environment: jsdom, globals enabled, isolation per file
 
 ---
-
 ## License
 
 Copyright © 2026 Kaseware. All rights reserved.

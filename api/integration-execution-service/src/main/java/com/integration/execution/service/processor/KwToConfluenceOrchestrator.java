@@ -47,13 +47,23 @@ public class KwToConfluenceOrchestrator {
                     limit);
 
             // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
-            // ExecutionWindow.windowEnd is exclusive (half-open interval), so filter
-            // out any record whose updatedTimestamp falls on the boundary second.
+            // ExecutionWindow.windowEnd is exclusive (half-open interval). Because the
+            // API operates at second granularity, we compare updatedTimestamp (seconds)
+            // against windowEnd's epoch-second.
+            //
+            // If windowEnd is exactly on a second boundary (no sub-second component),
+            // records at that boundary second must be excluded (strict less-than).
+            // If windowEnd has a sub-second component, any record whose second equals
+            // windowEnd.getEpochSecond() is still before windowEnd, so they must be
+            // included (less-than-or-equal).
             Instant windowEnd = cmd.getWindowEnd();
             if (windowEnd != null) {
-                long exclusiveEndSeconds = windowEnd.getEpochSecond();
+                long windowEndSeconds = windowEnd.getEpochSecond();
+                boolean exactSecondBoundary = windowEnd.getNano() == 0;
                 monitoringData = monitoringData.stream()
-                        .filter(doc -> doc.getUpdatedTimestamp() < exclusiveEndSeconds)
+                        .filter(doc -> exactSecondBoundary
+                                ? doc.getUpdatedTimestamp() < windowEndSeconds
+                                : doc.getUpdatedTimestamp() <= windowEndSeconds)
                         .toList();
             }
 

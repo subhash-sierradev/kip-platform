@@ -7,6 +7,20 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 import static com.integration.execution.constants.KasewareConstants.HIDDEN_FIELDS_KEY;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_APPROVERS;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_AUTHORS;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_BODY;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_CASE_LABELS;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_CREATED_TIMESTAMP;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_DYNAMIC_FORM_DEFINITION_ID;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_DYNAMIC_FORM_DEFINITION_NAME;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_DYNAMIC_FORM_VERSION_NUMBER;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_ID;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_RELATED_ENTITIES;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_SERIALS;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_TENANT_ID;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_TITLE;
+import static com.integration.execution.constants.KasewareConstants.MONITORING_FIELD_UPDATED_TIMESTAMP;
 
 /**
  * Configuration for Kaseware monitoring document attribute extraction.
@@ -29,15 +43,15 @@ public class MonitoringDocumentConfig {
      * properties. These are skipped during generic attribute extraction to avoid duplication.
      */
     private Set<String> stableFields = new LinkedHashSet<>(Set.of(
-            "id",
-            "title",
-            "body",
-            "createdTimestamp",
-            "updatedTimestamp",
-            "dynamicFormDefinitionId",
-            "dynamicFormDefinitionName",
-            "dynamicFormVersionNumber",
-            "tenantId"
+            MONITORING_FIELD_ID,
+            MONITORING_FIELD_TITLE,
+            MONITORING_FIELD_BODY,
+            MONITORING_FIELD_CREATED_TIMESTAMP,
+            MONITORING_FIELD_UPDATED_TIMESTAMP,
+            MONITORING_FIELD_DYNAMIC_FORM_DEFINITION_ID,
+            MONITORING_FIELD_DYNAMIC_FORM_DEFINITION_NAME,
+            MONITORING_FIELD_DYNAMIC_FORM_VERSION_NUMBER,
+            MONITORING_FIELD_TENANT_ID
     ));
 
     /**
@@ -51,11 +65,11 @@ public class MonitoringDocumentConfig {
      * attributes. Useful for people/case sub-objects that are only meaningful when populated.
      */
     private Set<String> requireNonEmptyArrayFields = new LinkedHashSet<>(Set.of(
-            "authors",
-            "approvers",
-            "serials",
-            "caseLabels",
-            "relatedEntities"
+            MONITORING_FIELD_AUTHORS,
+            MONITORING_FIELD_APPROVERS,
+            MONITORING_FIELD_SERIALS,
+            MONITORING_FIELD_CASE_LABELS,
+            MONITORING_FIELD_RELATED_ENTITIES
     ));
 }
 
