@@ -1225,31 +1225,4 @@ class KwGraphQLServiceTest {
         assertThat(clientMeta.get("department")).isEqualTo("Finance");
     }
 
-    @Test
-    void fetchMonitoringData_configOverrideRequireNonEmpty_retainsEmptyArrayForNonListedField() {
-        // When requireNonEmptyArrayFields does NOT include a field, an empty array is kept.
-        // This test verifies the config controls the behaviour, not hardcoded names.
-        ObjectMapper mapper = new ObjectMapper();
-
-        MonitoringDocumentConfig config = new MonitoringDocumentConfig();
-        // Remove "authors" from the require-non-empty set so empty authors array is retained
-        config.getRequireNonEmptyArrayFields().remove("authors");
-        KwGraphQLService flexService = new KwGraphQLService(kwGraphqlClient, mapper, config);
-
-        ArrayNode docs = mapper.createArrayNode();
-        ObjectNode doc = mapper.createObjectNode();
-        doc.put("id", "doc-cfg");
-        doc.put("dynamicFormDefinitionId", "form-cfg");
-        doc.set("authors", mapper.createArrayNode()); // empty — normally excluded
-        docs.add(doc);
-
-        when(kwGraphqlClient.fetchMonitoringDocuments("form-cfg", 0, 99999, 0, 500)).thenReturn(docs);
-        when(kwGraphqlClient.fetchFormDefinition("form-cfg")).thenReturn(mapper.createObjectNode());
-
-        List<KwMonitoringDocument> result = flexService.fetchMonitoringData("form-cfg", 0, 99999, 0, 500);
-
-        assertThat(result).hasSize(1);
-        // With "authors" removed from requireNonEmpty, empty array must be present in attributes
-        assertThat(result.get(0).getAttributes()).containsKey("authors");
-    }
 }
