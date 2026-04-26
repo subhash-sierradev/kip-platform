@@ -46,11 +46,42 @@ public class KwToConfluenceOrchestrator {
                     offset,
                     limit);
 
+            // The Kaseware GraphQL API uses inclusive epoch-second boundaries.
+            // ExecutionWindow.windowEnd is exclusive (half-open interval). Because the
+            // API operates at second granularity, we compare updatedTimestamp (seconds)
+            // against windowEnd's epoch-second.
+            //
+            // If windowEnd is exactly on a second boundary (no sub-second component),
+            // records at that boundary second must be excluded (strict less-than).
+            // If windowEnd has a sub-second component, any record whose second equals
+            // windowEnd.getEpochSecond() is still before windowEnd, so they must be
+            // included (less-than-or-equal).
+            Instant windowEnd = cmd.getWindowEnd();
+            if (windowEnd != null) {
+                long windowEndSeconds = windowEnd.getEpochSecond();
+                boolean exactSecondBoundary = windowEnd.getNano() == 0;
+                monitoringData = monitoringData.stream()
+                        .filter(doc -> exactSecondBoundary
+                                ? doc.getUpdatedTimestamp() < windowEndSeconds
+                                : doc.getUpdatedTimestamp() <= windowEndSeconds)
+                        .toList();
+            }
+
             log.info("Confluence integration {} — monitoring records fetched={} startTs={} endTs={} start={} limit={}",
                     cmd.getIntegrationId(), monitoringData.size(), startTimestamp, endTimestamp, offset, limit);
 
             if (monitoringData.isEmpty()) {
                 log.info("Confluence integration {} — no monitoring data found for requested window",
+                        cmd.getIntegrationId());
+                return ConfluenceJobExecutionResult.success(0, null, null);
+            }
+
+            List<KwMonitoringDocument> namedClientData = confluencePageRenderer.filterNamedClients(monitoringData);
+            log.info("Confluence integration {} — records after unknown-client filter: fetched={} included={}",
+                    cmd.getIntegrationId(), monitoringData.size(), namedClientData.size());
+
+            if (namedClientData.isEmpty()) {
+                log.info("Confluence integration {} — all fetched records have unknown client, no page published",
                         cmd.getIntegrationId());
                 return ConfluenceJobExecutionResult.success(0, null, null);
             }
@@ -64,7 +95,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — using timezone: {}",
                     cmd.getIntegrationId(), confluenceTimezone.getId());
 
-            String pageContent = confluencePageRenderer.buildPageContent(monitoringData, confluenceTimezone);
+            String pageContent = confluencePageRenderer.buildPageContent(namedClientData, confluenceTimezone);
 
             ConfluenceApiClient.ConfluencePublishResult publishResult =
                     confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
@@ -77,7 +108,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — published monitoring page", cmd.getIntegrationId());
 
             return ConfluenceJobExecutionResult.success(
-                    monitoringData.size(),
+                    namedClientData.size(),
                     publishResult.confluencePageUrl(),
                     publishResult.confluencePageId());
 
