@@ -71,7 +71,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping(
         path = "/api/translate",
-        produces = MediaType.APPLICATION_JSON_VALUE
+        produces = {
+            MediaType.APPLICATION_JSON_VALUE,
+            MediaType.APPLICATION_PROBLEM_JSON_VALUE
+        }
 )
 public class TranslationController {
 
