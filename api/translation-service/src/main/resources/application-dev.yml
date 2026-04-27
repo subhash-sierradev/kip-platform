@@ -1,0 +1,19 @@
+# ─── Development / Docker Compose Profile ────────────────────────────────────
+# Active when SPRING_PROFILES_ACTIVE=dev (set in docker-compose.dev.yml).
+# Overrides localhost defaults with Docker service-name hostnames.
+
+ollama:
+  # Resolves to the 'ollama' service in docker-compose.dev.yml.
+  # Change to http://localhost:11434 if running the Spring Boot app outside Docker.
+  base-url: ${OLLAMA_BASE_URL:http://ollama:11434}
+  model: ${OLLAMA_MODEL:mistral}
+  timeout-seconds: ${OLLAMA_TIMEOUT_SECONDS:120}
+  connect-timeout-seconds: ${OLLAMA_CONNECT_TIMEOUT_SECONDS:10}
+
+logging:
+  level:
+    com.integration.translation: DEBUG
+    org.springframework.web.client: DEBUG
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+

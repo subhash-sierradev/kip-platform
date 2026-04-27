@@ -1,0 +1,126 @@
+# ============================================================
+# docker-compose.dev.yml  —  Translation Service + Ollama LLM
+# ============================================================
+#
+# This compose file is intended for local development and
+# integration testing ONLY.  It is NOT production-ready.
+#
+# Prerequisites
+# ─────────────
+#   1. Docker Desktop (or Docker Engine) running with BuildKit enabled.
+#   2. The translation-service JAR must be built first:
+#        ./gradlew :translation-service:bootJar
+#   3. (First run only) Pull the Mistral model — this takes ~4 GB and
+#      a few minutes depending on your connection:
+#        docker compose -f docker-compose.dev.yml run --rm ollama-init
+#
+# Usage
+# ─────
+#   Start everything:
+#     docker compose -f docker-compose.dev.yml up
+#
+#   Start in detached mode:
+#     docker compose -f docker-compose.dev.yml up -d
+#
+#   Tail logs:
+#     docker compose -f docker-compose.dev.yml logs -f
+#
+#   Stop and remove containers (keeps Ollama model cache volume):
+#     docker compose -f docker-compose.dev.yml down
+#
+#   Full teardown including the model volume:
+#     docker compose -f docker-compose.dev.yml down -v
+#
+# API endpoint (after stack is up):
+#   POST http://localhost:8083/api/translate
+#
+# Health endpoints:
+#   http://localhost:8083/actuator/health
+#   http://localhost:11434/            (Ollama root)
+# ============================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────
+  # ollama — Local LLM runtime
+  # ──────────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"         # Expose for debugging / direct testing
+    volumes:
+      - ollama_data:/root/.ollama   # Persist downloaded models between restarts
+    networks:
+      - translation-net
+    # Health check: Ollama's root path returns "Ollama is running\n" with HTTP 200
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/11434"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ──────────────────────────────────────────────────────────
+  # ollama-init — One-shot model pull (runs once, then exits)
+  # Pulls the 'mistral' model into the shared ollama_data volume.
+  # Re-run manually if you want a different model:
+  #   docker compose -f docker-compose.dev.yml run --rm ollama-init ollama pull llama3
+  # ──────────────────────────────────────────────────────────
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: ollama-init
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["ollama", "pull", "mistral"]
+    networks:
+      - translation-net
+    restart: "no"
+
+  # ──────────────────────────────────────────────────────────
+  # translation-service — Spring Boot Translation API
+  # Listens on port 8083.
+  # ──────────────────────────────────────────────────────────
+  translation-service:
+    build:
+      context: .
+      dockerfile: translation-service/Dockerfile
+    image: translation-service:dev
+    container_name: translation-service
+    restart: unless-stopped
+    ports:
+      - "8083:8083"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_MODEL=mistral
+      - OLLAMA_TIMEOUT_SECONDS=120
+      - OLLAMA_CONNECT_TIMEOUT_SECONDS=10
+      # Ensure the JVM outputs UTF-8 regardless of the host locale
+      - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - translation-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+networks:
+  translation-net:
+    driver: bridge
+
+volumes:
+  # Named volume so Ollama model weights survive container restarts.
+  # Models are large (~4 GB for mistral); do NOT use a tmpfs here.
+  ollama_data:
+    driver: local
+
