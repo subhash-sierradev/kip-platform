@@ -172,7 +172,13 @@ ollama serve
 ./gradlew :translation-service:bootRun
 ```
 
-The service starts on **port 8083** with `application-dev.yml` using `http://localhost:11434`.
+The service starts on **port 8083**. With `application-dev.yml` the Ollama URL is
+resolved as follows:
+
+| Runtime | `OLLAMA_BASE_URL` set? | Effective URL |
+|---|---|---|
+| `./gradlew bootRun` (bare machine) | No | `http://localhost:11434` ✅ |
+| `docker compose up` | Yes (set by compose) | `http://ollama:11434` ✅ |
 
 ---
 

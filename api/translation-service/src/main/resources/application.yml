@@ -27,7 +27,9 @@ management:
         include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      # Never expose stack traces or internal component details in non-dev environments.
+      # Overridden to 'always' in application-dev.yml for local debugging convenience.
+      show-details: never
   info:
     build:
       enabled: true

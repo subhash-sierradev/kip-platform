@@ -50,6 +50,13 @@ public class TranslationCacheConfig {
     public static final String CACHE_OLLAMA_HEALTH = "ollama-health";
 
     /**
+     * Spring bean name of the {@link com.integration.translation.config.cache.TranslationCacheKeyGenerator}.
+     * Referenced in {@code @Cacheable(keyGenerator = ...)} so that a change to the
+     * bean name only needs to be made in one place.
+     */
+    public static final String KEY_GENERATOR = "translationCacheKeyGenerator";
+
+    /**
      * Returns the primary {@link CacheManager} backed by Caffeine.
      *
      * @return configured {@code CacheManager}

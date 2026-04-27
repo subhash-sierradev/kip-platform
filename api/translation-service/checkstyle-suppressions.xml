@@ -55,6 +55,7 @@
 
     <!-- Allow IllegalCatch for the Ollama client (network/IO error fallback) -->
     <suppress checks="IllegalCatch" files=".*OllamaClient\.java"/>
+    <suppress checks="IllegalCatch" files=".*OllamaCachedTranslator\.java"/>
     <suppress checks="IllegalCatch" files=".*OllamaTranslationService\.java"/>
     <suppress checks="IllegalCatch" files=".*OllamaHealthIndicator\.java"/>
 

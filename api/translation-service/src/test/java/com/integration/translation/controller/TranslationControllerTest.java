@@ -153,4 +153,24 @@ class TranslationControllerTest {
                 .getTranslatorTranslateTextCharacterCount())
                 .isEqualTo(11);
     }
+
+    @Test
+    @DisplayName("translate() handles null translationResults in response without throwing")
+    void translate_nullTranslationResults_returnsOk() {
+        // Exercises the null-guard ternary in the controller log statement
+        TranslationResponse mockResponse = TranslationResponse.builder()
+                .cognitiveServicesUsage(CognitiveServicesUsage.ofTranslation(0))
+                .translationResults(null)
+                .extractOnDisk(false)
+                .build();
+
+        when(translationService.translate(any())).thenReturn(mockResponse);
+
+        ResponseEntity<TranslationResponse> response = controller.translate(
+                new TranslationRequest("Hi", "en", List.of("ja")));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getTranslationResults()).isNull();
+    }
 }

@@ -1,162 +1,125 @@
 package com.integration.translation.service;
 
-import com.integration.translation.client.OllamaClient;
-import com.integration.translation.client.OllamaClient.OllamaClientException;
-import com.integration.translation.client.dto.OllamaGenerateResponse;
 import com.integration.translation.model.request.TranslationRequest;
 import com.integration.translation.model.response.TranslationResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+/**
+ * Unit tests for {@link OllamaTranslationService}.
+ *
+ * <p>These tests verify the <em>orchestration</em> logic of the service:
+ * iterating target languages, assembling the response envelope, and billing
+ * character counts.  Actual Ollama HTTP calls and cache behaviour are exercised
+ * separately in {@link OllamaCachedTranslatorTest}.</p>
+ *
+ * <p>{@link OllamaCachedTranslator} is mocked here, which also confirms that the
+ * service correctly delegates through the injected bean (rather than via
+ * {@code this}, which would bypass Spring's caching proxy).</p>
+ */
 @ExtendWith(MockitoExtension.class)
 class OllamaTranslationServiceTest {
 
     @Mock
-    private OllamaClient ollamaClient;
+    private OllamaCachedTranslator cachedTranslator;
 
-    @InjectMocks
     private OllamaTranslationService service;
-
-    private TranslationRequest request;
 
     @BeforeEach
     void setUp() {
-        request = new TranslationRequest(
-                "Hello world. Please translate this document.",
-                "en",
-                List.of("ja", "ru")
-        );
+        service = new OllamaTranslationService(cachedTranslator);
     }
 
     @Test
     @DisplayName("translate() returns one result per target language on success")
     void translate_successfulTranslation_returnsResultPerLanguage() {
-        OllamaGenerateResponse jaResponse = new OllamaGenerateResponse();
-        jaResponse.setResponse("こんにちは、世界。この文書を翻訳してください。");
-        jaResponse.setDone(true);
+        TranslationRequest request = new TranslationRequest(
+                "Hello world.", "en", List.of("ja", "ru"));
 
-        OllamaGenerateResponse ruResponse = new OllamaGenerateResponse();
-        ruResponse.setResponse("Привет мир. Пожалуйста, переведите этот документ.");
-        ruResponse.setDone(true);
-
-        when(ollamaClient.generate(anyString()))
-                .thenReturn(jaResponse)
-                .thenReturn(ruResponse);
+        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ja"))
+                .thenReturn("こんにちは、世界。");
+        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ru"))
+                .thenReturn("Привет мир.");
 
         TranslationResponse response = service.translate(request);
 
-        assertThat(response).isNotNull();
         assertThat(response.getTranslationResults()).hasSize(2);
         assertThat(response.getTranslationResults().get(0).getLanguageCode()).isEqualTo("ja");
         assertThat(response.getTranslationResults().get(0).getValue())
-                .isEqualTo("こんにちは、世界。この文書を翻訳してください。");
+                .isEqualTo("こんにちは、世界。");
         assertThat(response.getTranslationResults().get(1).getLanguageCode()).isEqualTo("ru");
         assertThat(response.getTranslationResults().get(1).getValue())
-                .isEqualTo("Привет мир. Пожалуйста, переведите этот документ.");
+                .isEqualTo("Привет мир.");
     }
 
     @Test
     @DisplayName("translate() populates cognitiveServicesUsage with character count")
     void translate_populatesCharacterCount() {
-        OllamaGenerateResponse response = new OllamaGenerateResponse();
-        response.setResponse("Translated");
-        response.setDone(true);
-        when(ollamaClient.generate(anyString())).thenReturn(response);
-
-        int expectedCharCount = "Hello world. Please translate this document.".length() * 2;
+        TranslationRequest request = new TranslationRequest(
+                "Hello world.", "en", List.of("ja", "ru"));
+        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ja"))
+                .thenReturn("こんにちは");
+        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ru"))
+                .thenReturn("Привет");
 
         TranslationResponse result = service.translate(request);
 
+        // "Hello world." = 12 chars × 2 languages = 24
         assertThat(result.getCognitiveServicesUsage()
                 .getTranslatorTranslateTextCharacterCount())
-                .isEqualTo(expectedCharCount);
+                .isEqualTo(24);
     }
 
     @Test
-    @DisplayName("translate() falls back to source text when Ollama throws")
-    void translate_ollamaThrows_fallsBackToSourceText() {
-        when(ollamaClient.generate(anyString()))
-                .thenThrow(new OllamaClientException("Connection refused"));
+    @DisplayName("translate() delegates to cachedTranslator once per language — not this.method()")
+    void translate_delegatesToCachedTranslatorPerLanguage() {
+        TranslationRequest request = new TranslationRequest(
+                "Hi", "en", List.of("ja", "ru"));
+        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja")).thenReturn("こんにちは");
+        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ru")).thenReturn("Привет");
 
-        TranslationResponse response = service.translate(request);
+        service.translate(request);
 
-        // Both results should fall back to the original text
-        assertThat(response.getTranslationResults()).hasSize(2);
-        response.getTranslationResults().forEach(result ->
-                assertThat(result.getValue())
-                        .isEqualTo("Hello world. Please translate this document."));
+        verify(cachedTranslator, times(1))
+                .translateSingleLanguage("Hi", "en", "ja");
+        verify(cachedTranslator, times(1))
+                .translateSingleLanguage("Hi", "en", "ru");
     }
 
     @Test
-    @DisplayName("translate() falls back when Ollama returns empty string")
-    void translate_ollamaReturnsEmpty_fallsBackToSourceText() {
-        OllamaGenerateResponse emptyResponse = new OllamaGenerateResponse();
-        emptyResponse.setResponse("  ");
-        emptyResponse.setDone(true);
-        when(ollamaClient.generate(anyString())).thenReturn(emptyResponse);
-
-        TranslationResponse response = service.translate(request);
-
-        response.getTranslationResults().forEach(result ->
-                assertThat(result.getValue())
-                        .isEqualTo("Hello world. Please translate this document."));
-    }
-
-    @Test
-    @DisplayName("translate() falls back when Ollama returns null body response")
-    void translate_ollamaReturnsNullResponse_fallsBackToSourceText() {
-        OllamaGenerateResponse nullBodyResponse = new OllamaGenerateResponse();
-        nullBodyResponse.setResponse(null);
-        nullBodyResponse.setDone(true);
-        when(ollamaClient.generate(anyString())).thenReturn(nullBodyResponse);
-
-        TranslationResponse response = service.translate(request);
-
-        response.getTranslationResults().forEach(result ->
-                assertThat(result.getValue())
-                        .isEqualTo("Hello world. Please translate this document."));
-    }
-
-    @Test
-    @DisplayName("translate() trims whitespace from Ollama response")
-    void translate_ollamaResponseHasWhitespace_isTrimmed() {
-        OllamaGenerateResponse trimResponse = new OllamaGenerateResponse();
-        trimResponse.setResponse("  こんにちは  \n");
-        trimResponse.setDone(true);
-        when(ollamaClient.generate(anyString())).thenReturn(trimResponse);
-
-        TranslationRequest singleTarget = new TranslationRequest(
+    @DisplayName("translate() propagates fallback text from cachedTranslator")
+    void translate_cachedTranslatorReturnsFallback_propagatesIt() {
+        TranslationRequest request = new TranslationRequest(
                 "Hello", "en", List.of("ja"));
+        // Simulate fallback: OllamaCachedTranslator returns the source text
+        when(cachedTranslator.translateSingleLanguage("Hello", "en", "ja"))
+                .thenReturn("Hello");
 
-        TranslationResponse response = service.translate(singleTarget);
+        TranslationResponse response = service.translate(request);
 
-        assertThat(response.getTranslationResults().get(0).getValue()).isEqualTo("こんにちは");
+        assertThat(response.getTranslationResults().get(0).getValue()).isEqualTo("Hello");
     }
 
     @Test
     @DisplayName("translate() sets translatedTimestamp to a recent epoch second")
     void translate_setsTimestamp() {
         long before = System.currentTimeMillis() / 1000L;
+        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja"))
+                .thenReturn("こんにちは");
 
-        OllamaGenerateResponse r = new OllamaGenerateResponse();
-        r.setResponse("OK");
-        when(ollamaClient.generate(anyString())).thenReturn(r);
-
-        TranslationRequest singleTarget = new TranslationRequest("Hi", "en", List.of("ja"));
-        TranslationResponse response = service.translate(singleTarget);
+        TranslationResponse response = service.translate(
+                new TranslationRequest("Hi", "en", List.of("ja")));
 
         long after = System.currentTimeMillis() / 1000L + 1;
         long ts = response.getTranslationResults().get(0).getTranslatedTimestamp();
@@ -164,25 +127,13 @@ class OllamaTranslationServiceTest {
     }
 
     @Test
-    @DisplayName("translate() calls Ollama once per language code")
-    void translate_callsOllamaOncePerLanguage() {
-        OllamaGenerateResponse r = new OllamaGenerateResponse();
-        r.setResponse("Translated");
-        when(ollamaClient.generate(anyString())).thenReturn(r);
-
-        service.translate(request); // 2 target languages
-
-        verify(ollamaClient, times(2)).generate(anyString());
-    }
-
-    @Test
     @DisplayName("translate() returns extractOnDisk=false")
     void translate_extractOnDiskIsFalse() {
-        OllamaGenerateResponse r = new OllamaGenerateResponse();
-        r.setResponse("Translated");
-        when(ollamaClient.generate(anyString())).thenReturn(r);
+        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja"))
+                .thenReturn("こんにちは");
 
-        TranslationResponse response = service.translate(request);
+        TranslationResponse response = service.translate(
+                new TranslationRequest("Hi", "en", List.of("ja")));
 
         assertThat(response.isExtractOnDisk()).isFalse();
     }

@@ -83,7 +83,7 @@ tasks.withType<Checkstyle> {
     }
 }
 
-// ---- JaCoCo (70% minimum - dev service) ----
+// ---- JaCoCo (90% minimum — consistent with integration-execution-service and integration-management-service) ----
 jacoco {
     toolVersion = libs.versions.jacoco.get()
 }
@@ -94,9 +94,18 @@ tasks.jacocoTestReport {
         xml.required.set(true)
         html.required.set(true)
     }
+    // Exclude the Spring Boot entry-point — main() cannot be unit-tested and
+    // it is excluded from coverage analysis in the sibling service modules.
+    classDirectories.setFrom(
+        files(classDirectories.files.map { dir ->
+            fileTree(dir) {
+                exclude("**/TranslationServiceApplication.class")
+            }
+        })
+    )
 }
 
-val jacocoMinCoverage = "0.70".toBigDecimal()
+val jacocoMinCoverage = "0.90".toBigDecimal()
 
 tasks.jacocoTestCoverageVerification {
     dependsOn(tasks.jacocoTestReport)
