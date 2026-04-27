@@ -69,6 +69,7 @@ public interface ConfluenceIntegrationMapper extends NormalizationMapper {
     @Mapping(target = "dynamicDocumentType", source = "integration.dynamicDocumentType")
     @Mapping(target = "languageCodes",
             expression = "java(toLanguageCodes(integration != null ? integration.getLanguages() : null))")
+    @Mapping(target = "sourceLanguage", source = "integration.sourceLanguage")
     @Mapping(target = "confluenceSpaceKey", source = "integration.confluenceSpaceKey")
     @Mapping(target = "confluenceSpaceKeyFolderKey", source = "integration.confluenceSpaceKeyFolderKey")
     @Mapping(target = "reportNameTemplate", source = "integration.reportNameTemplate")

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.integration.execution.config.properties.KwProperties;
+import com.integration.execution.config.properties.TranslationApiProperties;
 import freemarker.template.TemplateExceptionHandler;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +22,7 @@ import static freemarker.template.Configuration.VERSION_2_3_34;
 @Configuration
 @EnableAsync
 @EnableRetry
-@EnableConfigurationProperties(KwProperties.class)
+@EnableConfigurationProperties({KwProperties.class, TranslationApiProperties.class})
 public class AppConfig {
 
     @Bean(name = "taskExecutor")

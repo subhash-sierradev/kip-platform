@@ -17,7 +17,11 @@ import java.util.List;
 
 /**
  * Orchestrates the Confluence monitoring report generation pipeline:
- * Kw fetch → page build → Confluence publish → result.
+ * Kw fetch → page render → (optional) translate → Confluence publish → result.
+ *
+ * <p>The translation step is applied <em>after</em> FreeMarker rendering and
+ * <em>before</em> the Confluence API call.  If the Translation API is unavailable or
+ * returns an error the pipeline falls back to the original English content and continues.</p>
  */
 @Slf4j
 @Service
@@ -31,6 +35,7 @@ public class KwToConfluenceOrchestrator {
     private final KwGraphQLService kwGraphQLService;
     private final ConfluencePageRenderer confluencePageRenderer;
     private final ConfluenceApiClient confluenceApiClient;
+    private final ConfluenceTranslationStep confluenceTranslationStep;
 
     public ConfluenceJobExecutionResult processExecution(final ConfluenceExecutionCommand cmd) {
         try {
@@ -66,13 +71,21 @@ public class KwToConfluenceOrchestrator {
 
             String pageContent = confluencePageRenderer.buildPageContent(monitoringData, confluenceTimezone);
 
+            // ── Translation step ────────────────────────────────────────────────
+            // After FreeMarker renders (always English), optionally translate to
+            // the target language configured on the integration before publishing.
+            String finalContent = confluenceTranslationStep.translateIfNeeded(
+                    pageContent,
+                    cmd.getSourceLanguage(),
+                    cmd.getLanguageCodes());
+
             ConfluenceApiClient.ConfluencePublishResult publishResult =
                     confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
                             cmd.getConnectionSecretName(),
                             cmd.getConfluenceSpaceKey(),
                             cmd.getConfluenceSpaceKeyFolderKey(),
                             buildMonitoringPageTitle(cmd, confluenceTimezone),
-                            pageContent));
+                            finalContent));
 
             log.info("Confluence integration {} — published monitoring page", cmd.getIntegrationId());
 

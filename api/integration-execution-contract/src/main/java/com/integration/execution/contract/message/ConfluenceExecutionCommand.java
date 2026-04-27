@@ -32,6 +32,10 @@ public class ConfluenceExecutionCommand {
     // Language codes for translation blocks (e.g. ["en", "ja"])
     private List<String> languageCodes;
 
+    /** BCP-47 source language of the report template (default "en"). Used together with languageCodes
+     *  to decide whether a translation API call is required before publishing the Confluence page. */
+    private String sourceLanguage;
+
     // Confluence page config
     private String confluenceSpaceKey;
     private String confluenceSpaceKeyFolderKey;

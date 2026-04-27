@@ -13,6 +13,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Instant;
 import java.time.ZoneId;
@@ -24,12 +26,15 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class KwToConfluenceOrchestratorTest {
 
     @Mock
@@ -41,12 +46,20 @@ class KwToConfluenceOrchestratorTest {
     @Mock
     private ConfluenceApiClient confluenceApiClient;
 
+    @Mock
+    private ConfluenceTranslationStep confluenceTranslationStep;
+
     private KwToConfluenceOrchestrator orchestrator;
 
     @BeforeEach
     void setUp() {
         orchestrator = new KwToConfluenceOrchestrator(
-                kwGraphQLService, confluencePageRenderer, confluenceApiClient);
+                kwGraphQLService, confluencePageRenderer, confluenceApiClient,
+                confluenceTranslationStep);
+        // Default: translation step is a pass-through (returns content unchanged).
+        // Lenient so tests that never reach the translator don't fail.
+        lenient().when(confluenceTranslationStep.translateIfNeeded(anyString(), any(), anyList()))
+                .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -74,6 +87,81 @@ class KwToConfluenceOrchestratorTest {
         String expectedDate = DateTimeFormatter.ofPattern("yyyy/MM/dd")
                 .format(Instant.parse("2026-01-31T23:59:59Z").atZone(ZoneId.of("UTC")));
         assertThat(requestCaptor.getValue().pageTitle()).isEqualTo("2025-" + expectedDate);
+    }
+
+    @Test
+    void processExecution_translationStepReceivesRenderedContentAndLanguages() {
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone("UTC")
+                .sourceLanguage("en")
+                .languageCodes(List.of("en", "ja"))
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
+        when(confluenceTranslationStep.translateIfNeeded("<p>English</p>", "en", List.of("en", "ja")))
+                .thenReturn("<p>日本語</p>");
+        ArgumentCaptor<ConfluencePublishRequest> captor =
+                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
+        when(confluenceApiClient.createOrUpdatePage(captor.capture()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        orchestrator.processExecution(cmd);
+
+        // The translated content must reach the Confluence API
+        assertThat(captor.getValue().body()).isEqualTo("<p>日本語</p>");
+        verify(confluenceTranslationStep)
+                .translateIfNeeded("<p>English</p>", "en", List.of("en", "ja"));
+    }
+
+    @Test
+    void processExecution_translationStepFallback_jobSucceedsWithOriginalContent() {
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone("UTC")
+                .sourceLanguage("en")
+                .languageCodes(List.of("de"))
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
+        // Simulate translation step returning original (fallback scenario)
+        when(confluenceTranslationStep.translateIfNeeded(anyString(), any(), anyList()))
+                .thenReturn("<p>English</p>");
+        ArgumentCaptor<ConfluencePublishRequest> captor =
+                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
+        when(confluenceApiClient.createOrUpdatePage(captor.capture()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "2"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).isNull();
+        assertThat(captor.getValue().body()).isEqualTo("<p>English</p>");
     }
 
     @Test

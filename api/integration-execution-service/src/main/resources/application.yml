@@ -166,3 +166,15 @@ integration:
         project-statuses: '/rest/api/3/project/{projectKey}/statuses'
         fields: '/rest/api/3/field'
         issue-create: '/rest/api/3/issue'
+
+# ─── Translation API (KIP-544) ────────────────────────────────────────────────
+# Calls the Translation Service to convert rendered FreeMarker report content
+# from English (source) to the target language configured on the integration.
+# Set translation.api.enabled=false to publish English-only content without
+# requiring the Translation Service to be running.
+translation:
+  api:
+    base-url: ${TRANSLATION_API_BASE_URL:http://localhost:8083}
+    enabled: ${TRANSLATION_API_ENABLED:true}
+    timeout-seconds: ${TRANSLATION_API_TIMEOUT:30}
+

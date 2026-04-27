@@ -46,6 +46,14 @@ public class ConfluenceIntegrationCreateUpdateRequest {
     @NotEmpty(message = "At least one language code is required")
     private List<String> languageCodes;
 
+    /**
+     * BCP-47 source language of the FreeMarker report template.
+     * Defaults to "en" (English). When a target language in {@code languageCodes}
+     * differs from this value the Translation API will be invoked.
+     */
+    @Size(max = 10, message = "Source language code cannot exceed {max} characters")
+    private String sourceLanguage = "en";
+
     @NotBlank(message = "Report name template is required")
     @Size(max = 255, message = "Report name template cannot exceed {max} characters")
     private String reportNameTemplate;

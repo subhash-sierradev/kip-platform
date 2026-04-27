@@ -75,6 +75,15 @@ public class ConfluenceIntegration extends UuidBaseEntity implements Schedulable
     @Builder.Default
     private Boolean includeTableOfContents = true;
 
+    /**
+     * BCP-47 language code of the FreeMarker template language (default "en").
+     * Combined with {@code languages} to determine whether the Translation API
+     * should be called before publishing the Confluence page.
+     */
+    @Column(name = "source_language", nullable = false, length = 10)
+    @Builder.Default
+    private String sourceLanguage = "en";
+
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
         name = "confluence_integration_languages",

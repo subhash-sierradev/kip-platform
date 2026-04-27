@@ -32,6 +32,8 @@ public class ConfluenceIntegrationResponse {
 
     private List<Language> languages;
     private List<String> languageCodes;
+    /** BCP-47 source language of the report template (e.g. "en"). */
+    private String sourceLanguage;
 
     private String reportNameTemplate;
     private String confluenceSpaceKey;
