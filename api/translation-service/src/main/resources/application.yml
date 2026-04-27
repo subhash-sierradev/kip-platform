@@ -7,7 +7,7 @@ spring:
 
   # Ensure Jackson serialises all responses as UTF-8 JSON.
   # Detailed ObjectMapper configuration is in AppConfig.java to avoid
-  # Spring Boot 4 / Jackson 3 property-name incompatibilities.
+  # Spring Boot 4 / Jackson 2 property-name incompatibilities.
   jackson:
     default-property-inclusion: always
 

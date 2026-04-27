@@ -15,9 +15,9 @@ import java.util.stream.Collectors;
  * Centralised exception-to-HTTP-response mapping for the Translation Service.
  *
  * <p>Uses the RFC 7807 {@link ProblemDetail} format (natively supported by
- * Spring Boot 6+) so clients receive a structured, machine-readable error body
- * with a stable {@code type} URI, a human-readable {@code detail}, and the
- * current server timestamp.</p>
+ * Spring Framework 6+) so clients receive a structured, machine-readable error
+ * body with a stable {@code type} URI, a human-readable {@code detail}, and
+ * the current server timestamp.</p>
  *
  * <h3>Handled exceptions</h3>
  * <ul>
@@ -46,7 +46,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidationException(final MethodArgumentNotValidException ex) {
         String details = ex.getBindingResult().getFieldErrors().stream()
-                .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
+                .map(fe -> fe.getDefaultMessage())
                 .collect(Collectors.joining("; "));
 
         log.warn("Validation failed: {}", details);
