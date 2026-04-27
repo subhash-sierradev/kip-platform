@@ -1,0 +1,67 @@
+<?xml version="1.0"?>
+<!DOCTYPE suppressions PUBLIC
+    "-//Checkstyle//DTD SuppressionFilter Configuration 1.2//EN"
+    "https://checkstyle.org/dtds/suppressions_1_2.dtd">
+
+<suppressions>
+    <!-- Suppress Javadoc checks for test classes -->
+    <suppress checks="MissingJavadocType" files=".*Test\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*Test\.java"/>
+    <suppress checks="JavadocMethod" files=".*Test\.java"/>
+    <suppress checks="MethodName" files=".*Test\.java"/>
+
+    <!-- Suppress Javadoc checks for configuration classes -->
+    <suppress checks="MissingJavadocType" files=".*[Cc]onfig.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*[Cc]onfig.*\.java"/>
+
+    <!-- Suppress Javadoc checks for DTOs/Models with Lombok -->
+    <suppress checks="MissingJavadocType" files=".*dto.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*dto.*\.java"/>
+    <suppress checks="MissingJavadocType" files=".*model.*\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*model.*\.java"/>
+    <suppress checks="MissingJavadocType" files=".*Request\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*Request\.java"/>
+    <suppress checks="MissingJavadocType" files=".*Response\.java"/>
+    <suppress checks="MissingJavadocMethod" files=".*Response\.java"/>
+
+    <!-- Suppress utility class constructor hiding for Spring Boot main classes -->
+    <suppress checks="HideUtilityClassConstructor" files=".*Application\.java"/>
+
+    <!-- Suppress design for extension in controllers (Spring handles this) -->
+    <suppress checks="DesignForExtension" files=".*Controller\.java"/>
+
+    <!-- Suppress parameter number check for DI constructors in Spring components -->
+    <suppress checks="ParameterNumber" files=".*[Ss]ervice.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Cc]ontroller.*\.java"/>
+    <suppress checks="ParameterNumber" files=".*[Cc]lient.*\.java"/>
+
+    <!-- Suppress magic number checks in configuration classes -->
+    <suppress checks="MagicNumber" files=".*[Cc]onfig.*\.java"/>
+
+    <!-- Suppress visibility modifier checks for fields with Lombok annotations -->
+    <suppress checks="VisibilityModifier" files=".*model.*\.java"/>
+    <suppress checks="VisibilityModifier" files=".*dto.*\.java"/>
+    <suppress checks="VisibilityModifier" files=".*Request\.java"/>
+    <suppress checks="VisibilityModifier" files=".*Response\.java"/>
+
+    <!-- Allow star imports for test classes -->
+    <suppress checks="AvoidStarImport" files=".*Test\.java"/>
+
+    <!-- Suppress final parameters for all Java files -->
+    <suppress checks="FinalParameters" files=".*\.java"/>
+
+    <!-- Suppress Javadoc for Spring Boot auto-generated methods -->
+    <suppress checks="JavadocMethod" files=".*" message="Missing a Javadoc comment"/>
+
+    <!-- Allow IllegalCatch for the Ollama client (network/IO error fallback) -->
+    <suppress checks="IllegalCatch" files=".*OllamaClient\.java"/>
+    <suppress checks="IllegalCatch" files=".*OllamaTranslationService\.java"/>
+    <suppress checks="IllegalCatch" files=".*OllamaHealthIndicator\.java"/>
+
+    <!-- Suppress file length check for test classes -->
+    <suppress checks="FileLength" files=".*Test\.java"/>
+
+    <!-- Suppress line length violations for test classes -->
+    <suppress checks="LineLength" files=".*Test\.java"/>
+</suppressions>
+
