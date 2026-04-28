@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const routerSpies = vi.hoisted(() => ({
   back: vi.fn(),
   push: vi.fn(),
+  replace: vi.fn(),
   route: { params: { id: 'ci-1' }, query: { search: 'abc' } },
 }));
 
@@ -46,7 +47,11 @@ vi.mock(
 
 vi.mock('vue-router', () => ({
   useRoute: () => routerSpies.route,
-  useRouter: () => ({ back: routerSpies.back, push: routerSpies.push }),
+  useRouter: () => ({
+    back: routerSpies.back,
+    push: routerSpies.push,
+    replace: routerSpies.replace,
+  }),
 }));
 
 const serviceSpies = vi.hoisted(() => ({
@@ -60,6 +65,7 @@ vi.mock('@/api/services/ConfluenceIntegrationService', () => ({
 }));
 
 import ConfluenceIntegrationDetailsPage from '@/components/outbound/confluenceintegration/details/ConfluenceIntegrationDetailsPage.vue';
+import { ROUTES } from '@/router/routes';
 
 const mockIntegration = {
   id: 'ci-1',
@@ -198,27 +204,18 @@ describe('ConfluenceIntegrationDetailsPage', () => {
     expect(serviceSpies.getConfluenceIntegrationById).toHaveBeenCalledWith('ci-1');
   });
 
-  it('uses history back when available and falls back to the list route otherwise', async () => {
+  it('navigates back to the list route with preserved query state', async () => {
     const wrapper = mount(ConfluenceIntegrationDetailsPage, {
       global: { provide: { setBreadcrumbTitle: vi.fn() } },
     });
     await new Promise(r => setTimeout(r, 0));
 
-    Object.defineProperty(window, 'history', {
-      configurable: true,
-      value: { length: 2 },
-    });
     (wrapper.vm as any).handleBack();
-    expect(routerSpies.back).toHaveBeenCalledTimes(1);
-
-    Object.defineProperty(window, 'history', {
-      configurable: true,
-      value: { length: 1 },
-    });
-    (wrapper.vm as any).handleBack();
-    expect(routerSpies.push).toHaveBeenCalledWith({
-      path: '/outbound/integration/confluence',
+    expect(routerSpies.replace).toHaveBeenCalledWith({
+      path: ROUTES.confluenceIntegration,
       query: { search: 'abc' },
     });
+    expect(routerSpies.push).not.toHaveBeenCalled();
+    expect(routerSpies.back).not.toHaveBeenCalled();
   });
 });

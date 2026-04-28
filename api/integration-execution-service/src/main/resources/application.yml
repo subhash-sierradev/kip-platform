@@ -166,3 +166,11 @@ integration:
         project-statuses: '/rest/api/3/project/{projectKey}/statuses'
         fields: '/rest/api/3/field'
         issue-create: '/rest/api/3/issue'
+
+# TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification credentials
+arcgis:
+  verification:
+    feature-service-url: ${ARCGIS_VERIFICATION_FEATURE_URL:}
+    client-id: ${ARCGIS_VERIFICATION_CLIENT_ID:}
+    client-secret: ${ARCGIS_VERIFICATION_CLIENT_SECRET:}
+    token-url: ${ARCGIS_VERIFICATION_TOKEN_URL:https://www.arcgis.com/sharing/rest/oauth2/token}

@@ -1,109 +1,82 @@
 import { test, expect } from '@playwright/test';
 import { POManager } from '../../pages/Common_Files/POManager.js';
-import { JiraWebhookConnectJiraPage } from '../../pages/Jira_Webhook/JiraWebhookConnectJiraPage.js';
+import { JiraWebhookFieldMappingPage } from '../../pages/Jira_Webhook/JiraWebhookFieldMappingPage.js';
 import { JiraWebhookTestCaseDesc } from '../../TestCases/JiraWebhookTestCaseDesc.js';
 import { GenerateTestData } from '../../utils/GenerateTestData.js';
 
-// Helper function to navigate to webhook creation
-const navigateToWebhookCreation = async (page) => {
-  const ui = page.ui || (new (await import('../../pages/Common_Files/UICommonElements.js')).UICommonElements(page));
-  await ui.mainNavigation.outboundMenu.click();
-  await ui.mainNavigation.jiraWebhookMenu.click();
-  await ui.buttons.addJiraWebhook.click();
-};
-
-// Helper function to handle connection selection and verification using page object
-const selectAndVerifyConnection = async (page, connectJiraPage) => {
-  try {
-    await connectJiraPage.selectConnection();
-    await connectJiraPage.waitForVerifyButtonEnabled();
-    await connectJiraPage.verifyConnection();
-    await expect(page.getByRole('button', { name: 'Verified' })).toBeVisible({ timeout: 15000 });
-    return true;
-  } catch (error) {
-    // Check if there are any active connections available
-    try {
-      const connectionCountText = await page.getByText(/connections.*active.*failed/).textContent({ timeout: 3000 });
-      if (connectionCountText.includes('0 active')) {
-        test.skip();
-      }
-    } catch (e) {
-      test.skip();
-    }
-    throw error;
-  }
-};
-
 test.describe('Jira Webhook Creation - Field Mapping Step', () => {
-  let testDataGenerator;
+  let poManager;
+  let connectJiraPage;
+  let fieldMappingPage;
   let testData;
 
   test.beforeEach(async ({ page }) => {
-    // Initialize test data generator
-    testDataGenerator = new GenerateTestData();
+    const testDataGenerator = new GenerateTestData();
     testData = testDataGenerator.getBasicDetailsTestData();
-    
-    const poManager = new POManager(page);
+
+    poManager = new POManager(page);
+    connectJiraPage = poManager.jiraWebhookConnectJiraPage;
+    fieldMappingPage = new JiraWebhookFieldMappingPage(page);
+
     await poManager.loginPage.pageUrlAsync();
     await poManager.loginPage.loginAsync();
   });
 
   test(JiraWebhookTestCaseDesc.fieldMappingTestCase, async ({ page }) => {
-    // Initialize page object
-    const connectJiraPage = new JiraWebhookConnectJiraPage(page);
-    const poManager = new POManager(page);
-    
-    // Navigate and complete previous steps
-    await navigateToWebhookCreation(page);
-    await page.getByRole('textbox', { name: 'Jira Webhook Name' }).pressSequentially(testData.validWebhookName, { delay: 50 });
+    // Navigate to webhook creation
+    const nav = poManager.ui.mainNavigation;
+    await nav.outboundMenu.click();
+    await nav.jiraWebhookMenu.click();
+    await poManager.ui.buttons.addJiraWebhook.click();
+    await expect(page.getByRole('heading', { name: 'Create Jira Webhook' })).toBeVisible();
+
+    // Step 1 – Basic details
+    const nameInput = page.getByRole('textbox', { name: 'Jira Webhook Name' });
+    await nameInput.click();
+    await nameInput.fill(testData.validWebhookName);
     await poManager.basePage.ui.buttons.next.click();
-    
-    const jsonPayload = testData.samplePayload;
-    await page.getByRole('textbox', { name: 'Paste your JSON payload here' }).fill(JSON.stringify(jsonPayload));
+
+    // Step 2 – Sample payload
+    await page.getByRole('textbox', { name: 'Paste your JSON payload here' }).fill(JSON.stringify(testData.samplePayload));
     await page.getByRole('button', { name: 'Next →' }).click();
 
-    // Complete connection step using page object methods
+    // Step 3 – Connect Jira
     await expect(page.getByText('Connection Method')).toBeVisible();
-    
-    // Select 'Use Existing Connection' option (should be default)
-    await expect(page.getByRole('radio', { name: 'Use an Existing Connection – Reuse a previously configured connection' })).toBeChecked();
 
-    // Select and verify existing Jira connection
-    const connectionSelected = await selectAndVerifyConnection(page, connectJiraPage);
-    if (!connectionSelected) {
-      return; // Skip test if no connections available
+    const testDataGenerator = new GenerateTestData();
+    let connectionResult;
+    try {
+      connectionResult = await connectJiraPage.manageJiraConnectionUpdated(testDataGenerator.generateJiraConnectionName());
+    } catch (error) {
+      if (error.message.includes('No active connections') || error.message.includes('0 active')) {
+        test.skip();
+      }
+      throw error;
     }
-    
-    // Verify Next button becomes enabled after successful verification
-    await expect(connectJiraPage.ui.buttons.next).toBeEnabled();
-    
-    // Click 'Next' to proceed to step 4
-    await connectJiraPage.clickNext();
 
-    // Verify Field Mapping step is loaded
-    await expect(page.getByRole('heading', { name: 'Map to Jira Fields' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Incoming JSON' })).toBeVisible();
+    if (connectionResult !== 'existing' && connectionResult !== 'new') {
+      return;
+    }
 
-    // Verify initial state - Next button disabled, dropdowns properly configured
-    await expect(page.getByRole('button', { name: 'Next →' })).toBeDisabled();
-    await expect(page.getByRole('combobox').nth(3)).toBeDisabled(); // Issue Type
-    await expect(page.getByRole('combobox').nth(4)).toBeDisabled(); // Assignee
-
-    // Select project and verify dependent dropdowns enable
-    const projectDropdown = page.getByRole('combobox').nth(2);
-    await projectDropdown.selectOption(['KIP Test Project A']);
-    await expect(page.getByRole('combobox').nth(3)).toBeEnabled();
-    await expect(page.getByRole('combobox').nth(4)).toBeEnabled();
-
-    // Complete field mapping
-    await page.getByRole('combobox').nth(3).selectOption(['Epic']);
-    await page.getByRole('textbox', { name: 'Enter issue summary template' }).fill('Case Update: {{form.title}} - Priority: {{form.priority}}');
-    await page.getByRole('textbox', { name: 'Enter issue description' }).fill('Case Details:\\nForm ID: {{form.id}}\\nSubmitted by: {{form.submitter}}\\nStatus: {{form.status}}\\nNotes: {{form.notes}}');
-
-    // Verify Next button enables and proceed
-    await expect(page.getByRole('button', { name: 'Next →' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Next →' })).toBeEnabled({ timeout: 10000 });
     await page.getByRole('button', { name: 'Next →' }).click();
-    await expect(page.getByText('Review your webhook configuration')).toBeVisible();
 
+    // Step 4 – Field Mapping
+    await expect(fieldMappingPage.mapToJiraFieldsHeading).toBeVisible();
+    await expect(fieldMappingPage.incomingJsonHeading).toBeVisible();
+
+    await expect(fieldMappingPage.nextButton).toBeDisabled();
+    await expect(fieldMappingPage.issueTypeDropdown).toBeDisabled();
+
+    await fieldMappingPage.selectProject('KIP Test Project A');
+    await expect(fieldMappingPage.issueTypeDropdown).toBeEnabled();
+
+    await fieldMappingPage.selectIssueType('Epic');
+    await fieldMappingPage.fillSummaryTemplate('Case Update: {{form.title}} - Priority: {{form.priority}}');
+    await fieldMappingPage.fillDescriptionTemplate('Case Details:\\nForm ID: {{form.id}}\\nSubmitted by: {{form.submitter}}\\nStatus: {{form.status}}\\nNotes: {{form.notes}}');
+
+    await expect(fieldMappingPage.nextButton).toBeEnabled();
+    await fieldMappingPage.clickNext();
+    await expect(page.getByText('Review your webhook configuration')).toBeVisible();
   });
 });

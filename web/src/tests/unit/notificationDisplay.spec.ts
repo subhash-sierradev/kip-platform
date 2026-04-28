@@ -319,7 +319,10 @@ describe('notificationDisplay utilities', () => {
       const n: AppNotification = {
         ...baseNotification,
         type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { actionLabel: 'Open Confluence Connection', actionUrl: ROUTES.confluenceConnection },
+        metadata: {
+          actionLabel: 'Open Confluence Connection',
+          actionUrl: ROUTES.confluenceConnection,
+        },
       };
       expect(getPrimaryAction(n, ['feature_confluence_integration'])).toBeNull();
     });
@@ -328,7 +331,10 @@ describe('notificationDisplay utilities', () => {
       const n: AppNotification = {
         ...baseNotification,
         type: 'INTEGRATION_CONNECTION_CREATED',
-        metadata: { actionLabel: 'Open Confluence Connection', actionUrl: ROUTES.confluenceConnection },
+        metadata: {
+          actionLabel: 'Open Confluence Connection',
+          actionUrl: ROUTES.confluenceConnection,
+        },
       };
       expect(getPrimaryAction(n, ['tenant_admin'])).toEqual({
         label: 'Open Confluence Connection',

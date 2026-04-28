@@ -18,6 +18,13 @@ vi.mock('@/store/auth', () => ({
         'feature_jira_webhook',
         'feature_arcgis_integration',
       ].includes(role),
+    userRoles: [
+      'tenant_admin',
+      'app_admin',
+      'feature_integration',
+      'feature_jira_webhook',
+      'feature_arcgis_integration',
+    ],
     currentUser: { userName: 'jane doe', tenantId: 'AcmeCorp' },
     logout: vi.fn(),
   }),

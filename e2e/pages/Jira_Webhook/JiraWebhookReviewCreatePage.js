@@ -31,8 +31,18 @@ class JiraWebhookReviewCreatePage extends BasePage {
 
   // Step 1: Basic Details
   async fillBasicDetails(webhookName, description) {
-    await this.webhookNameInput.type(webhookName);
-    await this.webhookDescriptionInput.type(description);
+    // Clear and fill webhook name field with more robust approach
+    await this.webhookNameInput.click();
+    await this.webhookNameInput.clear();
+    await this.webhookNameInput.fill(webhookName);
+    
+    // Verify the field was filled
+    await expect(this.webhookNameInput).toHaveValue(webhookName);
+    
+    // Clear and fill description field
+    await this.webhookDescriptionInput.click();
+    await this.webhookDescriptionInput.clear();
+    await this.webhookDescriptionInput.fill(description);
     
     // Wait for the Next button to be enabled (validation may have debounce delay)
     await expect(this.ui.buttons.next).toBeEnabled({ timeout: 10000 });

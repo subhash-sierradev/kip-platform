@@ -17,6 +17,10 @@ class BasePage {
   async fill(selector, text, options = {}) {
     const locator = typeof selector === 'string' ? this.page.locator(selector) : selector;
     await locator.waitFor({ state: 'visible', timeout: this.timeout });
+    
+    // Clear the field before filling to ensure reliable input
+    await locator.click();
+    await locator.clear();
     await locator.fill(text, options);
   }
 
