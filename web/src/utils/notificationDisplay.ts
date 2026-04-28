@@ -224,7 +224,8 @@ export function getPrimaryAction(
   if (label && explicitTarget) {
     // Suppress admin-only connection routes for non-admins even when URL is explicit
     const effectiveRolesExplicit = userRoles ?? [];
-    if (isAdminConnectionRoute(explicitTarget) && !effectiveRolesExplicit.includes('tenant_admin')) return null;
+    if (isAdminConnectionRoute(explicitTarget) && !effectiveRolesExplicit.includes('tenant_admin'))
+      return null;
     return { label, target: explicitTarget, external: /^https?:\/\//i.test(explicitTarget) };
   }
 

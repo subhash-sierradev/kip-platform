@@ -65,3 +65,38 @@ export function roleGuard(requiredRoles: string[]) {
     }
   };
 }
+
+/**
+ * All-roles authorization guard
+ * Ensures users have ALL required roles to access specific routes
+ */
+export function allRolesGuard(requiredRoles: string[]) {
+  return async (
+    to: RouteLocationNormalized,
+    from: RouteLocationNormalized,
+    next: NavigationGuardNext
+  ) => {
+    const authStore = useAuthStore();
+
+    try {
+      // Ensure authentication first
+      if (!authStore.initialized) {
+        await authStore.init();
+      }
+
+      if (!authStore.isAuthenticated) {
+        next('/login');
+        return;
+      }
+
+      // Check that the user holds every required role
+      if (authStore.hasAllRoles(requiredRoles)) {
+        next();
+      } else {
+        next('/unauthorized');
+      }
+    } catch {
+      next('/login');
+    }
+  };
+}

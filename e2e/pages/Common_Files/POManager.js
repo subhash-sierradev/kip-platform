@@ -12,7 +12,6 @@ import { JiraWebhookEditPage } from '../Jira_Webhook/EditJiraWebhook.js';
 import { JiraWebhookBasicDetailsPage } from '../Jira_Webhook/JiraWebhookBasicDetailsPage.js';
 import { JiraWebhookConnectJiraPage } from '../Jira_Webhook/JiraWebhookConnectJiraPage.js';
 import { JiraWebhookFieldMappingPage } from '../Jira_Webhook/JiraWebhookFieldMappingPage.js';
-import { JiraWebhookListPage } from '../Jira_Webhook/JiraWebhookListPage.js';
 import { JiraWebhookManagementPage } from '../Jira_Webhook/JiraWebhookManagementPage.js';
 import { JiraWebhookReviewCreatePage } from '../Jira_Webhook/JiraWebhookReviewCreatePage.js';
 import { JiraWebhookSamplePayloadPage } from '../Jira_Webhook/JiraWebhookSamplePayloadPage.js';
@@ -22,6 +21,7 @@ import { ArcGISIntegrationManagementPage } from '../ArcGIS_Integration/ArcGISInt
 import { ArcGISIntegrationEditorPage } from '../ArcGIS_Integration/ArcGISIntegrationEditorPage.js';
 import { ArcGISIntegrationViewPage } from '../ArcGIS_Integration/ArcGISIntegrationViewPage.js';
 import { ConfluenceIntegrationCreatorPage } from '../Confluence_Integration/Confluence_Integration_Creator_Page.js';
+import { ConfluenceIntegrationEditorPage } from '../Confluence_Integration/Confluence_Integration_Editor_Page.js';
 
 class POManager {
   constructor(page) {
@@ -79,10 +79,6 @@ class POManager {
     return this._jiraWebhookFieldMappingPage = this._jiraWebhookFieldMappingPage || new JiraWebhookFieldMappingPage(this.page);
   }
 
-  get jiraWebhookListPage() {
-    return this._jiraWebhookListPage = this._jiraWebhookListPage || new JiraWebhookListPage(this.page);
-  }
-
   get jiraWebhookManagementPage() {
     return this._jiraWebhookManagementPage = this._jiraWebhookManagementPage || new JiraWebhookManagementPage(this.page);
   }
@@ -119,6 +115,10 @@ class POManager {
   // Confluence Integration page objects
   get confluenceIntegrationCreatorPage() {
     return this._confluenceIntegrationCreatorPage = this._confluenceIntegrationCreatorPage || new ConfluenceIntegrationCreatorPage(this.page);
+  }
+
+  get confluenceIntegrationEditorPage() {
+    return this._confluenceIntegrationEditorPage = this._confluenceIntegrationEditorPage || new ConfluenceIntegrationEditorPage(this.page);
   }
 }
 

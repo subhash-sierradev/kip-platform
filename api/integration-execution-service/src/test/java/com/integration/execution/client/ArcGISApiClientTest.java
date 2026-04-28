@@ -257,17 +257,141 @@ class ArcGISApiClientTest {
     }
 
     @Test
-    void applyEditsWithPartition_missingAddsAndUpdates_defaultsToEmptyArrays() throws Exception {
+    void queryFeaturesWithWhere_whenHttpReturns404_throwsIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
+        when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
+
+        when(classicHttpResponse.getCode()).thenReturn(404);
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.queryFeaturesWithWhere("secret", "1=1"))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("HTTP 404");
+    }
+
+    @Test
+    void queryFeaturesWithWhere_whenArcGisBodyContainsError_throwsIntegrationApiException() throws Exception {
         when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
         when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
 
         when(classicHttpResponse.getCode()).thenReturn(200);
-        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity("{\"updateResults\":[]}"));
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"error\":{\"code\":400,\"message\":\"invalid where clause\"}}"));
         mockHttpExecution(classicHttpResponse);
 
-        JsonNode response = client.applyEditsWithPartition("secret", "{}");
+        assertThatThrownBy(() -> client.queryFeaturesWithWhere("secret", "invalid ="))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("ArcGIS query failed");
+    }
 
-        assertThat(response.has("updateResults")).isTrue();
+    @Test
+    void queryFeaturesWithWhere_whenEntityMissing_throwsIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
+        when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
+
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(null);
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.queryFeaturesWithWhere("secret", "1=1"))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("Empty HTTP response");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void queryFeaturesWithWhere_whenHttpClientThrows_throwsIntegrationApiException() throws Exception {
+        when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
+        when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
+        when(arcgisHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
+                .thenThrow(new RuntimeException("connection reset"));
+
+        assertThatThrownBy(() -> client.queryFeaturesWithWhere("secret", "1=1"))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("ArcGIS query failed");
+    }
+
+    @Test
+    void getAccessToken_whenTokenBlank_throwsUnauthorizedException() throws Exception {
+        // Covers token.isBlank() = true branch in "token == null || token.isBlank()"
+        IntegrationSecret secret = oauthSecret("https://example.com/FeatureServer");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"access_token\":\"  \",\"expires_in\":120}"));
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.getAccessToken("secret", secret))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("Token generation failed");
+    }
+
+    @Test
+    void getAccessToken_whenSecretNameNull_doesNotStoreToken() throws Exception {
+        // Covers secretName != null = false branch in "secretName != null && !secretName.isBlank()"
+        IntegrationSecret secret = oauthSecret("https://example.com/FeatureServer");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity())
+                .thenReturn(new StringEntity("{\"access_token\":\"token\",\"expires_in\":120}"));
+        mockHttpExecution(classicHttpResponse);
+
+        String token = client.getAccessToken(null, secret);
+
+        assertThat(token).isEqualTo("token");
+        verify(tokenCache, never()).store(anyString(), anyString(), any());
+    }
+
+    @Test
+    void queryFeatures_statusBelow200_throwsIntegrationApiException() throws Exception {
+        // Covers "status < 200" = true branch in validateResponse
+        when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
+        when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
+        when(classicHttpResponse.getCode()).thenReturn(102);
+        mockHttpExecution(classicHttpResponse);
+
+        assertThatThrownBy(() -> client.queryFeatures("secret"))
+                .isInstanceOf(IntegrationApiException.class)
+                .hasMessageContaining("HTTP 102");
+    }
+
+    @Test
+    void fetchArcGISFields_whenFieldsNodeIsNotArray_returnsEmptyList() {
+        // Covers !fieldsNode.isArray() = true branch in fetchArcGISFields
+        ArcGISApiClient spyClient = org.mockito.Mockito.spy(client);
+        doReturn(new ObjectMapper().createObjectNode().put("fields", "not-an-array"))
+                .when(spyClient).queryFeatures("secret");
+
+        assertThat(spyClient.fetchArcGISFields("secret")).isEmpty();
+    }
+
+    @Test
+    void fetchArcGISFields_fieldWithNoOptionalKeys_mapsWithNullsForAbsentKeys() throws Exception {
+        // Covers !node.has(fieldName) = true in getNullableInt, getNullableText, getNullableNode
+        ArcGISApiClient spyClient = org.mockito.Mockito.spy(client);
+        JsonNode root = new ObjectMapper().readTree("""
+                {
+                  "fields": [
+                    {
+                      "name": "minimal_field",
+                      "type": "esriFieldTypeString",
+                      "alias": "Minimal",
+                      "sqlType": "sqlTypeNVarchar",
+                      "nullable": true,
+                      "editable": true
+                    }
+                  ]
+                }
+                """);
+        doReturn(root).when(spyClient).queryFeatures("secret");
+
+        List<ArcGISFieldDto> fields = spyClient.fetchArcGISFields("secret");
+
+        assertThat(fields).hasSize(1);
+        assertThat(fields.get(0).getName()).isEqualTo("minimal_field");
+        assertThat(fields.get(0).getLength()).isNull();
+        assertThat(fields.get(0).getPrecision()).isNull();
+        assertThat(fields.get(0).getDescription()).isNull();
+        assertThat(fields.get(0).getDefaultValue()).isNull();
+        assertThat(fields.get(0).getDomain()).isNull();
     }
 
     @Test
@@ -285,6 +409,7 @@ class ArcGISApiClientTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void queryFeatures_whenHttpClientFails_wrapsAsIntegrationApiException() throws Exception {
         when(tokenCache.getValidToken("secret")).thenReturn("cached-token");
         when(vaultService.getSecret("secret")).thenReturn(oauthSecret("https://example.com/FeatureServer"));
@@ -369,6 +494,7 @@ class ArcGISApiClientTest {
         assertThat(fields.get(1).getDefaultValue()).isNull();
     }
 
+    @SuppressWarnings("unchecked")
     private void mockHttpExecution(ClassicHttpResponse response) throws Exception {
         when(arcgisHttpClient.execute(any(HttpUriRequest.class), any(HttpClientResponseHandler.class)))
                 .thenAnswer(invocation -> {

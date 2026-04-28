@@ -11,6 +11,8 @@ spring:
             readTimeout: 30000
           execution-arcgis-feature-layer:
             url: ${integration.execution.base-url}
+          execution-arcgis-verification:
+            url: ${integration.execution.base-url}
           execution-integration-connection:
             url: ${integration.execution.base-url}
           execution-jira-integration:

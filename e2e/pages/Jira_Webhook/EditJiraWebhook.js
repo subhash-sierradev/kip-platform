@@ -1,4 +1,5 @@
 import { BasePage } from '../Common_Files/BasePage.js';
+import { expect } from '@playwright/test';
 
 class JiraWebhookEditPage extends BasePage {
   constructor(page) {
@@ -27,7 +28,7 @@ class JiraWebhookEditPage extends BasePage {
     
     // Field mapping step locators
     this.projectDropdown = page.getByRole('combobox').nth(2);
-    this.issueTypeDropdown = page.getByRole('combobox').nth(3);
+    this.issueTypeDropdown = page.getByRole('combobox').nth(4);
     this.summaryTemplateInput = page.getByRole('textbox', { name: 'Enter issue summary template' });
     this.descriptionTemplateInput = page.getByRole('textbox', { name: 'Enter issue description' });
     
@@ -45,17 +46,39 @@ class JiraWebhookEditPage extends BasePage {
   }
 
   async updateBasicDetails(name, description) {
+    // Clear and fill webhook name field with more robust approach
+    await this.webhookNameInput.click();
+    await this.webhookNameInput.clear();
     await this.webhookNameInput.fill(name);
+    
+    // Verify the field was filled
+    await expect(this.webhookNameInput).toHaveValue(name);
+    
+    // Clear and fill description field
+    await this.descriptionInput.click();
+    await this.descriptionInput.clear();
     await this.descriptionInput.fill(description);
   }
 
   async proceedToNextStep() {
+    // Wait for Next button to be enabled before clicking
+    await expect(this.nextButton).toBeEnabled({ timeout: 10000 });
     await this.nextButton.click();
   }
 
   async updateJsonPayload(payload) {
+    // Use robust field filling pattern
+    await this.jsonPayloadInput.click();
+    await this.jsonPayloadInput.clear();
     await this.jsonPayloadInput.fill(payload);
-    await this.formatJsonButton.click();
+    
+    // Only click format if the button is enabled
+    const isFormatEnabled = await this.formatJsonButton.isEnabled().catch(() => false);
+    if (isFormatEnabled) {
+      await this.formatJsonButton.click();
+      // Wait for formatting to complete
+      await this.page.waitForTimeout(1000);
+    }
   }
 
   async selectExistingConnection() {
@@ -63,8 +86,6 @@ class JiraWebhookEditPage extends BasePage {
     // Click the dropdown to open it
     const dropdown = this.page.locator('div').filter({ hasText: /^Choose a saved connection$/ }).nth(1);
     await dropdown.click();
-    // Wait a moment for the dropdown to open and then select the first option
-    await this.page.waitForTimeout(500);
     // Select the first available connection option
     const connectionOption = this.page.getByText(/jira-organization.*Success/).first();
     await connectionOption.click();

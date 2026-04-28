@@ -48,6 +48,11 @@ public class KwToArcGISOrchestrator {
         }
 
         log.info("Fetched {} documents with locations", documents.size());
+        int totalLocationsBeforeTransform = documents.stream()
+                .mapToInt(doc -> doc.getLocations() != null ? doc.getLocations().size() : 0)
+                .sum();
+        log.info("Total location records across all documents (pre-transform): {}",
+                totalLocationsBeforeTransform);
 
         // Step 2: Transform documents to ArcGIS features with metadata tracking
         TransformationResult transformationResult = locationTransformer
@@ -97,6 +102,11 @@ public class KwToArcGISOrchestrator {
         ApplyEditsPartition partition = mappingResolver
                 .partitionFeaturesForAddOrUpdate(features, secretName, arcgisEndpointUrl);
 
+        log.info("After transform: features={}, transformFailures={}",
+                features.size(), totalLocationCount - features.size());
+        log.info("ArcGIS partition: adds={}, updates={}, total={}",
+                partition.adds().size(), partition.updates().size(),
+                partition.adds().size() + partition.updates().size());
         log.info("Partitioned into {} adds, {} updates",
                 partition.adds().size(), partition.updates().size());
 
