@@ -39,22 +39,25 @@ class JiraWebhookViewPage {
   // Navigate to specific tabs
   async clickWebhookDetailsTab() {
     // Wait for tab to be visible before clicking
-    await expect(this.webhookDetailsTab).toBeVisible();
+    await expect(this.webhookDetailsTab).toBeVisible({ timeout: 10000 });
     await this.webhookDetailsTab.click();
     await this.page.waitForLoadState('domcontentloaded'); // Wait for tab content to load
   }
 
   async clickSamplePayloadTab() {
+    await expect(this.samplePayloadTab).toBeVisible({ timeout: 10000 });
     await this.samplePayloadTab.click();
     await this.page.waitForLoadState('domcontentloaded');
   }
 
   async clickJiraFieldMappingTab() {
+    await expect(this.jiraFieldMappingTab).toBeVisible({ timeout: 10000 });
     await this.jiraFieldMappingTab.click();
     await this.page.waitForLoadState('domcontentloaded');
   }
 
   async clickWebhookHistoryTab() {
+    await expect(this.webhookHistoryTab).toBeVisible({ timeout: 10000 });
     await this.webhookHistoryTab.click();
     await this.page.waitForLoadState('domcontentloaded');
   }

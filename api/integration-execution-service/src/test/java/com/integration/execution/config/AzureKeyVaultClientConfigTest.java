@@ -124,4 +124,20 @@ class AzureKeyVaultClientConfigTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Azure Key Vault URL is required");
     }
+
+    @Test
+    void secretClient_withClientIdOnlyNoClientSecret_usesDefaultCredential() {
+        AzureKeyVaultProperties kvProperties = new AzureKeyVaultProperties();
+        kvProperties.setUrl("https://example-vault.vault.azure.net/");
+        kvProperties.setClientId("test-client-id");
+        // clientSecret and tenantId deliberately not set — covers short-circuit false of second &&
+
+        HttpClientProperties httpClientProperties = new HttpClientProperties();
+
+        AzureKeyVaultClientConfig config = new AzureKeyVaultClientConfig(kvProperties, httpClientProperties);
+
+        SecretClient client = config.secretClient();
+
+        assertThat(client).isNotNull();
+    }
 }

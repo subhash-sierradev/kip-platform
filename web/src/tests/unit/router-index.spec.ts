@@ -5,13 +5,19 @@ const roleGuardMock = vi.fn().mockImplementation((_roles: string[]) => {
   return vi.fn((_to, _from, next) => next());
 });
 
+const allRolesGuardMock = vi.fn().mockImplementation((_roles: string[]) => {
+  return vi.fn((_to, _from, next) => next());
+});
+
 vi.mock('@/router/guards', () => ({
   roleGuard: roleGuardMock,
+  allRolesGuard: allRolesGuardMock,
 }));
 
 describe('router/index', () => {
   beforeEach(() => {
     roleGuardMock.mockClear();
+    allRolesGuardMock.mockClear();
   });
 
   afterEach(async () => {
@@ -45,8 +51,7 @@ describe('router/index', () => {
     expect(calls).toContainEqual(['app_admin']);
     // confluence connection: must require only tenant_admin — not feature_confluence_integration
     const confluenceGuardCall = roleGuardMock.mock.calls.find(
-      ([roles]) =>
-        roles.length === 1 && roles[0] === 'tenant_admin'
+      ([roles]) => roles.length === 1 && roles[0] === 'tenant_admin'
     );
     expect(confluenceGuardCall).toBeDefined();
     expect(calls).not.toContainEqual(['tenant_admin', 'feature_confluence_integration']);

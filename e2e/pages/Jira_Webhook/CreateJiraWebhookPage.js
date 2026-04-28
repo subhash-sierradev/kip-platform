@@ -2,6 +2,7 @@
 import { expect } from '@playwright/test';
 import { BasePage } from '../Common_Files/BasePage.js';
 import { JiraWebhookConnectJiraPage } from './JiraWebhookConnectJiraPage.js';
+import { GenerateTestData } from '../../utils/GenerateTestData.js';
 
 class JiraWebhookCreatorPage extends BasePage {
   constructor(page) {
@@ -82,10 +83,17 @@ class JiraWebhookCreatorPage extends BasePage {
       // Complete Step 1: Fill webhook name and description
       await expect(this.createJiraWebhookHeading).toBeVisible();
       
-      // Click and fill webhook name for better reliability
+      // Clear and fill webhook name field with more robust approach
       await this.webhookNameInput.click();
+      await this.webhookNameInput.clear();
       await this.webhookNameInput.fill(testData.validWebhookName);
       
+      // Verify the field was filled
+      await expect(this.webhookNameInput).toHaveValue(testData.validWebhookName);
+      
+      // Clear and fill description field
+      await this.webhookDescriptionInput.click();
+      await this.webhookDescriptionInput.clear();
       await this.webhookDescriptionInput.fill(testData.validDescription);
       
       // Wait for the Next button to be enabled (validation may have debounce delay)
@@ -104,74 +112,29 @@ class JiraWebhookCreatorPage extends BasePage {
       // Verify step 2 completion
       await expect(this.checkmarkIcon).toHaveCount(2);
 
-      // Complete Step 3: Select and verify existing Jira connection
-
-      // Using enhanced logic with retry for failed connections
+      // Complete Step 3: Connect to Jira using the improved connection management
       await expect(this.connectJiraHeading).toBeVisible();
       
-      // Select 'Use Existing Connection' option (should be default)
-      await expect(this.useExistingConnectionRadio).toBeChecked();
-
-      // Select and verify existing Jira connection with retry logic for failed connections
-      let connectionVerified = false;
-      let retryCount = 0;
-      const maxRetries = 3;
+      // Generate a unique connection name for new connections
+      const testDataGenerator = new GenerateTestData();
+      const connectionName = testDataGenerator.generateJiraConnectionName();
       
-      while (!connectionVerified && retryCount < maxRetries) {
-        try {
-          // If this is a retry, try to select a connection with "pass" status
-          if (retryCount > 0) {
-            // Look for connections with "pass" or "verified" status
-            const passConnections = this.page.locator('[data-testid*="pass"], [title*="pass"], [class*="pass"], [class*="verified"], [data-status="active"]');
-            const passConnectionCount = await passConnections.count();
-            
-            if (passConnectionCount > 0) {
-              // Select the first available pass connection
-              await passConnections.first().click();
-            } else {
-              // If no pass connections found, use the regular selection method
-              await this.connectJiraPage.selectConnection();
-            }
-          } else {
-            // First attempt - use regular selection
-            await this.connectJiraPage.selectConnection();
-          }
-          
-          await this.connectJiraPage.waitForVerifyButtonEnabled();
-          await this.connectJiraPage.verifyConnection();
-          await expect(this.verifiedButton).toBeVisible({ timeout: 15000 });
-          
-          // If we reach here, verification was successful
-          connectionVerified = true;
-          
-        } catch (error) {
-          retryCount++;
-          
-          // If this is not the last retry, continue to next attempt
-          if (retryCount < maxRetries) {
-            continue;
-          }
-          
-          // If all retries failed, check if there are any active connections available
-          try {
-            const connectionCountText = await this.connectionCountText.textContent({ timeout: 3000 });
-            if (connectionCountText.includes('0 active')) {
-              throw new Error('No active connections available - test should be skipped');
-            }
-          } catch (e) {
-            throw new Error('No active connections available - test should be skipped');
-          }
-          
-          // Re-throw the original error after all retries failed
-          throw new Error(`Failed to verify connection after ${maxRetries} attempts. Last error: ${error.message}`);
+      // Use the smart connection management method
+      try {
+        const connectionResult = await this.connectJiraPage.manageJiraConnectionUpdated(connectionName);
+        
+        // Verify the next button is enabled after successful connection
+        await expect(this.nextButton).toBeEnabled({ timeout: 10000 });
+        
+        // Click 'Next' to proceed to step 4
+        await this.nextButton.click();
+      } catch (error) {
+        // If no active connections and can't create new ones, skip the test
+        if (error.message.includes('No active connections') || error.message.includes('0 active')) {
+          throw new Error('No active connections available - test should be skipped');
         }
+        throw error;
       }
-      
-      // Verify Next button becomes enabled after successful verification
-      await expect(this.connectJiraPage.ui.buttons.next).toBeEnabled();
-      
-      // Click 'Next' to proceed to step 4 - using the connectJiraPage method
-      await this.connectJiraPage.clickNext();
 
       // Complete Step 4: Map fields including project, issue type, summary, description, and custom fields
       await expect(this.mapFieldsHeading).toBeVisible();

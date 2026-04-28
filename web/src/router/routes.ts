@@ -52,4 +52,7 @@ export const ROUTES = {
 
   // Misc
   unauthorized: '/unauthorized',
+
+  // TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification
+  arcgisVerification: '/admin/arcgis-verification',
 } as const;

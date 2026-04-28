@@ -205,7 +205,7 @@ public class KwGraphqlClient {
                     """;
 
     private static final String SEARCH_DOCUMENTS_WITH_LOCATIONS_QUERY = """
-                    query ($type: String, $subType: String, $startTs: Int, $endTs: Int) {
+                    query ($type: String, $subType: String, $startTs: Int, $endTs: Int, $start: Int, $limit: Int) {
                         searchWithData(
                             type: $type
                             subType: $subType
@@ -213,6 +213,8 @@ public class KwGraphqlClient {
                             endCreatedTimestamp: $endTs
                             startUpdatedTimestamp: $startTs
                             endUpdatedTimestamp: $endTs
+                            start: $start
+                            limit: $limit
                         ) {
                             ... on Document {
                                 %s
@@ -263,6 +265,8 @@ public class KwGraphqlClient {
             queryMap.put("subType", itemSubtype);
             queryMap.put("startTs", startTs);
             queryMap.put("endTs", endTs);
+            queryMap.put("start", SEARCH_START);
+            queryMap.put("limit", SEARCH_LIMIT);
 
             log.info(
                 "KW GraphQL searchWithData request (type/subType mode): type={}, subType={}, "
@@ -433,18 +437,17 @@ public class KwGraphqlClient {
 
     private List<KwDocumentDto> parseDocumentLocationsResponse(final ClassicHttpResponse response) throws Exception {
         String responseBody = readBody(response);
-
         JsonNode root = objectMapper.readTree(responseBody);
         validateGraphQLResponse(root);
-
         JsonNode jsonNode = root.path("data").path("searchWithData");
         JsonNode normalized = normalizeSearchWithData(jsonNode);
-
         if (normalized != null && !normalized.isArray()) {
             log.error("Unexpected searchWithData shape: nodeType={}, fields={}",
                     normalized.getNodeType(), normalized.isObject() ? normalized.fieldNames() : "n/a");
             return List.of();
         }
+        log.info("RAW KW response: total nodes returned by searchWithData={}",
+                normalized != null ? normalized.size() : 0);
         return kwDocumentMapper.convertToDocumentDtos(normalized);
     }
 
@@ -454,24 +457,23 @@ public class KwGraphqlClient {
         String responseBody = readBody(response);
         JsonNode root = objectMapper.readTree(responseBody);
         validateGraphQLResponse(root);
-
         JsonNode searchWithDataNode = root.path("data").path("searchWithData");
         JsonNode normalized = normalizeSearchWithData(searchWithDataNode);
-
         if (normalized == null || !normalized.isArray()) {
             log.error("Unexpected dynamic searchWithData shape: nodeType={}",
                     normalized != null ? normalized.getNodeType() : "null");
             return List.of();
         }
-
+        log.info("RAW KW response: total nodes returned by searchWithData={}",
+                normalized.size());
         ArrayNode filtered = objectMapper.createArrayNode();
         for (JsonNode node : normalized) {
             if (dynamicFormDefinitionId.equals(node.path("dynamicFormDefinitionId").asText(null))) {
                 filtered.add(node);
             }
         }
-        log.info("dynamic searchWithData query: total={}, matchingDynamicFormDefinitionId={}",
-                normalized.size(), filtered.size());
+        log.info("After dynamicFormDefinitionId filter: rawTotal={}, matchingFormDef={}, dropped={}",
+                normalized.size(), filtered.size(), normalized.size() - filtered.size());
         return kwDocumentMapper.convertToDocumentDtos(filtered);
     }
 

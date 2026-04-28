@@ -221,6 +221,38 @@ class KwGraphqlClientTest {
     }
 
     @Test
+    void queryDocumentsWithLocations_dynamicDocumentType_startUpdatedTimestampIsWindowStart() throws Exception {
+        // startUpdatedTimestamp is set to the window start so only documents
+        // updated within the integration time window are fetched.
+        when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
+        when(classicHttpResponse.getCode()).thenReturn(200);
+        when(classicHttpResponse.getEntity()).thenReturn(new StringEntity(
+                "{\"data\":{\"searchWithData\":[{\"id\":\"doc-1\",\"dynamicFormDefinitionId\":\"dyn-123\"}]}}"
+        ));
+        mockHttpExecution(classicHttpResponse);
+        when(kwDocumentMapper.convertToDocumentDtos(any()))
+                .thenReturn(List.of(new KwDocumentDto("doc-1", "Doc", "DOCUMENT_FINAL_DYNAMIC", 1L, 2L)));
+
+        Instant windowStart = Instant.parse("2025-01-01T05:30:00Z");
+        ArcGISExecutionCommand cmd = ArcGISExecutionCommand.builder()
+                .itemType("DOCUMENT")
+                .itemSubtype("REPORT")
+                .dynamicDocumentType("dyn-123")
+                .windowStart(windowStart)
+                .windowEnd(Instant.parse("2026-04-20T16:12:00Z"))
+                .build();
+
+        client.queryDocumentsWithLocations(cmd);
+
+        ArgumentCaptor<HttpUriRequest> requestCaptor = ArgumentCaptor.forClass(HttpUriRequest.class);
+        verify(kwHttpClient).execute(requestCaptor.capture(), any(HttpClientResponseHandler.class));
+        String requestBody = EntityUtils.toString(((HttpPost) requestCaptor.getValue()).getEntity());
+
+        assertThat(requestBody).contains("\"startUpdatedTimestamp\":" + windowStart.getEpochSecond());
+        assertThat(requestBody).doesNotContain("\"startUpdatedTimestamp\":0");
+    }
+
+    @Test
     void queryDocumentsWithLocations_itemsContainer_normalizesAndMaps() throws Exception {
         when(tokenCache.getValidToken(KW_GRAPHQL_TOKEN_CACHE_KEY)).thenReturn("cached-token");
         when(classicHttpResponse.getCode()).thenReturn(200);

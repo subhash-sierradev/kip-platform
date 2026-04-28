@@ -3,7 +3,7 @@ import { createPinia } from 'pinia';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
-import { authGuard, roleGuard } from '@/router/guards';
+import { allRolesGuard, authGuard, roleGuard } from '@/router/guards';
 
 const keycloakMocks = vi.hoisted(() => ({
   loginIfNeededMock: vi.fn(),
@@ -37,6 +37,11 @@ function createTestRouter() {
         path: '/protected-role',
         component: { template: '<div>protected-role</div>' },
         beforeEnter: roleGuard(['tenant_admin']),
+      },
+      {
+        path: '/protected-all-roles',
+        component: { template: '<div>protected-all-roles</div>' },
+        beforeEnter: allRolesGuard(['tenant_admin', 'feature_arcgis_integration']),
       },
     ],
   });
@@ -140,5 +145,59 @@ describe('Route guards integration', () => {
 
     expect(router.currentRoute.value.path).toBe('/login');
     expect(wrapper.text()).toContain('login-page');
+  });
+
+  it('allows access through allRolesGuard when user has all required roles', async () => {
+    keycloakMocks.getUserInfoMock.mockReturnValue({
+      userName: 'UI Tester',
+      userMail: 'ui@example.com',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      roles: ['tenant_admin', 'feature_arcgis_integration'],
+    });
+
+    const { router, wrapper } = await mountGuardHarness();
+
+    await router.push('/protected-all-roles');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/protected-all-roles');
+    expect(wrapper.text()).toContain('protected-all-roles');
+  });
+
+  it('redirects to unauthorized through allRolesGuard when user has only tenant_admin', async () => {
+    keycloakMocks.getUserInfoMock.mockReturnValue({
+      userName: 'UI Tester',
+      userMail: 'ui@example.com',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      roles: ['tenant_admin'],
+    });
+
+    const { router, wrapper } = await mountGuardHarness();
+
+    await router.push('/protected-all-roles');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/unauthorized');
+    expect(wrapper.text()).toContain('unauthorized-page');
+  });
+
+  it('redirects to unauthorized through allRolesGuard when user has only feature_arcgis_integration', async () => {
+    keycloakMocks.getUserInfoMock.mockReturnValue({
+      userName: 'UI Tester',
+      userMail: 'ui@example.com',
+      tenantId: 'tenant-1',
+      userId: 'user-1',
+      roles: ['feature_arcgis_integration'],
+    });
+
+    const { router, wrapper } = await mountGuardHarness();
+
+    await router.push('/protected-all-roles');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/unauthorized');
+    expect(wrapper.text()).toContain('unauthorized-page');
   });
 });

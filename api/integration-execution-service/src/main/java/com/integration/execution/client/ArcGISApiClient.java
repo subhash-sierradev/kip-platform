@@ -108,22 +108,21 @@ public class ArcGISApiClient {
 
     public JsonNode queryFeaturesWithWhere(String secretName, String whereClause) {
         IntegrationSecret secret = vaultService.getSecret(secretName);
-
-        URI uri = UriComponentsBuilder
-                .fromUriString(secret.getBaseUrl())
-                .pathSegment("0", "query")
-                .queryParam("f", "json")
-                .queryParam("where", whereClause)
-                .queryParam("outFields",
-                        ARCGIS_FIELD_OBJECTID + "," + ARCGIS_FIELD_EXTERNAL_LOCATION_ID)
-                .queryParam("returnGeometry", false)
-                .queryParam("token", getAccessToken(secretName))
-                .build()
-                .encode()
-                .toUri();
-
-        return execute(new HttpGet(uri), this::readArcGisJson,
-                "ArcGIS query failed");
+        // Use POST to avoid HTTP 414 / 404 when the IN-clause is large (many UUIDs)
+        String url = secret.getBaseUrl().replaceAll("/?$", "") + "/0/query";
+        List<NameValuePair> params = List.of(
+                new BasicNameValuePair("f", "json"),
+                new BasicNameValuePair("where", whereClause),
+                new BasicNameValuePair("outFields",
+                        ARCGIS_FIELD_OBJECTID + "," + ARCGIS_FIELD_EXTERNAL_LOCATION_ID),
+                new BasicNameValuePair("returnGeometry", "false"),
+                new BasicNameValuePair("token", getAccessToken(secretName))
+        );
+        HttpPost post = new HttpPost(url);
+        post.setEntity(new UrlEncodedFormEntity(params, StandardCharsets.UTF_8));
+        post.setHeader(HttpHeaders.CONTENT_TYPE,
+                ContentType.APPLICATION_FORM_URLENCODED.getMimeType());
+        return execute(post, this::readArcGisJson, "ArcGIS query failed");
     }
 
     public JsonNode applyEditsWithPartition(String secretName, String payloadJson) {
