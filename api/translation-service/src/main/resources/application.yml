@@ -37,11 +37,17 @@ management:
 # ─── Ollama LLM Sidecar ──────────────────────────────────────────────────────
 # Default values are suitable for a local developer machine (Ollama on localhost).
 # The dev profile overrides base-url to the Docker service name 'ollama'.
+#
+# Tuning guidance for slow hardware (no GPU):
+#   timeout-seconds  — set to 300+ so Mistral 7B can finish a 2 000-char batch
+#   num-predict      — cap token output (2048 ≈ 1 500 translated words) to
+#                      prevent runaway generation and bound worst-case latency
 ollama:
   base-url: http://localhost:11434
   model: mistral
-  timeout-seconds: 120
+  timeout-seconds: 300
   connect-timeout-seconds: 10
+  num-predict: 2048
 
 logging:
   level:

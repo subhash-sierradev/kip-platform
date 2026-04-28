@@ -23,10 +23,14 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -37,51 +41,24 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
  * Parameterized end-to-end pipeline test for multi-language Confluence reports.
  *
- * <h2>What this tests</h2>
- * <p>The complete pipeline without Spring context or Docker:</p>
- * <pre>
- *   KwGraphQLService (mock)
- *        ↓  monitoring docs
- *   ConfluencePageRenderer (real FreeMarker)
- *        ↓  English XHTML
- *   ConfluenceTranslationStep (real)
- *        ↓  calls Translation API (WireMock)
- *        ↓  translated content
- *   KwToConfluenceOrchestrator
- *        ↓
- *   ConfluenceApiClient.createOrUpdatePage (mock)
- *        ↓
- *   ConfluenceJobExecutionResult
- * </pre>
- *
- * <h2>Languages tested</h2>
- * <ul>
- *   <li><b>Japanese (ja)</b> — multi-byte CJK characters</li>
- *   <li><b>German (de)</b> — European with umlauts</li>
- *   <li><b>Russian (ru)</b> — Cyrillic script</li>
- *   <li><b>Arabic (ar)</b> — right-to-left script</li>
- *   <li><b>Same-language passthrough</b> — sourceLanguage == targetLanguage → no API call</li>
- *   <li><b>Translation API unavailable</b> — graceful fallback to English</li>
- * </ul>
- *
- * <h2>Running the test</h2>
- * <pre>
- *   # From api/ directory
- *   ./gradlew :integration-execution-service:test \
- *     --tests "*.ConfluenceMultiLanguageReportTest"
- * </pre>
+ * <p>Tests the full pipeline, using real FreeMarker and jsoup-based XHTML translation.
+ * Content-verification tests use a mock {@link TranslationApiClient} to return
+ * properly segmented responses. WireMock is still used for HTTP-error fallback tests.</p>
  */
 class ConfluenceMultiLanguageReportTest {
 
     // ── WireMock server (shared across all parameterized cases) ─────────────
     private static WireMockServer translationApiMock;
     private static final String TRANSLATE_PATH = "/api/translate";
+    private static final Pattern SEG_SPLIT =
+            Pattern.compile(Pattern.quote("\n" + XhtmlTextTranslator.SEG + "\n"));
 
     // ── Sample monitoring document ──────────────────────────────────────────
     private static final KwMonitoringDocument SAMPLE_DOC = buildSampleDocument();
@@ -90,6 +67,7 @@ class ConfluenceMultiLanguageReportTest {
     private KwGraphQLService kwGraphQLService;
     private ConfluenceApiClient confluenceApiClient;
     private KwToConfluenceOrchestrator orchestrator;
+    private TranslationApiClient mockTranslationApiClient;
 
     // ── Captured publish requests ───────────────────────────────────────────
     private ConfluencePublishRequest capturedPublishRequest;
@@ -114,19 +92,19 @@ class ConfluenceMultiLanguageReportTest {
     void setUp() {
         kwGraphQLService = mock(KwGraphQLService.class);
         confluenceApiClient = mock(ConfluenceApiClient.class);
+        mockTranslationApiClient = mock(TranslationApiClient.class);
 
-        // Real FreeMarker renderer (uses classpath template)
         AppConfig appConfig = new AppConfig();
         ConfluencePageRenderer renderer = new ConfluencePageRenderer(appConfig.freemarkerConfiguration());
 
-        // Real translation step pointing at WireMock
         TranslationApiProperties props = new TranslationApiProperties();
         props.setBaseUrl("http://localhost:" + translationApiMock.port());
         props.setEnabled(true);
         props.setTimeoutSeconds(10);
 
-        TranslationApiClient apiClient = new TranslationApiClient(props, new ObjectMapper());
-        ConfluenceTranslationStep translationStep = new ConfluenceTranslationStep(props, apiClient);
+        // Real XhtmlTextTranslator backed by a mock TranslationApiClient
+        XhtmlTextTranslator xhtmlTextTranslator = new XhtmlTextTranslator(mockTranslationApiClient, props);
+        ConfluenceTranslationStep translationStep = new ConfluenceTranslationStep(props, xhtmlTextTranslator);
 
         orchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService, renderer, confluenceApiClient, translationStep);
@@ -175,8 +153,8 @@ class ConfluenceMultiLanguageReportTest {
             final String targetLanguage,
             final String translatedOutput) {
 
-        // ── Arrange ─────────────────────────────────────────────────────────
-        stubTranslationApi(targetLanguage, translatedOutput);
+        // Stub: for each batch, return the translatedOutput repeated for each segment
+        stubContentTranslation(targetLanguage, translatedOutput);
         stubKwService();
 
         ConfluenceExecutionCommand cmd = buildCommand("en", List.of(targetLanguage));
@@ -188,7 +166,10 @@ class ConfluenceMultiLanguageReportTest {
         assertThat(result.errorMessage()).as("job must not fail").isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
 
-        // The translated content must have been pushed to Confluence
+        // Two pages published: English + target language
+        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
+
+        // capturedPublishRequest is the last call = translated page
         assertThat(capturedPublishRequest).isNotNull();
         assertThat(capturedPublishRequest.body())
                 .as("page body must contain the translated snippet for %s", displayName)
@@ -214,17 +195,16 @@ class ConfluenceMultiLanguageReportTest {
         stubKwService();
         ConfluenceExecutionCommand cmd = buildCommand(sourceLanguage, languageCodes);
 
-        translationApiMock.resetAll(); // no stubs — any call would fail
-
+        // ── Act ──────────────────────────────────────────────────────────────
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
+        // ── Assert ───────────────────────────────────────────────────────────
         assertThat(result.errorMessage()).isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
 
-        // Translation API must NOT have been called
-        assertThat(translationApiMock.getAllServeEvents())
-                .as("Translation API must not be called when source == target")
-                .isEmpty();
+        // No translation should have been requested (mock verifies 0 interactions)
+        verify(mockTranslationApiClient, org.mockito.Mockito.never())
+                .translate(anyString(), anyString(), anyString());
     }
 
     static Stream<Arguments> sameLanguageScenarios() {
@@ -246,29 +226,43 @@ class ConfluenceMultiLanguageReportTest {
     void pipeline_translationApiFails_fallsBackToEnglishAndJobSucceeds(
             final int httpStatus, final String desc) {
 
-        // Stub Translation API to return an error
+        // Use a real TranslationApiClient pointing at WireMock for HTTP error testing
+        TranslationApiProperties wireMockProps = new TranslationApiProperties();
+        wireMockProps.setBaseUrl("http://localhost:" + translationApiMock.port());
+        wireMockProps.setEnabled(true);
+        wireMockProps.setTimeoutSeconds(10);
+
         translationApiMock.resetAll();
         translationApiMock.stubFor(post(urlEqualTo(TRANSLATE_PATH))
                 .willReturn(aResponse().withStatus(httpStatus).withBody("error")));
 
+        TranslationApiClient realApiClient = new TranslationApiClient(wireMockProps, new ObjectMapper());
+        XhtmlTextTranslator realTranslator = new XhtmlTextTranslator(realApiClient, wireMockProps);
+        ConfluenceTranslationStep errorStep = new ConfluenceTranslationStep(wireMockProps, realTranslator);
+
+        AppConfig appConfig = new AppConfig();
+        KwToConfluenceOrchestrator errorOrchestrator = new KwToConfluenceOrchestrator(
+                kwGraphQLService,
+                new ConfluencePageRenderer(appConfig.freemarkerConfiguration()),
+                confluenceApiClient,
+                errorStep);
+
         stubKwService();
         ConfluenceExecutionCommand cmd = buildCommand("en", List.of("ja"));
 
-        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+        // ── Act ──────────────────────────────────────────────────────────────
+        ConfluenceJobExecutionResult result = errorOrchestrator.processExecution(cmd);
 
-        // Job must succeed even though translation failed
+        // ── Assert ───────────────────────────────────────────────────────────
         assertThat(result.errorMessage())
                 .as("job must not fail when Translation API returns %s", httpStatus)
                 .isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
 
-        // Confluence page must still have been published (with original English content)
+        // English page + Japanese page (fallback) = 2 calls
+        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
         assertThat(capturedPublishRequest).isNotNull();
-        assertThat(capturedPublishRequest.body())
-                .as("fallback content must be English XHTML")
-                .isNotBlank();
-
-        verify(confluenceApiClient).createOrUpdatePage(any());
+        assertThat(capturedPublishRequest.body()).isNotBlank();
     }
 
     static Stream<Arguments> translationApiErrorScenarios() {
@@ -283,14 +277,14 @@ class ConfluenceMultiLanguageReportTest {
     @org.junit.jupiter.api.Test
     @DisplayName("pipeline falls back to English when Translation Service is unreachable")
     void pipeline_translationServiceUnreachable_fallsBackToEnglishAndJobSucceeds() {
-        // Point the translation step at a port nothing is listening on
         TranslationApiProperties offlineProps = new TranslationApiProperties();
         offlineProps.setBaseUrl("http://localhost:1"); // refused
         offlineProps.setEnabled(true);
         offlineProps.setTimeoutSeconds(2);
 
         TranslationApiClient offlineClient = new TranslationApiClient(offlineProps, new ObjectMapper());
-        ConfluenceTranslationStep offlineStep = new ConfluenceTranslationStep(offlineProps, offlineClient);
+        XhtmlTextTranslator offlineTranslator = new XhtmlTextTranslator(offlineClient, offlineProps);
+        ConfluenceTranslationStep offlineStep = new ConfluenceTranslationStep(offlineProps, offlineTranslator);
 
         AppConfig appConfig = new AppConfig();
         KwToConfluenceOrchestrator offlineOrchestrator = new KwToConfluenceOrchestrator(
@@ -306,26 +300,28 @@ class ConfluenceMultiLanguageReportTest {
 
         assertThat(result.errorMessage()).isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
-        verify(confluenceApiClient).createOrUpdatePage(any());
+        // English page + German fallback page = 2 calls
+        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // Multi-code list: first non-source language is picked as target
+    // Multi-code list
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @org.junit.jupiter.api.Test
-    @DisplayName("when languageCodes contains source + target, first non-source code is used")
-    void pipeline_mixedLanguageCodeList_picksFirstNonSourceAsTarget() {
+    @DisplayName("when languageCodes contains source + target, separate pages are published")
+    void pipeline_mixedLanguageCodeList_publishesBothPages() {
         String japaneseContent = "日本語: 今日の監視レポート";
-        stubTranslationApi("ja", japaneseContent);
+        stubContentTranslation("ja", japaneseContent);
         stubKwService();
 
-        // languageCodes = ["en", "ja"] — "en" is same as source, "ja" is the target
         ConfluenceExecutionCommand cmd = buildCommand("en", List.of("en", "ja"));
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         assertThat(result.errorMessage()).isNull();
+        assertThat(result.publishedPages()).hasSize(2);
+        // Last captured is the Japanese page
         assertThat(capturedPublishRequest.body()).contains(japaneseContent);
     }
 
@@ -333,23 +329,23 @@ class ConfluenceMultiLanguageReportTest {
     // Helpers
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    /** Stubs the WireMock Translation API endpoint for the given language. */
-    private void stubTranslationApi(final String languageCode, final String translatedValue) {
-        translationApiMock.stubFor(post(urlEqualTo(TRANSLATE_PATH))
-                .willReturn(aResponse()
-                        .withStatus(200)
-                        .withHeader("Content-Type", "application/json; charset=UTF-8")
-                        .withBody(String.format("""
-                                {
-                                  "translationResults": [
-                                    {
-                                      "translatedTimestamp": 1776694594,
-                                      "languageCode": "%s",
-                                      "value": "%s"
-                                    }
-                                  ]
-                                }
-                                """, languageCode, escapeJson(translatedValue)))));
+    /**
+     * Stubs mockTranslationApiClient so that for any batch request for {@code targetLanguage},
+     * the response contains the correct number of {@link XhtmlTextTranslator#SEG}-separated
+     * segments, each filled with {@code translatedValue}. This lets the XhtmlTextTranslator
+     * successfully reassemble the translated XHTML.
+     */
+    private void stubContentTranslation(final String targetLanguage, final String translatedValue) {
+        when(mockTranslationApiClient.translate(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(targetLanguage)))
+                .thenAnswer(inv -> {
+                    String batch = (String) inv.getArgument(0);
+                    String[] segments = SEG_SPLIT.split(batch, -1);
+                    // Return translatedValue for every segment, joined with <<<SEG>>>
+                    String joinedResponse = Arrays.stream(segments)
+                            .map(ignored -> translatedValue)
+                            .collect(Collectors.joining("\n" + XhtmlTextTranslator.SEG + "\n"));
+                    return Optional.of(joinedResponse);
+                });
     }
 
     private void stubKwService() {
@@ -393,11 +389,6 @@ class ConfluenceMultiLanguageReportTest {
                 .updatedTimestamp(1_700_001_000L)
                 .attributes(Map.of("dynamicData", dynData))
                 .build();
-    }
-
-    /** Minimal JSON escaping for test stub bodies. */
-    private static String escapeJson(final String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
 

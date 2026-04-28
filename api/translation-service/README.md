@@ -190,8 +190,9 @@ All properties are under the `ollama.*` namespace:
 |---------------------------------|----------------------------|-----------------------------------------|
 | `ollama.base-url`               | `http://localhost:11434`   | URL of the Ollama REST API              |
 | `ollama.model`                  | `mistral`                  | Ollama model tag to use                 |
-| `ollama.timeout-seconds`        | `120`                      | Max seconds to wait for generation      |
+| `ollama.timeout-seconds`        | `300`                      | Max seconds to wait for generation      |
 | `ollama.connect-timeout-seconds`| `10`                       | TCP connect timeout                     |
+| `ollama.num-predict`            | `2048`                     | Max tokens to generate (`-1` = unlimited) |
 
 Override via environment variables in Docker Compose:
 
@@ -199,6 +200,8 @@ Override via environment variables in Docker Compose:
 environment:
   - OLLAMA_BASE_URL=http://my-ollama-host:11434
   - OLLAMA_MODEL=llama3
+  - OLLAMA_TIMEOUT_SECONDS=300
+  - OLLAMA_NUM_PREDICT=2048
 ```
 
 ### Switching Models
@@ -285,6 +288,6 @@ public class AzureTranslationService implements TranslationService {
 
 - **Not production-ready**: no authentication; intended for dev/test only.
 - **Model quality**: Mistral translation quality varies by language pair. For high-quality output use a dedicated translation service.
-- **Latency**: LLM inference is slow (~5–30 s per language). Caching mitigates this for repeated requests.
+- **Latency**: LLM inference is slow (~30–300 s per batch on CPU-only hardware). Caching mitigates this for repeated requests. Use `ollama.num-predict` to cap token output and bound worst-case latency.
 - **Memory**: Ollama requires ~6–8 GB RAM to run Mistral. Ensure Docker has sufficient memory allocated.
 

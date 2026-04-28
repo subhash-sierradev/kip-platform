@@ -30,3 +30,18 @@ logging:
     org.springframework.context.annotation: WARN
   pattern:
     console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+
+# ─── Translation API — Ollama dev overrides ──────────────────────────────────
+# The translation-service (port 8083) uses Ollama internally with a 300 s
+# inference timeout (ollama.timeout-seconds=300 in that service's config).
+# IES must wait longer than that — set to 360 s to guarantee Ollama finishes
+# before the IES-side HTTP socket times out.
+#
+# The default max-chars of 45 000 is too large for Ollama: a 45 K-char prompt
+# with ~1 500 SEG separators overwhelms the model context window and always
+# times out.  2 000 chars (~300 words) is a manageable batch for local
+# inference; the model can generate ~500 output tokens well within 5 minutes.
+translation:
+  api:
+    timeout-seconds: 360   # > ollama.timeout-seconds (300) — let Ollama finish first
+    max-chars: 2000        # ~300 words per batch — LLM-manageable for local inference

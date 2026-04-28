@@ -78,6 +78,7 @@ public class ConfluenceIntegrationService {
             cronScheduleService.buildCron(schedule);
             ConfluenceIntegration integration = confluenceIntegrationMapper.toEntity(request);
             integration.setLanguages(resolveLanguages(request.getLanguageCodes()));
+            integration.setSourceLanguage(resolveSourceLanguage(request.getSourceLanguage()));
             integration.setSchedule(schedule);
             integration.setTenantId(tenantId);
             integration.setCreatedBy(userId);
@@ -119,6 +120,7 @@ public class ConfluenceIntegrationService {
 
             confluenceIntegrationMapper.updateEntity(request, existing);
             existing.setLanguages(resolveLanguages(request.getLanguageCodes()));
+            existing.setSourceLanguage(resolveSourceLanguage(request.getSourceLanguage()));
             existing.setLastModifiedBy(userId);
             integrationSchedulerMapper.updateEntity(request.getSchedule(), existing.getSchedule());
             cronScheduleService.buildCron(existing.getSchedule());
@@ -341,6 +343,13 @@ public class ConfluenceIntegrationService {
                     + languageCodes);
         }
         return resolvedLanguages;
+    }
+
+    private String resolveSourceLanguage(String sourceLanguage) {
+        if (sourceLanguage == null || sourceLanguage.isBlank()) {
+            return "en";
+        }
+        return sourceLanguage.trim().toLowerCase();
     }
 
     public String getConfluenceSpaceLabel(UUID connectionId, String tenantId, String spaceKey) {

@@ -98,8 +98,9 @@ services:
       - SPRING_PROFILES_ACTIVE=dev
       - OLLAMA_BASE_URL=http://ollama:11434
       - OLLAMA_MODEL=mistral
-      - OLLAMA_TIMEOUT_SECONDS=120
+      - OLLAMA_TIMEOUT_SECONDS=300
       - OLLAMA_CONNECT_TIMEOUT_SECONDS=10
+      - OLLAMA_NUM_PREDICT=2048
       # Ensure the JVM outputs UTF-8 regardless of the host locale
       - JAVA_TOOL_OPTIONS=-Dfile.encoding=UTF-8
     depends_on:

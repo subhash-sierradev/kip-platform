@@ -14,6 +14,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 
 /**
  * Low-level HTTP client for the <a href="https://ollama.com">Ollama</a> REST API.
@@ -68,6 +69,7 @@ public class OllamaClient {
                 .model(ollamaProperties.getModel())
                 .prompt(prompt)
                 .stream(false)
+                .options(Map.of("num_predict", ollamaProperties.getNumPredict()))
                 .build();
 
         HttpHeaders headers = new HttpHeaders();

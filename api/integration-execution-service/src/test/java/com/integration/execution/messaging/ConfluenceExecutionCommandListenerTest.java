@@ -8,6 +8,7 @@ import com.integration.execution.contract.model.enums.JobExecutionStatus;
 import com.integration.execution.contract.queue.QueueNames;
 import com.integration.execution.mapper.ConfluenceExecutionMapper;
 import com.integration.execution.model.ConfluenceJobExecutionResult;
+import com.integration.execution.model.ConfluenceJobExecutionResult.PublishedPage;
 import com.integration.execution.service.processor.KwToConfluenceOrchestrator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +54,7 @@ class ConfluenceExecutionCommandListenerTest {
     void handleExecutionCommand_success_publishesSuccessResultAndCompletionNotification() {
         ConfluenceExecutionCommand command = buildCommand("Integration A", "tenant-1");
         ConfluenceJobExecutionResult orchResult = ConfluenceJobExecutionResult.success(
-                5, "https://confluence.example.com/page/123", "123");
+                5, List.of(new PublishedPage("en", "https://confluence.example.com/page/123", "123")));
         ConfluenceExecutionResult mappedResult = buildMappedResult(
                 command.getJobExecutionId(), JobExecutionStatus.SUCCESS, null, 5);
 
@@ -105,7 +107,8 @@ class ConfluenceExecutionCommandListenerTest {
     @Test
     void handleExecutionCommand_nullIntegrationName_usesEmptyStringInNotification() {
         ConfluenceExecutionCommand command = buildCommandNullName("tenant-3");
-        ConfluenceJobExecutionResult orchResult = ConfluenceJobExecutionResult.success(2, "url", "456");
+        ConfluenceJobExecutionResult orchResult = ConfluenceJobExecutionResult.success(
+                2, List.of(new PublishedPage("en", "url", "456")));
         ConfluenceExecutionResult mappedResult = buildMappedResult(
                 command.getJobExecutionId(), JobExecutionStatus.SUCCESS, null, 2);
 

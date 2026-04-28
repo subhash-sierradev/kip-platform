@@ -1,6 +1,5 @@
 package com.integration.execution.service.processor;
 
-import com.integration.execution.client.TranslationApiClient;
 import com.integration.execution.config.properties.TranslationApiProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,8 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -19,15 +18,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for {@link ConfluenceTranslationStep}.
- *
- * <p>Covers the four acceptance-criteria scenarios:
- * <ol>
- *   <li>Translation called and result used when source ≠ target language.</li>
- *   <li>No API call when source language equals target language.</li>
- *   <li>Fallback to original content when the Translation API throws / returns empty.</li>
- *   <li>Translation globally disabled via {@code translation.api.enabled=false}.</li>
- * </ol>
- * </p>
+ * Covers the skip-logic layer; XHTML DOM manipulation is tested in XhtmlTextTranslatorTest.
  */
 @ExtendWith(MockitoExtension.class)
 class ConfluenceTranslationStepTest {
@@ -40,56 +31,52 @@ class ConfluenceTranslationStepTest {
     private TranslationApiProperties translationApiProperties;
 
     @Mock
-    private TranslationApiClient translationApiClient;
+    private XhtmlTextTranslator xhtmlTextTranslator;
 
     private ConfluenceTranslationStep step;
 
     @BeforeEach
     void setUp() {
-        step = new ConfluenceTranslationStep(translationApiProperties, translationApiClient);
+        step = new ConfluenceTranslationStep(translationApiProperties, xhtmlTextTranslator);
     }
 
-    // -----------------------------------------------------------------------
-    // translate() — direct method
-    // -----------------------------------------------------------------------
-
     @Test
-    void translate_whenLanguagesDiffer_callsApiAndReturnsTranslatedContent() {
+    void translate_whenLanguagesDiffer_delegatesToXhtmlTranslator() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "ja"))
-                .thenReturn(Optional.of(JAPANESE_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "ja"))
+                .thenReturn(JAPANESE_TRANSLATED);
 
         String result = step.translate(ENGLISH_CONTENT, "en", "ja");
 
         assertThat(result).isEqualTo(JAPANESE_TRANSLATED);
-        verify(translationApiClient).translate(ENGLISH_CONTENT, "en", "ja");
+        verify(xhtmlTextTranslator).translateXhtml(ENGLISH_CONTENT, "en", "ja");
     }
 
     @Test
-    void translate_whenTargetEqualsSource_skipsApiCall() {
+    void translate_whenTargetEqualsSource_skipsXhtmlTranslator() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
 
         String result = step.translate(ENGLISH_CONTENT, "en", "en");
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
-    void translate_whenTargetIsNull_skipsApiCall() {
+    void translate_whenTargetIsNull_skipsXhtmlTranslator() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
 
         String result = step.translate(ENGLISH_CONTENT, "en", null);
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
-    void translate_whenApiReturnsEmpty_fallsBackToOriginalContent() {
+    void translate_whenXhtmlTranslatorReturnsFallback_resultIsOriginal() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "de"))
-                .thenReturn(Optional.empty());
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "de"))
+                .thenReturn(ENGLISH_CONTENT);
 
         String result = step.translate(ENGLISH_CONTENT, "en", "de");
 
@@ -97,33 +84,33 @@ class ConfluenceTranslationStepTest {
     }
 
     @Test
-    void translate_whenGloballyDisabled_skipsApiCallAndReturnsOriginal() {
+    void translate_whenGloballyDisabled_skipsXhtmlTranslatorAndReturnsOriginal() {
         when(translationApiProperties.isEnabled()).thenReturn(false);
 
         String result = step.translate(ENGLISH_CONTENT, "en", "ja");
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
-    void translate_whenContentIsBlank_returnsBlankWithoutApiCall() {
+    void translate_whenContentIsBlank_returnsBlankWithoutDelegating() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
 
         String result = step.translate("   ", "en", "ja");
 
         assertThat(result).isEqualTo("   ");
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
-    void translate_whenContentIsNull_returnsNullWithoutApiCall() {
+    void translate_whenContentIsNull_returnsNullWithoutDelegating() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
 
         String result = step.translate(null, "en", "ja");
 
         assertThat(result).isNull();
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -133,60 +120,53 @@ class ConfluenceTranslationStepTest {
         String result = step.translate(ENGLISH_CONTENT, "en", "EN");
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
     void translate_whenSourceLanguageIsNull_defaultsToEnglish() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "de"))
-                .thenReturn(Optional.of(GERMAN_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "de"))
+                .thenReturn(GERMAN_TRANSLATED);
 
-        // null sourceLanguage must default to "en"
         String result = step.translate(ENGLISH_CONTENT, null, "de");
 
         assertThat(result).isEqualTo(GERMAN_TRANSLATED);
-        verify(translationApiClient).translate(ENGLISH_CONTENT, "en", "de");
+        verify(xhtmlTextTranslator).translateXhtml(ENGLISH_CONTENT, "en", "de");
     }
 
     @Test
     void translate_whenSourceLanguageIsBlank_defaultsToEnglish() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "de"))
-                .thenReturn(Optional.of(GERMAN_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "de"))
+                .thenReturn(GERMAN_TRANSLATED);
 
-        // blank sourceLanguage must default to "en"
         String result = step.translate(ENGLISH_CONTENT, "   ", "de");
 
         assertThat(result).isEqualTo(GERMAN_TRANSLATED);
-        verify(translationApiClient).translate(ENGLISH_CONTENT, "en", "de");
+        verify(xhtmlTextTranslator).translateXhtml(ENGLISH_CONTENT, "en", "de");
     }
 
     @Test
-    void translate_whenTargetLanguageIsBlank_skipsApiCall() {
+    void translate_whenTargetLanguageIsBlank_skipsXhtmlTranslator() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
 
         String result = step.translate(ENGLISH_CONTENT, "en", "  ");
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
-
-    // -----------------------------------------------------------------------
-    // translateIfNeeded() — entry point from the orchestrator
-    // -----------------------------------------------------------------------
 
     @Test
     void translateIfNeeded_picksFirstNonSourceLanguageCode() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "ja"))
-                .thenReturn(Optional.of(JAPANESE_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "ja"))
+                .thenReturn(JAPANESE_TRANSLATED);
 
-        // languageCodes contains "en" (same as source) and "ja" (target)
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "en", List.of("en", "ja"));
 
         assertThat(result).isEqualTo(JAPANESE_TRANSLATED);
-        verify(translationApiClient).translate(ENGLISH_CONTENT, "en", "ja");
+        verify(xhtmlTextTranslator).translateXhtml(ENGLISH_CONTENT, "en", "ja");
     }
 
     @Test
@@ -196,7 +176,7 @@ class ConfluenceTranslationStepTest {
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "en", List.of("en"));
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -206,7 +186,7 @@ class ConfluenceTranslationStepTest {
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "en", List.of());
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
@@ -216,14 +196,14 @@ class ConfluenceTranslationStepTest {
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "en", null);
 
         assertThat(result).isEqualTo(ENGLISH_CONTENT);
-        verify(translationApiClient, never()).translate(anyString(), anyString(), anyString());
+        verify(xhtmlTextTranslator, never()).translateXhtml(anyString(), anyString(), anyString());
     }
 
     @Test
     void translateIfNeeded_whenSourceLanguageIsNull_defaultsToEnglish() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "de"))
-                .thenReturn(Optional.of(GERMAN_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "de"))
+                .thenReturn(GERMAN_TRANSLATED);
 
         String result = step.translateIfNeeded(ENGLISH_CONTENT, null, List.of("de"));
 
@@ -233,8 +213,8 @@ class ConfluenceTranslationStepTest {
     @Test
     void translateIfNeeded_whenSourceLanguageIsBlank_defaultsToEnglish() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "ja"))
-                .thenReturn(Optional.of(JAPANESE_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "ja"))
+                .thenReturn(JAPANESE_TRANSLATED);
 
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "  ", List.of("ja"));
 
@@ -244,12 +224,11 @@ class ConfluenceTranslationStepTest {
     @Test
     void translateIfNeeded_listWithNullAndBlankCodes_skipsInvalidEntries() {
         when(translationApiProperties.isEnabled()).thenReturn(true);
-        when(translationApiClient.translate(ENGLISH_CONTENT, "en", "de"))
-                .thenReturn(Optional.of(GERMAN_TRANSLATED));
+        when(xhtmlTextTranslator.translateXhtml(ENGLISH_CONTENT, "en", "de"))
+                .thenReturn(GERMAN_TRANSLATED);
 
-        // null and blank codes should be skipped; "de" should be picked as the target
         String result = step.translateIfNeeded(ENGLISH_CONTENT, "en",
-                java.util.Arrays.asList(null, "  ", "de"));
+                Arrays.asList(null, "  ", "de"));
 
         assertThat(result).isEqualTo(GERMAN_TRANSLATED);
     }

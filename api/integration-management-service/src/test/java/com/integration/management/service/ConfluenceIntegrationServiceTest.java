@@ -1318,4 +1318,87 @@ class ConfluenceIntegrationServiceTest {
                 .isInstanceOf(IntegrationPersistenceException.class)
                 .hasMessageContaining("data integrity");
     }
+
+    // -------------------------------------------------------------------------
+    // resolveSourceLanguage branch-coverage tests
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("create - null sourceLanguage defaults to 'en'")
+    void create_nullSourceLanguage_defaultsToEn() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+        request.setSourceLanguage(null); // explicitly null
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(UUID.randomUUID());
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(integration);
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(integration.getId().toString(), "Test"));
+
+        service.create(request, "tenant1", "user1");
+
+        // sourceLanguage should have been set to "en"
+        assertThat(integration.getSourceLanguage()).isEqualTo("en");
+    }
+
+    @Test
+    @DisplayName("create - blank sourceLanguage defaults to 'en'")
+    void create_blankSourceLanguage_defaultsToEn() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+        request.setSourceLanguage("   "); // blank
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(UUID.randomUUID());
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(integration);
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(integration.getId().toString(), "Test"));
+
+        service.create(request, "tenant1", "user1");
+
+        assertThat(integration.getSourceLanguage()).isEqualTo("en");
+    }
+
+    @Test
+    @DisplayName("create - uppercase sourceLanguage is normalized to lowercase")
+    void create_uppercaseSourceLanguage_normalizedToLowercase() {
+        ConfluenceIntegrationCreateUpdateRequest request = new ConfluenceIntegrationCreateUpdateRequest();
+        request.setLanguageCodes(List.of("en-US"));
+        request.setSchedule(new IntegrationScheduleRequest());
+        request.setSourceLanguage("  JA  "); // uppercase with spaces
+
+        Language lang = new Language();
+        lang.setCode("en-US");
+
+        ConfluenceIntegration integration = new ConfluenceIntegration();
+        integration.setId(UUID.randomUUID());
+
+        when(integrationSchedulerMapper.toEntity(any())).thenReturn(new IntegrationSchedule());
+        when(confluenceIntegrationMapper.toEntity(any())).thenReturn(integration);
+        when(masterDataService.getAllActiveLanguages()).thenReturn(List.of(lang));
+        when(confluenceIntegrationRepository.save(any())).thenReturn(integration);
+        when(confluenceIntegrationMapper.toCreationResponse(any()))
+                .thenReturn(new CreationResponse(integration.getId().toString(), "Test"));
+
+        service.create(request, "tenant1", "user1");
+
+        assertThat(integration.getSourceLanguage()).isEqualTo("ja");
+    }
 }

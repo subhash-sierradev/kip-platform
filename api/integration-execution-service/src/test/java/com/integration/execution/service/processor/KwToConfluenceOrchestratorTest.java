@@ -19,6 +19,7 @@ import org.mockito.quality.Strictness;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,10 +27,10 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,14 +57,13 @@ class KwToConfluenceOrchestratorTest {
         orchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService, confluencePageRenderer, confluenceApiClient,
                 confluenceTranslationStep);
-        // Default: translation step is a pass-through (returns content unchanged).
-        // Lenient so tests that never reach the translator don't fail.
-        lenient().when(confluenceTranslationStep.translateIfNeeded(anyString(), any(), anyList()))
+        // Default: translation step is a pass-through.
+        lenient().when(confluenceTranslationStep.translate(anyString(), anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
-    void processExecution_withMonitoringData_rendersAndPublishesPage() {
+    void processExecution_withMonitoringData_publishesEnglishPageAndReturnsResult() {
         ConfluenceExecutionCommand cmd = buildCommand("DYNAMIC_TYPE", "2025-{date}", "UTC");
         List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"), buildDocument("doc-2"));
 
@@ -83,14 +83,14 @@ class KwToConfluenceOrchestratorTest {
         assertThat(result.totalRecords()).isEqualTo(2);
         assertThat(result.confluencePageUrl()).isEqualTo("https://example.com/page/42");
         assertThat(result.confluencePageId()).isEqualTo("42");
-        // Title date must reflect windowEnd (2026-01-31) formatted in UTC, not system clock
+
         String expectedDate = DateTimeFormatter.ofPattern("yyyy/MM/dd")
                 .format(Instant.parse("2026-01-31T23:59:59Z").atZone(ZoneId.of("UTC")));
         assertThat(requestCaptor.getValue().pageTitle()).isEqualTo("2025-" + expectedDate);
     }
 
     @Test
-    void processExecution_translationStepReceivesRenderedContentAndLanguages() {
+    void processExecution_multipleLanguages_publishesOnePagePerLanguage() {
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
@@ -103,7 +103,7 @@ class KwToConfluenceOrchestratorTest {
                 .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
                 .businessTimeZone("UTC")
                 .sourceLanguage("en")
-                .languageCodes(List.of("en", "ja"))
+                .languageCodes(List.of("en", "ja", "de"))
                 .tenantId("tenant-1")
                 .build();
 
@@ -112,23 +112,37 @@ class KwToConfluenceOrchestratorTest {
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
-        when(confluenceTranslationStep.translateIfNeeded("<p>English</p>", "en", List.of("en", "ja")))
+        when(confluenceTranslationStep.translate("<p>English</p>", "en", "ja"))
                 .thenReturn("<p>日本語</p>");
+        when(confluenceTranslationStep.translate("<p>English</p>", "en", "de"))
+                .thenReturn("<p>Deutsch</p>");
+
         ArgumentCaptor<ConfluencePublishRequest> captor =
                 ArgumentCaptor.forClass(ConfluencePublishRequest.class);
         when(confluenceApiClient.createOrUpdatePage(captor.capture()))
                 .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
 
-        orchestrator.processExecution(cmd);
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
-        // The translated content must reach the Confluence API
-        assertThat(captor.getValue().body()).isEqualTo("<p>日本語</p>");
-        verify(confluenceTranslationStep)
-                .translateIfNeeded("<p>English</p>", "en", List.of("en", "ja"));
+        // 3 pages: English + Japanese + German
+        verify(confluenceApiClient, times(3)).createOrUpdatePage(any());
+        List<ConfluencePublishRequest> requests = captor.getAllValues();
+
+        assertThat(requests.get(0).pageTitle()).isEqualTo("2026/01/31");
+        assertThat(requests.get(0).body()).isEqualTo("<p>English</p>");
+
+        assertThat(requests.get(1).pageTitle()).isEqualTo("2026/01/31 [JA]");
+        assertThat(requests.get(1).body()).isEqualTo("<p>日本語</p>");
+
+        assertThat(requests.get(2).pageTitle()).isEqualTo("2026/01/31 [DE]");
+        assertThat(requests.get(2).body()).isEqualTo("<p>Deutsch</p>");
+
+        assertThat(result.publishedPages()).hasSize(3);
+        assertThat(result.errorMessage()).isNull();
     }
 
     @Test
-    void processExecution_translationStepFallback_jobSucceedsWithOriginalContent() {
+    void processExecution_englishOnlyLanguages_publishesOnlyOneEnglishPage() {
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
@@ -141,7 +155,7 @@ class KwToConfluenceOrchestratorTest {
                 .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
                 .businessTimeZone("UTC")
                 .sourceLanguage("en")
-                .languageCodes(List.of("de"))
+                .languageCodes(List.of("en"))
                 .tenantId("tenant-1")
                 .build();
 
@@ -150,18 +164,52 @@ class KwToConfluenceOrchestratorTest {
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
-        // Simulate translation step returning original (fallback scenario)
-        when(confluenceTranslationStep.translateIfNeeded(anyString(), any(), anyList()))
-                .thenReturn("<p>English</p>");
-        ArgumentCaptor<ConfluencePublishRequest> captor =
-                ArgumentCaptor.forClass(ConfluencePublishRequest.class);
-        when(confluenceApiClient.createOrUpdatePage(captor.capture()))
-                .thenReturn(new ConfluencePublishResult("https://page.url", "2"));
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
+        verify(confluenceTranslationStep, never()).translate(anyString(), anyString(), anyString());
+        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
+    }
+
+    @Test
+    void processExecution_translatedPagePublishFails_continuesAndReturnsSuccess() {
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone("UTC")
+                .sourceLanguage("en")
+                .languageCodes(List.of("en", "fr"))
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(
+                anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
+
+        // English page publishes OK, French throws
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url/en", "1"))
+                .thenThrow(new RuntimeException("Confluence API timeout"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        // Job succeeds; only the English page appears in publishedPages
         assertThat(result.errorMessage()).isNull();
-        assertThat(captor.getValue().body()).isEqualTo("<p>English</p>");
+        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
     }
 
     @Test
@@ -180,7 +228,7 @@ class KwToConfluenceOrchestratorTest {
     }
 
     @Test
-    void processExecution_confluenceClientThrows_returnsFailedResult() {
+    void processExecution_confluenceClientThrowsOnEnglishPage_returnsFailedResult() {
         ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "UTC");
         List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
 
@@ -215,7 +263,6 @@ class KwToConfluenceOrchestratorTest {
 
     @Test
     void processExecution_pageTitleUsesWindowEndInConfluenceTimezone() {
-        // windowEnd 2026-02-01T03:00:00Z is 2026-01-31 in America/New_York (UTC-5)
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
@@ -243,12 +290,11 @@ class KwToConfluenceOrchestratorTest {
 
         orchestrator.processExecution(cmd);
 
-        // 2026-02-01T03:00:00Z = 2026-01-31T22:00:00 in America/New_York
         assertThat(requestCaptor.getValue().pageTitle()).isEqualTo("2026/01/31-Report");
     }
 
     @Test
-    void processExecution_businessTimeZoneUsedAsFallback_whenConfluenceTimezoneUnavailable() {
+    void processExecution_businessTimeZoneUsedAsFallback() {
         ConfluenceExecutionCommand cmd = buildCommand("TYPE", "{date}", "America/Chicago");
         List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
 
@@ -263,7 +309,6 @@ class KwToConfluenceOrchestratorTest {
 
         orchestrator.processExecution(cmd);
 
-        // fallback ZoneId passed to getUserTimezone must match businessTimeZone on the command
         assertThat(fallbackCaptor.getValue()).isEqualTo(ZoneId.of("America/Chicago"));
     }
 
@@ -288,6 +333,116 @@ class KwToConfluenceOrchestratorTest {
 
         assertThat(result.totalRecords()).isZero();
         assertThat(result.errorMessage()).isNull();
+    }
+
+    @Test
+    void processExecution_nullBusinessTimezoneAndNullBlankLanguageCodes_onlyPublishesSourcePage() {
+        // null businessTimeZone   → covers `!= null` false branch in processExecution
+        // null entry in list      → covers `langCode == null` true branch in the for-loop
+        // blank entry in list     → covers `langCode.isBlank()` true branch in the for-loop
+        List<String> langs = new ArrayList<>();
+        langs.add("en");
+        langs.add(null);
+        langs.add("   ");
+
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone(null)
+                .sourceLanguage("en")
+                .languageCodes(langs)
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.publishedPages()).hasSize(1);
+    }
+
+    @Test
+    void processExecution_blankBusinessTimeZone_usesNullFallbackForTimezone() {
+        // blank businessTimeZone → covers `!isBlank()` false branch
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(Instant.parse("2026-01-31T23:59:59Z"))
+                .businessTimeZone("   ")
+                .sourceLanguage("en")
+                .languageCodes(List.of("en"))
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.publishedPages()).hasSize(1);
+    }
+
+    @Test
+    void processExecution_nullWindowEndAndBlankSourceLanguage_usesDefaultsWithoutError() {
+        // null windowEnd     → covers `windowEnd != null` false branch in buildMonitoringPageTitle
+        // blank sourceLanguage → covers `!isBlank()` false branch in resolveSource
+        ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(UUID.randomUUID())
+                .dynamicDocumentType("TYPE")
+                .reportNameTemplate("{date}")
+                .connectionSecretName("secret")
+                .confluenceSpaceKey("SPACE")
+                .confluenceSpaceKeyFolderKey("ROOT")
+                .windowStart(Instant.parse("2026-01-01T00:00:00Z"))
+                .windowEnd(null)
+                .businessTimeZone("UTC")
+                .sourceLanguage("   ")
+                .languageCodes(List.of("en"))
+                .tenantId("tenant-1")
+                .build();
+
+        List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        when(kwGraphQLService.fetchMonitoringData(anyString(), anyInt(), anyInt(), anyInt(), anyInt()))
+                .thenReturn(docs);
+        when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
+        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>page</p>");
+        when(confluenceApiClient.createOrUpdatePage(any()))
+                .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
+
+        ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
+
+        assertThat(result.errorMessage()).isNull();
+        assertThat(result.publishedPages()).hasSize(1);
+        // Blank sourceLanguage resolved to "en"
+        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
     }
 
     private ConfluenceExecutionCommand buildCommand(

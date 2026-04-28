@@ -177,4 +177,4 @@ translation:
     base-url: ${TRANSLATION_API_BASE_URL:http://localhost:8083}
     enabled: ${TRANSLATION_API_ENABLED:true}
     timeout-seconds: ${TRANSLATION_API_TIMEOUT:30}
-
+    max-chars: ${TRANSLATION_API_MAX_CHARS:45000}

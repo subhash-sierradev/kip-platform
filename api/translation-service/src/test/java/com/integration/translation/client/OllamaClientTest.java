@@ -40,6 +40,7 @@ class OllamaClientTest {
         // do not fail with UnnecessaryStubbingException.
         lenient().when(ollamaProperties.getBaseUrl()).thenReturn("http://localhost:11434");
         lenient().when(ollamaProperties.getModel()).thenReturn("mistral");
+        lenient().when(ollamaProperties.getNumPredict()).thenReturn(2048);
     }
 
     @Test

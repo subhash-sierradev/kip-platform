@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
+import java.util.Map;
+
 /**
  * Request body sent to the Ollama {@code POST /api/generate} endpoint.
  *
@@ -40,5 +42,17 @@ public class OllamaGenerateRequest {
      */
     @JsonProperty("stream")
     private boolean stream;
+
+    /**
+     * Optional model-level parameters forwarded verbatim to Ollama.
+     *
+     * <p>Supported keys include {@code num_predict} (max tokens to generate)
+     * and {@code num_ctx} (context window size).  When {@code null} Ollama
+     * uses its built-in defaults.  Setting {@code num_predict} to a reasonable
+     * ceiling (e.g. {@code 2048}) prevents runaway generation on slow hardware
+     * and keeps inference time predictable.</p>
+     */
+    @JsonProperty("options")
+    private Map<String, Object> options;
 }
 
