@@ -54,8 +54,10 @@ import TopBar from './TopBar.vue';
 import SideNav from './SideNav.vue';
 import type { NavSection, NavLeaf } from '../../types/navigation';
 import { useNotifications } from '@/composables/useNotifications';
+import { useAuthStore } from '@/store/auth';
 
 useNotifications();
+const authStore = useAuthStore();
 
 defineOptions({ name: 'AppShell' });
 
@@ -71,39 +73,53 @@ provide('setBreadcrumbTitle', (title: string | null) => {
 /* ------------------------------------------------------------------
  * Navigation configuration
  * ------------------------------------------------------------------ */
-const navigationSections: NavSection[] = [
-  { label: 'Home', route: '/', icon: 'home' },
-  { label: 'Inbound', route: '/inbound/integrations', icon: 'import' },
-  {
-    label: 'Outbound',
-    icon: 'export',
-    route: '',
-    children: [
-      { label: 'ArcGIS Integration', route: '/outbound/integration/arcgis', icon: 'activefolder' },
-      {
-        label: 'Confluence Integration',
-        route: '/outbound/integration/confluence',
-        icon: 'activefolder',
-      },
-      { label: 'Jira Webhook', route: '/outbound/webhook/jira', icon: 'activefolder' },
-    ],
-  },
-  {
-    label: 'Admin',
-    icon: 'user',
-    route: '',
-    children: [
-      { label: 'ArcGIS Connect', route: '/admin/connections/arcgis', icon: 'link' },
-      { label: 'Confluence Connect', route: '/admin/connections/confluence', icon: 'link' },
-      { label: 'Jira Connect', route: '/admin/connections/jira', icon: 'link' },
-      { label: 'Audit Log', route: '/admin/audit-log', icon: 'undo' },
-      { label: 'Clear Cache', route: '/admin/clear-cache', icon: 'refresh' },
-      { label: 'Cache Statistics', route: '/admin/cache-statistics', icon: 'statistics' },
-      { label: 'Notifications', route: '/admin/notifications', icon: 'bell' },
-      { label: 'Site Config', route: '/admin/site-config', icon: 'preferences' },
-    ],
-  },
-];
+const navigationSections = computed<NavSection[]>(() => {
+  const hasArcGISFeature = authStore.hasAllRoles(['tenant_admin', 'feature_arcgis_integration']);
+
+  const adminChildren = [
+    { label: 'ArcGIS Connect', route: '/admin/connections/arcgis', icon: 'link' },
+    { label: 'Confluence Connect', route: '/admin/connections/confluence', icon: 'link' },
+    { label: 'Jira Connect', route: '/admin/connections/jira', icon: 'link' },
+    { label: 'Audit Log', route: '/admin/audit-log', icon: 'undo' },
+    { label: 'Clear Cache', route: '/admin/clear-cache', icon: 'refresh' },
+    { label: 'Cache Statistics', route: '/admin/cache-statistics', icon: 'statistics' },
+    { label: 'Notifications', route: '/admin/notifications', icon: 'bell' },
+    { label: 'Site Config', route: '/admin/site-config', icon: 'preferences' },
+    // TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification
+    ...(hasArcGISFeature
+      ? [{ label: 'ArcGIS Verify', route: '/admin/arcgis-verification', icon: 'search' }]
+      : []),
+  ];
+
+  return [
+    { label: 'Home', route: '/', icon: 'home' },
+    { label: 'Inbound', route: '/inbound/integrations', icon: 'import' },
+    {
+      label: 'Outbound',
+      icon: 'export',
+      route: '',
+      children: [
+        {
+          label: 'ArcGIS Integration',
+          route: '/outbound/integration/arcgis',
+          icon: 'activefolder',
+        },
+        {
+          label: 'Confluence Integration',
+          route: '/outbound/integration/confluence',
+          icon: 'activefolder',
+        },
+        { label: 'Jira Webhook', route: '/outbound/webhook/jira', icon: 'activefolder' },
+      ],
+    },
+    {
+      label: 'Admin',
+      icon: 'user',
+      route: '',
+      children: adminChildren,
+    },
+  ];
+});
 
 /* ------------------------------------------------------------------
  * Layout state
@@ -253,7 +269,7 @@ const breadcrumbItems = computed(() =>
  * Navigation helpers
  * ------------------------------------------------------------------ */
 function findSectionByRoute(routePath: string): NavSection | NavLeaf | null {
-  for (const section of navigationSections) {
+  for (const section of navigationSections.value) {
     if (section.route === routePath) return section;
     if (section.children) {
       const child = section.children.find(c => c.route === routePath);
@@ -264,7 +280,7 @@ function findSectionByRoute(routePath: string): NavSection | NavLeaf | null {
 }
 
 function findParentByChildRoute(childRoute: string): NavSection | null {
-  return navigationSections.find(s => s.children?.some(c => c.route === childRoute)) || null;
+  return navigationSections.value.find(s => s.children?.some(c => c.route === childRoute)) || null;
 }
 
 /* ------------------------------------------------------------------

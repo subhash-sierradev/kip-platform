@@ -138,6 +138,24 @@ class ConfluenceExecutionCommandListenerTest {
         assertThat(eventCaptor.getValue().getMetadata().get("errorMessage")).isEqualTo("");
     }
 
+    @Test
+    void handleExecutionCommand_nullIntegrationId_usesEmptyStringInNotification() {
+        ConfluenceExecutionCommand command = buildCommandNullId("tenant-5");
+        ConfluenceJobExecutionResult orchResult = ConfluenceJobExecutionResult.success(1, "url", "789");
+        ConfluenceExecutionResult mappedResult = buildMappedResult(
+                command.getJobExecutionId(), JobExecutionStatus.SUCCESS, null, 1);
+
+        when(orchestrator.processExecution(command)).thenReturn(orchResult);
+        when(confluenceExecutionMapper.toExecutionResult(eq(command), eq(orchResult), any(Instant.class)))
+                .thenReturn(mappedResult);
+
+        listener.handleExecutionCommand(command);
+
+        ArgumentCaptor<NotificationEvent> eventCaptor = ArgumentCaptor.forClass(NotificationEvent.class);
+        verify(notificationEventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().getMetadata().get("integrationId")).isEqualTo("");
+    }
+
     private ConfluenceExecutionCommand buildCommand(String name, String tenantId) {
         return ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
@@ -153,6 +171,16 @@ class ConfluenceExecutionCommandListenerTest {
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
                 .integrationName(null)
+                .tenantId(tenantId)
+                .triggeredByUser("user-1")
+                .build();
+    }
+
+    private ConfluenceExecutionCommand buildCommandNullId(String tenantId) {
+        return ConfluenceExecutionCommand.builder()
+                .jobExecutionId(UUID.randomUUID())
+                .integrationId(null)
+                .integrationName("Integration NullId")
                 .tenantId(tenantId)
                 .triggeredByUser("user-1")
                 .build();

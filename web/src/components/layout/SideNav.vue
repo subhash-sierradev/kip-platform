@@ -325,6 +325,18 @@
         </div>
         <span class="submenu-text">Site Config</span>
       </div>
+      <!-- TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification -->
+      <div
+        v-if="hasArcGISFeature"
+        class="submenu-item"
+        :class="{ active: currentRoute === '/admin/arcgis-verification' }"
+        @click="handleSubmenuClick('admin', '/admin/arcgis-verification')"
+      >
+        <div class="submenu-icon" style="color: var(--kw-secondary-dark)">
+          <i class="dx-icon dx-icon-search"></i>
+        </div>
+        <span class="submenu-text">ArcGIS Verify</span>
+      </div>
     </div>
 
     <!-- Footer: Branding + Version -->
@@ -358,6 +370,12 @@ const authStore = useAuthStore();
 let tooltipTimeout: ReturnType<typeof setTimeout> | null = null;
 
 const isAppAdmin = computed(() => authStore.hasRole('app_admin'));
+// TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification role check
+const hasArcGISFeature = computed(
+  () =>
+    authStore.userRoles.includes('tenant_admin') ||
+    authStore.userRoles.includes('feature_arcgis_integration')
+);
 function hasFeature(role: string): boolean {
   if (!role) return true;
   return authStore.hasRole(role);

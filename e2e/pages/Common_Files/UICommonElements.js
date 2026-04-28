@@ -105,7 +105,7 @@ class UICommonElements {
       sortDropdown: this.page.getByRole('combobox', { name: 'Sort items by field' }),
       pageSizeDropdown: this.page.getByRole('combobox', { name: 'Select page size' }),
       projectDropdown: this.page.getByRole('combobox').nth(2),
-      issueTypeDropdown: this.page.getByRole('combobox').nth(3),
+      issueTypeDropdown: this.page.getByRole('combobox').nth(4),
       
       // Authentication specific
       usernameInput: this.page.getByRole('textbox', { name: 'Username or email' }),

@@ -166,6 +166,7 @@ getConfluenceIntegrationConfig()
   return {
     name: this.generateConfluenceIntegrationName(),
     description: this.generateDescription(),
+    itemSubtype: 'Supplemental Report',
     schedule: {
       mode: 'Rolling Window',
       frequency: 'Weekly',
@@ -185,6 +186,34 @@ getConfluenceIntegrationConfig()
         confluenceField: 'Page Title'
       }
     ]
+  };
+}
+
+// Confluence Integration Update Test Data
+generateConfluenceUpdatedIntegrationName() {
+  return `Confluence_Updated_${faker.lorem.word()}_${this.timestamp}`;
+}
+
+getConfluenceUpdateConfig() {
+  const futureDate = new Date();
+  futureDate.setDate(futureDate.getDate() + 2);
+  const year  = futureDate.getFullYear();
+  const month = String(futureDate.getMonth() + 1).padStart(2, '0');
+  const day   = String(futureDate.getDate()).padStart(2, '0');
+  const futureDateStr = `${year}-${month}-${day}`;
+
+  return {
+    newName: this.generateConfluenceUpdatedIntegrationName(),
+    newDescription: this.generateDescription(),
+    newItemSubtype: 'Warrant',
+    schedule: {
+      mode: 'Daily Window',
+      frequency: 'Daily',
+      dailyFrequency: 'Every 24 hours',
+      startDate: futureDateStr,
+      executionTime: '10:00',
+      days: []
+    }
   };
 }
 

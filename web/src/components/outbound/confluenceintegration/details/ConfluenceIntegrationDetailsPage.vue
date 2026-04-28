@@ -52,6 +52,7 @@ import { useRoute, useRouter } from 'vue-router';
 import StandardDetailPageLayout from '@/components/common/StandardDetailPageLayout.vue';
 import { ConfluenceIntegrationService } from '@/api/services/ConfluenceIntegrationService';
 import type { ConfluenceIntegrationResponse } from '@/api/models/ConfluenceIntegrationResponse';
+import { ROUTES } from '@/router/routes';
 import type { TabDefinition } from '@/types/tab';
 import ConfluenceIntegrationWizard from '../wizard/ConfluenceIntegrationWizard.vue';
 
@@ -134,11 +135,7 @@ function onStatusUpdated(enabled: boolean): void {
 }
 
 function handleBack(): void {
-  if (window.history.length > 1) {
-    router.back();
-    return;
-  }
-  router.push({ path: '/outbound/integration/confluence', query: route.query });
+  router.replace({ path: ROUTES.confluenceIntegration, query: route.query });
 }
 
 function openEditWizard(): void {

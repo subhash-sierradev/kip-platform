@@ -30,6 +30,12 @@ vi.mock('@/store/auth', () => ({
       if (role === 'tenant_admin') return hasTenantAdmin;
       return featureSet[role] ?? false;
     },
+    get userRoles() {
+      const roles: string[] = [];
+      if (hasSuper) roles.push('app_admin');
+      if (hasTenantAdmin) roles.push('tenant_admin');
+      return [...roles, ...Object.keys(featureSet).filter(k => featureSet[k])];
+    },
   }),
 }));
 
