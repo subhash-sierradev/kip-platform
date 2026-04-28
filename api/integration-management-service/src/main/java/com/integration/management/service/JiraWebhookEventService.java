@@ -51,18 +51,17 @@ public class JiraWebhookEventService {
 
         JiraWebhookEvent lastEvent = findByOriginalEventIdOrderByRetryAttempt(id);
         JiraWebhook webhook = findWebhook(lastEvent.getWebhookId());
-        String effectiveTenantId = webhook.getTenantId();
 
         String originalEventId = StringUtils.hasText(lastEvent.getOriginalEventId())
                 ? lastEvent.getOriginalEventId() : id;
         int nextRetry = lastEvent.getRetryAttempt() != null ? lastEvent.getRetryAttempt() + 1 : 1;
 
         JiraWebhookEvent retryEvent = recordJiraWebhookEvent(
-                lastEvent.getWebhookId(), effectiveTenantId, userId,
+                lastEvent.getWebhookId(), tenantId, userId,
                 lastEvent.getIncomingPayload(), originalEventId, nextRetry);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, retryEvent, lastEvent.getIncomingPayload(), effectiveTenantId, userId);
+                webhook, retryEvent, lastEvent.getIncomingPayload(), tenantId, userId);
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
