@@ -48,7 +48,7 @@ class KwToConfluenceOrchestratorTest {
     private ConfluenceApiClient confluenceApiClient;
 
     @Mock
-    private ConfluenceTranslationStep confluenceTranslationStep;
+    private KwMonitoringDataTranslator kwMonitoringDataTranslator;
 
     private KwToConfluenceOrchestrator orchestrator;
 
@@ -56,9 +56,9 @@ class KwToConfluenceOrchestratorTest {
     void setUp() {
         orchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService, confluencePageRenderer, confluenceApiClient,
-                confluenceTranslationStep);
-        // Default: translation step is a pass-through.
-        lenient().when(confluenceTranslationStep.translate(anyString(), anyString(), anyString()))
+                kwMonitoringDataTranslator);
+        // Default: data translator is a pass-through (returns original docs).
+        lenient().when(kwMonitoringDataTranslator.translate(any(), anyString(), anyString()))
                 .thenAnswer(inv -> inv.getArgument(0));
     }
 
@@ -108,14 +108,21 @@ class KwToConfluenceOrchestratorTest {
                 .build();
 
         List<KwMonitoringDocument> docs = List.of(buildDocument("doc-1"));
+        List<KwMonitoringDocument> jaDocs = List.of(buildDocument("doc-1-ja"));
+        List<KwMonitoringDocument> deDocs = List.of(buildDocument("doc-1-de"));
+
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
-        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
-        when(confluenceTranslationStep.translate("<p>English</p>", "en", "ja"))
-                .thenReturn("<p>日本語</p>");
-        when(confluenceTranslationStep.translate("<p>English</p>", "en", "de"))
-                .thenReturn("<p>Deutsch</p>");
+
+        // Data translator returns language-specific document lists
+        when(kwMonitoringDataTranslator.translate(docs, "en", "ja")).thenReturn(jaDocs);
+        when(kwMonitoringDataTranslator.translate(docs, "en", "de")).thenReturn(deDocs);
+
+        // Renderer returns different content depending on which data it receives
+        when(confluencePageRenderer.buildPageContent(docs, ZoneId.of("UTC"))).thenReturn("<p>English</p>");
+        when(confluencePageRenderer.buildPageContent(jaDocs, ZoneId.of("UTC"))).thenReturn("<p>日本語</p>");
+        when(confluencePageRenderer.buildPageContent(deDocs, ZoneId.of("UTC"))).thenReturn("<p>Deutsch</p>");
 
         ArgumentCaptor<ConfluencePublishRequest> captor =
                 ArgumentCaptor.forClass(ConfluencePublishRequest.class);
@@ -170,7 +177,8 @@ class KwToConfluenceOrchestratorTest {
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
-        verify(confluenceTranslationStep, never()).translate(anyString(), anyString(), anyString());
+        // Data translator must never be called when only the source language is requested
+        verify(kwMonitoringDataTranslator, never()).translate(any(), anyString(), anyString());
         assertThat(result.publishedPages()).hasSize(1);
         assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
     }
@@ -199,7 +207,7 @@ class KwToConfluenceOrchestratorTest {
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
         when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
 
-        // English page publishes OK, French throws
+        // English page publishes OK, French throws on Confluence publish
         when(confluenceApiClient.createOrUpdatePage(any()))
                 .thenReturn(new ConfluencePublishResult("https://page.url/en", "1"))
                 .thenThrow(new RuntimeException("Confluence API timeout"));

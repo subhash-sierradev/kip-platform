@@ -56,8 +56,6 @@ dependencies {
     // FreeMarker for template rendering
     implementation(libs.freemarker)
 
-    // jsoup — XHTML DOM parsing for text-node-level translation
-    implementation(libs.jsoup)
 
     // Transformation & Utilities
     implementation(libs.jolt.core)

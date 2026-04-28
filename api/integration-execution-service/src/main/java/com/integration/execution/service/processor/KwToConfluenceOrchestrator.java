@@ -19,14 +19,18 @@ import java.util.List;
 
 /**
  * Orchestrates the Confluence monitoring report generation pipeline:
- * Kw fetch → page render → publish English page → translate + publish per target language.
+ * Kw fetch → page render → publish English page → translate data + render + publish per target language.
  *
  * <h3>Multi-language strategy</h3>
  * <ol>
- *   <li>The English (source) page is <em>always</em> published first with the unmodified title.</li>
+ *   <li>The English (source) page is <em>always</em> published first with the unmodified title,
+ *       rendered directly from the raw {@link KwMonitoringDocument} list.</li>
  *   <li>For each target language code in {@code languageCodes} that differs from
- *       {@code sourceLanguage}, the English XHTML is translated at the text-node level
- *       and published as a separate page titled {@code "<baseTitle> [<LANG>]"}.</li>
+ *       {@code sourceLanguage}, the raw monitoring data is translated at the field level
+ *       by {@link KwMonitoringDataTranslator} (translating {@code title}, {@code body},
+ *       dynamic-data values, and tags).  The translated data is then fed into the same
+ *       FreeMarker template to produce a natively-translated page, which is published
+ *       under the title {@code "<baseTitle> [<LANG>]"}.</li>
  *   <li>If a per-language publish fails, a warning is logged and the pipeline continues
  *       with the remaining languages — the job is not failed.</li>
  * </ol>
@@ -45,7 +49,7 @@ public class KwToConfluenceOrchestrator {
     private final KwGraphQLService kwGraphQLService;
     private final ConfluencePageRenderer confluencePageRenderer;
     private final ConfluenceApiClient confluenceApiClient;
-    private final ConfluenceTranslationStep confluenceTranslationStep;
+    private final KwMonitoringDataTranslator kwMonitoringDataTranslator;
 
     public ConfluenceJobExecutionResult processExecution(final ConfluenceExecutionCommand cmd) {
         try {
@@ -74,7 +78,7 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — using timezone: {}",
                     cmd.getIntegrationId(), confluenceTimezone.getId());
 
-            // FreeMarker renders always in English (source language)
+            // FreeMarker renders always in English (source language) for the primary page
             String englishContent = confluencePageRenderer.buildPageContent(
                     monitoringData, confluenceTimezone);
 
@@ -98,14 +102,15 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — published [{}] page: {}",
                     cmd.getIntegrationId(), sourceLanguage.toUpperCase(), baseTitle);
 
-            // ── 2. Publish one translated page per non-source language ────────
+            // ── 2. For each non-source language: translate data → render → publish ──
             for (String langCode : languageCodes) {
                 if (langCode == null || langCode.isBlank()
                         || langCode.equalsIgnoreCase(sourceLanguage)) {
                     continue; // English page already published above
                 }
-                publishTranslatedPage(cmd, englishContent, sourceLanguage,
-                        langCode, baseTitle, publishedPages);
+                List<KwMonitoringDocument> translatedData =
+                        kwMonitoringDataTranslator.translate(monitoringData, sourceLanguage, langCode);
+                publishTranslatedPage(cmd, translatedData, langCode, baseTitle, confluenceTimezone, publishedPages);
             }
 
             log.info("Confluence integration {} — published {} page(s): {}",
@@ -124,15 +129,22 @@ public class KwToConfluenceOrchestrator {
     // Helpers
     // -----------------------------------------------------------------------
 
+    /**
+     * Renders a Confluence page from the already-translated {@code translatedData}
+     * and publishes it under a language-suffixed title.
+     *
+     * <p>Any exception is caught and logged as a warning so that a single-language
+     * failure does not abort the remaining languages or fail the job.</p>
+     */
     private void publishTranslatedPage(final ConfluenceExecutionCommand cmd,
-                                        final String englishContent,
-                                        final String sourceLanguage,
+                                        final List<KwMonitoringDocument> translatedData,
                                         final String langCode,
                                         final String baseTitle,
+                                        final ZoneId confluenceTimezone,
                                         final List<PublishedPage> publishedPages) {
         try {
-            String translatedContent = confluenceTranslationStep.translate(
-                    englishContent, sourceLanguage, langCode);
+            String translatedContent = confluencePageRenderer.buildPageContent(
+                    translatedData, confluenceTimezone);
 
             String langTitle = baseTitle + " [" + langCode.toUpperCase() + "]";
 

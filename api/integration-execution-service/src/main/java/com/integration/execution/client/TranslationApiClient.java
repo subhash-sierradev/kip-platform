@@ -24,7 +24,7 @@ import java.util.Optional;
  * returns the translated text for the requested target language.  The client is
  * intentionally <em>not</em> retryable — callers should treat any failure as a
  * soft error and fall back to the original content (see
- * {@link com.integration.execution.service.processor.ConfluenceTranslationStep}).</p>
+ * {@link com.integration.execution.service.processor.KwMonitoringDataTranslator}).</p>
  *
  * <h3>Contract (mirrors KIP-544 TranslationRequest / TranslationResponse)</h3>
  * <pre>

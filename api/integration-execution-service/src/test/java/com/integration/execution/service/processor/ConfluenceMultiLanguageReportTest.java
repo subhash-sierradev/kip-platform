@@ -48,7 +48,9 @@ import static org.mockito.Mockito.when;
 /**
  * Parameterized end-to-end pipeline test for multi-language Confluence reports.
  *
- * <p>Tests the full pipeline, using real FreeMarker and jsoup-based XHTML translation.
+ * <p>Tests the full data-level translation pipeline: raw {@link KwMonitoringDocument}
+ * fields (title, body, dynamic-data values, tags) are translated via
+ * {@link KwMonitoringDataTranslator} before FreeMarker renders the Confluence page.
  * Content-verification tests use a mock {@link TranslationApiClient} to return
  * properly segmented responses. WireMock is still used for HTTP-error fallback tests.</p>
  */
@@ -58,7 +60,7 @@ class ConfluenceMultiLanguageReportTest {
     private static WireMockServer translationApiMock;
     private static final String TRANSLATE_PATH = "/api/translate";
     private static final Pattern SEG_SPLIT =
-            Pattern.compile(Pattern.quote("\n" + XhtmlTextTranslator.SEG + "\n"));
+            Pattern.compile(Pattern.quote("\n" + KwMonitoringDataTranslator.SEG + "\n"));
 
     // ── Sample monitoring document ──────────────────────────────────────────
     private static final KwMonitoringDocument SAMPLE_DOC = buildSampleDocument();
@@ -102,12 +104,11 @@ class ConfluenceMultiLanguageReportTest {
         props.setEnabled(true);
         props.setTimeoutSeconds(10);
 
-        // Real XhtmlTextTranslator backed by a mock TranslationApiClient
-        XhtmlTextTranslator xhtmlTextTranslator = new XhtmlTextTranslator(mockTranslationApiClient, props);
-        ConfluenceTranslationStep translationStep = new ConfluenceTranslationStep(props, xhtmlTextTranslator);
+        // Real KwMonitoringDataTranslator backed by a mock TranslationApiClient
+        KwMonitoringDataTranslator dataTranslator = new KwMonitoringDataTranslator(mockTranslationApiClient, props);
 
         orchestrator = new KwToConfluenceOrchestrator(
-                kwGraphQLService, renderer, confluenceApiClient, translationStep);
+                kwGraphQLService, renderer, confluenceApiClient, dataTranslator);
 
         // Default: Confluence mock returns a success publish result
         when(confluenceApiClient.getUserTimezone(anyString(), any()))
@@ -237,15 +238,14 @@ class ConfluenceMultiLanguageReportTest {
                 .willReturn(aResponse().withStatus(httpStatus).withBody("error")));
 
         TranslationApiClient realApiClient = new TranslationApiClient(wireMockProps, new ObjectMapper());
-        XhtmlTextTranslator realTranslator = new XhtmlTextTranslator(realApiClient, wireMockProps);
-        ConfluenceTranslationStep errorStep = new ConfluenceTranslationStep(wireMockProps, realTranslator);
+        KwMonitoringDataTranslator errorTranslator = new KwMonitoringDataTranslator(realApiClient, wireMockProps);
 
         AppConfig appConfig = new AppConfig();
         KwToConfluenceOrchestrator errorOrchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService,
                 new ConfluencePageRenderer(appConfig.freemarkerConfiguration()),
                 confluenceApiClient,
-                errorStep);
+                errorTranslator);
 
         stubKwService();
         ConfluenceExecutionCommand cmd = buildCommand("en", List.of("ja"));
@@ -283,15 +283,14 @@ class ConfluenceMultiLanguageReportTest {
         offlineProps.setTimeoutSeconds(2);
 
         TranslationApiClient offlineClient = new TranslationApiClient(offlineProps, new ObjectMapper());
-        XhtmlTextTranslator offlineTranslator = new XhtmlTextTranslator(offlineClient, offlineProps);
-        ConfluenceTranslationStep offlineStep = new ConfluenceTranslationStep(offlineProps, offlineTranslator);
+        KwMonitoringDataTranslator offlineTranslator = new KwMonitoringDataTranslator(offlineClient, offlineProps);
 
         AppConfig appConfig = new AppConfig();
         KwToConfluenceOrchestrator offlineOrchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService,
                 new ConfluencePageRenderer(appConfig.freemarkerConfiguration()),
                 confluenceApiClient,
-                offlineStep);
+                offlineTranslator);
 
         stubKwService();
         ConfluenceExecutionCommand cmd = buildCommand("en", List.of("de"));
@@ -331,9 +330,9 @@ class ConfluenceMultiLanguageReportTest {
 
     /**
      * Stubs mockTranslationApiClient so that for any batch request for {@code targetLanguage},
-     * the response contains the correct number of {@link XhtmlTextTranslator#SEG}-separated
-     * segments, each filled with {@code translatedValue}. This lets the XhtmlTextTranslator
-     * successfully reassemble the translated XHTML.
+     * the response contains the correct number of {@link KwMonitoringDataTranslator#SEG}-separated
+     * segments, each filled with {@code translatedValue}. This lets the KwMonitoringDataTranslator
+     * successfully re-inject the translated field values into each monitoring document.
      */
     private void stubContentTranslation(final String targetLanguage, final String translatedValue) {
         when(mockTranslationApiClient.translate(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(targetLanguage)))
@@ -343,7 +342,7 @@ class ConfluenceMultiLanguageReportTest {
                     // Return translatedValue for every segment, joined with <<<SEG>>>
                     String joinedResponse = Arrays.stream(segments)
                             .map(ignored -> translatedValue)
-                            .collect(Collectors.joining("\n" + XhtmlTextTranslator.SEG + "\n"));
+                            .collect(Collectors.joining("\n" + KwMonitoringDataTranslator.SEG + "\n"));
                     return Optional.of(joinedResponse);
                 });
     }
