@@ -162,8 +162,117 @@ class OllamaCachedTranslatorTest {
     void promptTemplate_containsRequiredPlaceholders() {
         assertThat(OllamaCachedTranslator.PROMPT_TEMPLATE)
                 .contains("%s")        // source lang placeholder
-                .contains("translate")
-                .contains("Text to translate");
+                .contains("Translate")
+                .contains("Text:");    // text-to-translate marker
+    }
+
+    @Test
+    @DisplayName("translateSingleLanguage() strips LLM artifacts from dirty Ollama response")
+    void translateSingleLanguage_dirtyResponse_artifactsStripped() {
+        // Ollama returns dirty text — cleanLlmResponse should strip the artifact
+        OllamaGenerateResponse resp = new OllamaGenerateResponse();
+        resp.setResponse("報告詳細\n\nHere is your translation: 報告詳細");
+        resp.setDone(true);
+        when(ollamaClient.generate(anyString())).thenReturn(resp);
+
+        String result = translator.translateSingleLanguage("Report Details", "en", "ja");
+
+        assertThat(result).isEqualTo("報告詳細");
+    }
+
+    // ── cleanLlmResponse ─────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("cleanLlmResponse() returns null/blank input unchanged")
+    void cleanLlmResponse_nullOrBlank_returnsAsIs() {
+        assertThat(translator.cleanLlmResponse(null)).isNull();
+        assertThat(translator.cleanLlmResponse("   ")).isBlank();
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips 'Here is your translation:' preamble")
+    void cleanLlmResponse_stripsLeadingPreamble() {
+        String raw = "Here is your translation: 報告詳細";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("報告詳細");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips trailing English artifact paragraph after double newline")
+    void cleanLlmResponse_stripsTrailingArtifactParagraph() {
+        String raw = "報告詳細\n\nHere is your translation: 報告詳細\n\nPlease note that I am an AI.";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("報告詳細");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips trailing English artifact after single newline")
+    void cleanLlmResponse_stripsTrailingArtifactAfterSingleNewline() {
+        // Real Ollama responses often use \n (not \n\n) before the appended explanation
+        String raw = "報告詳細\nHere is your translation: 報告詳細\nPlease note that I am an AI.";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("報告詳細");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() keeps second paragraph when it is NOT an English artifact")
+    void cleanLlmResponse_keepsSecondParagraphWhenNotArtifact() {
+        // Multi-paragraph legitimate translation should NOT be truncated at \n\n
+        String raw = "第一段落。\n\n第二段落。";
+        String result = translator.cleanLlmResponse(raw);
+        assertThat(result).contains("第一段落").contains("第二段落");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips inline English suffix after translated text")
+    void cleanLlmResponse_stripsInlineEnglishSuffix() {
+        String raw = "著者 Here is the translation of your text 'Authors' into Japanese.";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("著者");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() does NOT strip inline marker when suffix contains non-ASCII")
+    void cleanLlmResponse_doesNotStripWhenInlineSuffixContainsNonAscii() {
+        // Suffix after " Here is" starts with non-ASCII within 40 chars → not an English-only note → keep as-is
+        String raw = "著者 Here is日本語の続き";
+        String result = translator.cleanLlmResponse(raw);
+        assertThat(result).isEqualTo("著者 Here is日本語の続き");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips parenthetical English explanation even when it contains the translated word")
+    void cleanLlmResponse_stripsParentheticalExplanationWithTranslatedWordAtEnd() {
+        // Pattern: "合計レポート (The translation of 'Total Reports' in Japanese is '合計レポート'.)"
+        String raw = "合計レポート (The translation of \"Total Reports\" in Japanese is \"合計レポート\".)";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("合計レポート");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips 'this translation is a machine translation' artifact after newline")
+    void cleanLlmResponse_stripsThisTranslationMachineArtifact() {
+        String raw = "報告詳細\n\nThis translation is a machine translation of an English text. "
+                + "Human review and editing are highly recommended for accurate translations.";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("報告詳細");
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() returns text unchanged when no artifact is found")
+    void cleanLlmResponse_noArtifact_returnsUnchanged() {
+        String raw = "こんにちは、世界。";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo(raw);
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() falls back to original when cleanup produces blank")
+    void cleanLlmResponse_cleanupProducesBlank_returnsTrimmedOriginal() {
+        // Preamble only, no actual translated content → cleanup would be blank → keep original
+        String raw = "Here is your translation: ";
+        String result = translator.cleanLlmResponse(raw);
+        assertThat(result).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("cleanLlmResponse() strips 'Translation:' preamble variant")
+    void cleanLlmResponse_stripsTranslationColonPreamble() {
+        String raw = "Translation: こんにちは";
+        assertThat(translator.cleanLlmResponse(raw)).isEqualTo("こんにちは");
     }
 }
 

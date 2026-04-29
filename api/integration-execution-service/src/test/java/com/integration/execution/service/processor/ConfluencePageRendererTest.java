@@ -4,6 +4,8 @@ import com.integration.execution.config.AppConfig;
 import com.integration.execution.model.KwMonitoringDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -12,17 +14,23 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class ConfluencePageRendererTest {
 
     private ConfluencePageRenderer renderer;
+    private KwMonitoringDataTranslator mockTranslator;
 
     @BeforeEach
     void setUp() {
         AppConfig config = new AppConfig();
-        renderer = new ConfluencePageRenderer(config.freemarkerConfiguration());
+        mockTranslator = mock(KwMonitoringDataTranslator.class);
+        // translateLabelMaps returns an empty map → renderer falls back to English via the ! operator.
+        when(mockTranslator.translateLabelMaps(any(), anyString(), any())).thenReturn(Map.of());
+        renderer = new ConfluencePageRenderer(config.freemarkerConfiguration(), mockTranslator);
     }
 
     @Test
@@ -219,7 +227,8 @@ class ConfluencePageRendererTest {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        ConfluencePageRenderer brokenRenderer = new ConfluencePageRenderer(brokenCfg);
+        ConfluencePageRenderer brokenRenderer =
+                new ConfluencePageRenderer(brokenCfg, mock(KwMonitoringDataTranslator.class));
 
         assertThatThrownBy(() -> brokenRenderer.buildPageContent(List.of(), ZoneId.of("UTC")))
                 .isInstanceOf(RuntimeException.class)
@@ -282,9 +291,158 @@ class ConfluencePageRendererTest {
         assertThat(htmlUtc).isNotEqualTo(htmlNewYork);
     }
 
-    // -----------------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------------
+    @Test
+    void buildMultiLanguagePageContent_withJapaneseTranslation_rendersBothLanguageSections() {
+        List<KwMonitoringDocument> sourceDocs = List.of(docWithClient("ACME", "HIGH", "English Title"));
+
+        Map<String, Object> jaDynData = new HashMap<>();
+        jaDynData.put("Client", "ACME");
+        jaDynData.put("Priority", "HIGH");
+        List<KwMonitoringDocument> jaDocs = List.of(
+                KwMonitoringDocument.builder()
+                        .id("ja-doc").title("日本語タイトル").body("日本語本文")
+                        .attributes(Map.of("dynamicData", jaDynData))
+                        .build());
+
+        String html = renderer.buildMultiLanguagePageContent(
+                sourceDocs, Map.of("ja", jaDocs), "en", ZoneId.of("UTC"));
+
+        assertThat(html).isNotBlank();
+        assertThat(html).contains("English");         // English section heading
+        assertThat(html).contains("日本語");            // Japanese section heading
+        assertThat(html).contains("日本語タイトル");      // Japanese record title
+    }
+
+    @Test
+    void buildMultiLanguagePageContent_noTranslations_rendersSingleEnglishSection() {
+        List<KwMonitoringDocument> sourceDocs = List.of(docWithClient("Corp", "LOW", "Solo Title"));
+
+        String html = renderer.buildMultiLanguagePageContent(
+                sourceDocs, Map.of(), "en", ZoneId.of("UTC"));
+
+        assertThat(html).isNotBlank();
+        assertThat(html).contains("English");
+        assertThat(html).contains("Solo Title");
+    }
+
+    @Test
+    void buildMultiLanguagePageContent_multipleTargetLanguages_rendersAllSections() {
+        List<KwMonitoringDocument> sourceDocs = List.of(docWithClient("Corp", "HIGH", "Report"));
+        List<KwMonitoringDocument> deDocs = List.of(docWithClient("Corp", "HIGH", "Bericht"));
+        List<KwMonitoringDocument> ruDocs = List.of(docWithClient("Corp", "HIGH", "Отчёт"));
+
+        Map<String, List<KwMonitoringDocument>> translatedByLang = new java.util.LinkedHashMap<>();
+        translatedByLang.put("de", deDocs);
+        translatedByLang.put("ru", ruDocs);
+
+        String html = renderer.buildMultiLanguagePageContent(
+                sourceDocs, translatedByLang, "en", ZoneId.of("UTC"));
+
+        assertThat(html).isNotBlank();
+        assertThat(html).contains("English");    // en section
+        assertThat(html).contains("Deutsch");    // de section
+        assertThat(html).contains("Русский");    // ru section
+        assertThat(html).contains("Bericht");    // German record content
+        assertThat(html).contains("Отчёт");     // Russian record content
+    }
+
+    @ParameterizedTest(name = "langCode={0}")
+    @ValueSource(strings = {"fr", "es", "zh", "zh-cn", "zh-tw", "ko", "hi", "jp", "UNKNOWN_LANG"})
+    void buildMultiLanguagePageContent_variousLanguageCodes_rendersWithoutError(String lang) {
+        List<KwMonitoringDocument> source = List.of(docWithClient("Corp", "HIGH", "T"));
+        List<KwMonitoringDocument> translated = List.of(docWithClient("Corp", "HIGH", "T-" + lang));
+
+        String html = renderer.buildMultiLanguagePageContent(
+                source, Map.of(lang, translated), "en", ZoneId.of("UTC"));
+
+        assertThat(html).isNotBlank();
+    }
+
+    // ── Summary field resolution ─────────────────────────────────────────────
+
+    @Test
+    void buildPageContent_blankBodyWithDynamicSummary_usesDynamicSummaryText() {
+        // Document has no body but dynamicData["Summary"] has content.
+        // The renderer should fold it into the Summary row and NOT show it again as a dynamic field.
+        Map<String, Object> dynData = new HashMap<>();
+        dynData.put("Client", "Corp");
+        dynData.put("Priority", "INFO");
+        dynData.put("Summary", "Dynamic summary content");
+
+        List<KwMonitoringDocument> docs = List.of(
+                KwMonitoringDocument.builder()
+                        .id("doc-summary")
+                        .title("Summary Test")
+                        .body(null)              // blank body — should fall back to dynamicData
+                        .createdTimestamp(1700000000L)
+                        .updatedTimestamp(1700001000L)
+                        .attributes(Map.of("dynamicData", dynData))
+                        .build());
+
+        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
+
+        assertThat(html).contains("Dynamic summary content");
+        // "Dynamic summary content" should appear ONCE (as body), not twice as a dynamic field too.
+        int occurrences = html.split("Dynamic summary content", -1).length - 1;
+        assertThat(occurrences).isEqualTo(1);
+    }
+
+    @Test
+    void buildPageContent_blankBodyNoSummaryField_rendersEmptySummaryRow() {
+        // Document has neither body nor dynamicData["Summary"]: Summary row shows dash.
+        Map<String, Object> dynData = new HashMap<>();
+        dynData.put("Client", "Corp");
+        dynData.put("Priority", "INFO");
+
+        List<KwMonitoringDocument> docs = List.of(
+                KwMonitoringDocument.builder()
+                        .id("doc-nosummary")
+                        .title("No Summary")
+                        .body("")
+                        .createdTimestamp(1700000000L)
+                        .updatedTimestamp(1700001000L)
+                        .attributes(Map.of("dynamicData", dynData))
+                        .build());
+
+        String html = renderer.buildPageContent(docs, ZoneId.of("UTC"));
+
+        assertThat(html).isNotBlank();
+        // Template renders "-" for empty values — page should still be valid
+        assertThat(html).contains("No Summary");
+    }
+
+    @Test
+    void buildMultiLanguagePageContent_localeBasedTimestamps_differentMonthNamesPerLanguage() {
+        // English section uses English month names; Japanese section uses Japanese month names.
+        long may2025 = 1746057600L; // 2025-05-01 00:00:00 UTC
+        Map<String, Object> dynData = new HashMap<>();
+        dynData.put("Client", "Corp");
+        dynData.put("Priority", "INFO");
+
+        List<KwMonitoringDocument> source = List.of(
+                KwMonitoringDocument.builder()
+                        .id("ts-en").title("TS EN").body("body")
+                        .createdTimestamp(may2025).updatedTimestamp(may2025)
+                        .attributes(Map.of("dynamicData", dynData))
+                        .build());
+        Map<String, Object> jaDynData = new HashMap<>(dynData);
+        List<KwMonitoringDocument> jaDocs = List.of(
+                KwMonitoringDocument.builder()
+                        .id("ts-ja").title("TS JA").body("body-ja")
+                        .createdTimestamp(may2025).updatedTimestamp(may2025)
+                        .attributes(Map.of("dynamicData", jaDynData))
+                        .build());
+
+        String html = renderer.buildMultiLanguagePageContent(
+                source, Map.of("ja", jaDocs), "en", ZoneId.of("UTC"));
+
+        // English section contains English month name ("May")
+        assertThat(html).contains("May");
+        // Japanese section contains Japanese month name ("5月")
+        assertThat(html).contains("5月");
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private KwMonitoringDocument docWithClient(String client, String priority, String title) {
         Map<String, Object> dynData = new HashMap<>();

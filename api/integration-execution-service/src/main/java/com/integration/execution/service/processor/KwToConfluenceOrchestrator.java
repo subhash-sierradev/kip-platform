@@ -14,25 +14,23 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * Orchestrates the Confluence monitoring report generation pipeline:
- * Kw fetch → page render → publish English page → translate data + render + publish per target language.
+ * Kw fetch → translate data → render combined multi-language page → publish.
  *
  * <h3>Multi-language strategy</h3>
  * <ol>
- *   <li>The English (source) page is <em>always</em> published first with the unmodified title,
- *       rendered directly from the raw {@link KwMonitoringDocument} list.</li>
+ *   <li>The English (source) records are always rendered first in the page.</li>
  *   <li>For each target language code in {@code languageCodes} that differs from
  *       {@code sourceLanguage}, the raw monitoring data is translated at the field level
- *       by {@link KwMonitoringDataTranslator} (translating {@code title}, {@code body},
- *       dynamic-data values, and tags).  The translated data is then fed into the same
- *       FreeMarker template to produce a natively-translated page, which is published
- *       under the title {@code "<baseTitle> [<LANG>]"}.</li>
- *   <li>If a per-language publish fails, a warning is logged and the pipeline continues
- *       with the remaining languages — the job is not failed.</li>
+ *       by {@link KwMonitoringDataTranslator} and added as an additional section in the
+ *       <em>same</em> Confluence page — so a single page contains all language variants.</li>
+ *   <li>If translation fails for a language the original English content is used as a
+ *       fallback for that section; the job never fails due to translation errors.</li>
  * </ol>
  */
 @Slf4j
@@ -78,44 +76,41 @@ public class KwToConfluenceOrchestrator {
             log.info("Confluence integration {} — using timezone: {}",
                     cmd.getIntegrationId(), confluenceTimezone.getId());
 
-            // FreeMarker renders always in English (source language) for the primary page
-            String englishContent = confluencePageRenderer.buildPageContent(
-                    monitoringData, confluenceTimezone);
-
-            String baseTitle = buildMonitoringPageTitle(cmd, confluenceTimezone);
             String sourceLanguage = resolveSource(cmd.getSourceLanguage());
             List<String> languageCodes = cmd.getLanguageCodes() != null
                     ? cmd.getLanguageCodes() : List.of(sourceLanguage);
 
-            List<PublishedPage> publishedPages = new ArrayList<>();
+            // ── Translate to all non-source languages in one pass ────────────
+            List<String> targetLanguages = languageCodes.stream()
+                    .filter(l -> l != null && !l.isBlank() && !l.equalsIgnoreCase(sourceLanguage))
+                    .distinct()
+                    .toList();
 
-            // ── 1. Always publish the English (source) page ──────────────────
-            ConfluenceApiClient.ConfluencePublishResult englishResult =
+            Map<String, List<KwMonitoringDocument>> translatedByLang = targetLanguages.isEmpty()
+                    ? Map.of()
+                    : kwMonitoringDataTranslator.translateAll(monitoringData, sourceLanguage, targetLanguages);
+
+            // ── Build & publish ONE combined page (English + translated sections) ──
+            String baseTitle = buildMonitoringPageTitle(cmd, confluenceTimezone);
+            String combinedContent = confluencePageRenderer.buildMultiLanguagePageContent(
+                    monitoringData, translatedByLang, sourceLanguage, confluenceTimezone);
+
+            ConfluenceApiClient.ConfluencePublishResult pageResult =
                     confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
                             cmd.getConnectionSecretName(),
                             cmd.getConfluenceSpaceKey(),
                             cmd.getConfluenceSpaceKeyFolderKey(),
                             baseTitle,
-                            englishContent));
-            publishedPages.add(new PublishedPage(sourceLanguage,
-                    englishResult.confluencePageUrl(), englishResult.confluencePageId()));
-            log.info("Confluence integration {} — published [{}] page: {}",
-                    cmd.getIntegrationId(), sourceLanguage.toUpperCase(), baseTitle);
+                            combinedContent));
 
-            // ── 2. For each non-source language: translate data → render → publish ──
-            for (String langCode : languageCodes) {
-                if (langCode == null || langCode.isBlank()
-                        || langCode.equalsIgnoreCase(sourceLanguage)) {
-                    continue; // English page already published above
-                }
-                List<KwMonitoringDocument> translatedData =
-                        kwMonitoringDataTranslator.translate(monitoringData, sourceLanguage, langCode);
-                publishTranslatedPage(cmd, translatedData, langCode, baseTitle, confluenceTimezone, publishedPages);
-            }
+            List<PublishedPage> publishedPages = List.of(
+                    new PublishedPage(sourceLanguage,
+                            pageResult.confluencePageUrl(), pageResult.confluencePageId()));
 
-            log.info("Confluence integration {} — published {} page(s): {}",
-                    cmd.getIntegrationId(), publishedPages.size(),
-                    publishedPages.stream().map(PublishedPage::languageCode).toList());
+            log.info("Confluence integration {} — published combined page '{}' with languages: {}",
+                    cmd.getIntegrationId(), baseTitle,
+                    targetLanguages.isEmpty() ? List.of(sourceLanguage)
+                            : Stream.concat(Stream.of(sourceLanguage), targetLanguages.stream()).toList());
 
             return ConfluenceJobExecutionResult.success(monitoringData.size(), publishedPages);
 
@@ -128,44 +123,6 @@ public class KwToConfluenceOrchestrator {
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-
-    /**
-     * Renders a Confluence page from the already-translated {@code translatedData}
-     * and publishes it under a language-suffixed title.
-     *
-     * <p>Any exception is caught and logged as a warning so that a single-language
-     * failure does not abort the remaining languages or fail the job.</p>
-     */
-    private void publishTranslatedPage(final ConfluenceExecutionCommand cmd,
-                                        final List<KwMonitoringDocument> translatedData,
-                                        final String langCode,
-                                        final String baseTitle,
-                                        final ZoneId confluenceTimezone,
-                                        final List<PublishedPage> publishedPages) {
-        try {
-            String translatedContent = confluencePageRenderer.buildPageContent(
-                    translatedData, confluenceTimezone);
-
-            String langTitle = baseTitle + " [" + langCode.toUpperCase() + "]";
-
-            ConfluenceApiClient.ConfluencePublishResult langResult =
-                    confluenceApiClient.createOrUpdatePage(new ConfluencePublishRequest(
-                            cmd.getConnectionSecretName(),
-                            cmd.getConfluenceSpaceKey(),
-                            cmd.getConfluenceSpaceKeyFolderKey(),
-                            langTitle,
-                            translatedContent));
-
-            publishedPages.add(new PublishedPage(langCode,
-                    langResult.confluencePageUrl(), langResult.confluencePageId()));
-            log.info("Confluence integration {} — published [{}] page: {}",
-                    cmd.getIntegrationId(), langCode.toUpperCase(), langTitle);
-
-        } catch (Exception ex) {
-            log.warn("Confluence integration {} — failed to publish [{}] page; skipping. Error: {}",
-                    cmd.getIntegrationId(), langCode.toUpperCase(), ex.getMessage());
-        }
-    }
 
     private String buildMonitoringPageTitle(final ConfluenceExecutionCommand cmd,
                                             final ZoneId timezone) {

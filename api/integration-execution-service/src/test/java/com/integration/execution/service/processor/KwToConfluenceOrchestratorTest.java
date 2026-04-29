@@ -90,7 +90,7 @@ class KwToConfluenceOrchestratorTest {
     }
 
     @Test
-    void processExecution_multipleLanguages_publishesOnePagePerLanguage() {
+    void processExecution_multipleLanguages_publishesSingleCombinedPage() {
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
@@ -115,14 +115,13 @@ class KwToConfluenceOrchestratorTest {
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
 
-        // Data translator returns language-specific document lists
-        when(kwMonitoringDataTranslator.translate(docs, "en", "ja")).thenReturn(jaDocs);
-        when(kwMonitoringDataTranslator.translate(docs, "en", "de")).thenReturn(deDocs);
+        // Translator returns per-language documents
+        when(kwMonitoringDataTranslator.translateAll(docs, "en", List.of("ja", "de")))
+                .thenReturn(Map.of("ja", jaDocs, "de", deDocs));
 
-        // Renderer returns different content depending on which data it receives
-        when(confluencePageRenderer.buildPageContent(docs, ZoneId.of("UTC"))).thenReturn("<p>English</p>");
-        when(confluencePageRenderer.buildPageContent(jaDocs, ZoneId.of("UTC"))).thenReturn("<p>日本語</p>");
-        when(confluencePageRenderer.buildPageContent(deDocs, ZoneId.of("UTC"))).thenReturn("<p>Deutsch</p>");
+        // Renderer combines all languages into one page
+        when(confluencePageRenderer.buildMultiLanguagePageContent(any(), any(), anyString(), any()))
+                .thenReturn("<p>EN+JA+DE combined</p>");
 
         ArgumentCaptor<ConfluencePublishRequest> captor =
                 ArgumentCaptor.forClass(ConfluencePublishRequest.class);
@@ -131,20 +130,13 @@ class KwToConfluenceOrchestratorTest {
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
-        // 3 pages: English + Japanese + German
-        verify(confluenceApiClient, times(3)).createOrUpdatePage(any());
-        List<ConfluencePublishRequest> requests = captor.getAllValues();
+        // Only ONE combined page is published
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
+        assertThat(captor.getValue().pageTitle()).isEqualTo("2026/01/31");
+        assertThat(captor.getValue().body()).isEqualTo("<p>EN+JA+DE combined</p>");
 
-        assertThat(requests.get(0).pageTitle()).isEqualTo("2026/01/31");
-        assertThat(requests.get(0).body()).isEqualTo("<p>English</p>");
-
-        assertThat(requests.get(1).pageTitle()).isEqualTo("2026/01/31 [JA]");
-        assertThat(requests.get(1).body()).isEqualTo("<p>日本語</p>");
-
-        assertThat(requests.get(2).pageTitle()).isEqualTo("2026/01/31 [DE]");
-        assertThat(requests.get(2).body()).isEqualTo("<p>Deutsch</p>");
-
-        assertThat(result.publishedPages()).hasSize(3);
+        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
         assertThat(result.errorMessage()).isNull();
     }
 
@@ -170,7 +162,8 @@ class KwToConfluenceOrchestratorTest {
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
-        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
+        when(confluencePageRenderer.buildMultiLanguagePageContent(any(), any(), anyString(), any()))
+                .thenReturn("<p>English</p>");
         when(confluenceApiClient.createOrUpdatePage(any()))
                 .thenReturn(new ConfluencePublishResult("https://page.url", "1"));
 
@@ -179,12 +172,15 @@ class KwToConfluenceOrchestratorTest {
         verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
         // Data translator must never be called when only the source language is requested
         verify(kwMonitoringDataTranslator, never()).translate(any(), anyString(), anyString());
+        verify(kwMonitoringDataTranslator, never()).translateAll(any(), anyString(), any());
         assertThat(result.publishedPages()).hasSize(1);
         assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
     }
 
     @Test
-    void processExecution_translatedPagePublishFails_continuesAndReturnsSuccess() {
+    void processExecution_multipleLanguages_translationFails_stillPublishesCombinedPage() {
+        // When translateAll returns an empty map (e.g. translation API disabled),
+        // the orchestrator should still publish the combined page using source-language content.
         ConfluenceExecutionCommand cmd = ConfluenceExecutionCommand.builder()
                 .jobExecutionId(UUID.randomUUID())
                 .integrationId(UUID.randomUUID())
@@ -205,16 +201,20 @@ class KwToConfluenceOrchestratorTest {
         when(kwGraphQLService.fetchMonitoringData(
                 anyString(), anyInt(), anyInt(), anyInt(), anyInt())).thenReturn(docs);
         when(confluenceApiClient.getUserTimezone(anyString(), any())).thenReturn(ZoneId.of("UTC"));
-        when(confluencePageRenderer.buildPageContent(any(), any())).thenReturn("<p>English</p>");
 
-        // English page publishes OK, French throws on Confluence publish
+        // Translation returns empty (disabled / internal failure handled by translator)
+        when(kwMonitoringDataTranslator.translateAll(any(), anyString(), any()))
+                .thenReturn(Map.of());
+
+        when(confluencePageRenderer.buildMultiLanguagePageContent(any(), any(), anyString(), any()))
+                .thenReturn("<p>EN only</p>");
         when(confluenceApiClient.createOrUpdatePage(any()))
-                .thenReturn(new ConfluencePublishResult("https://page.url/en", "1"))
-                .thenThrow(new RuntimeException("Confluence API timeout"));
+                .thenReturn(new ConfluencePublishResult("https://page.url/combined", "1"));
 
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
-        // Job succeeds; only the English page appears in publishedPages
+        // ONE combined page published; job succeeds
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
         assertThat(result.errorMessage()).isNull();
         assertThat(result.publishedPages()).hasSize(1);
         assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");

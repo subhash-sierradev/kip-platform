@@ -101,8 +101,25 @@ class JiraWebhookEventControllerTest {
     }
 
     @Nested
-    @DisplayName("POST /api/webhooks/jira/triggers/retry/{id}")
+    @DisplayName("POST /api/webhooks/jira/triggers/retry/{id} - requires only feature_jira_webhook role")
     class RetryTrigger {
+
+        @Test
+        @DisplayName("should be accessible without webhook_client role - only feature_jira_webhook required")
+        void retryTrigger_noWebhookClientRole_succeeds() throws Exception {
+            when(jiraWebhookEventService.retryTrigger(EVENT_ID, TENANT_ID, USER_ID))
+                    .thenReturn(ResponseEntity.status(HttpStatus.ACCEPTED)
+                            .body(buildEventResponse(EVENT_ID, 1)));
+
+            // Standalone MockMvc bypasses Spring Security - confirms no method-level role guard blocks the call
+            mockMvc.perform(post(BASE_URL + "/triggers/retry/{id}", EVENT_ID)
+                    .requestAttr(X_TENANT_ID, TENANT_ID)
+                    .requestAttr(X_USER_ID, USER_ID)
+                    .contentType(MediaType.APPLICATION_JSON))
+                    .andExpect(status().isAccepted());
+
+            verify(jiraWebhookEventService).retryTrigger(EVENT_ID, TENANT_ID, USER_ID);
+        }
 
         @Test
         @DisplayName("should retry trigger and return 202 Accepted")

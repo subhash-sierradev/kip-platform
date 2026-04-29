@@ -23,14 +23,12 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -59,8 +57,7 @@ class ConfluenceMultiLanguageReportTest {
     // ── WireMock server (shared across all parameterized cases) ─────────────
     private static WireMockServer translationApiMock;
     private static final String TRANSLATE_PATH = "/api/translate";
-    private static final Pattern SEG_SPLIT =
-            Pattern.compile(Pattern.quote("\n" + KwMonitoringDataTranslator.SEG + "\n"));
+
 
     // ── Sample monitoring document ──────────────────────────────────────────
     private static final KwMonitoringDocument SAMPLE_DOC = buildSampleDocument();
@@ -96,16 +93,18 @@ class ConfluenceMultiLanguageReportTest {
         confluenceApiClient = mock(ConfluenceApiClient.class);
         mockTranslationApiClient = mock(TranslationApiClient.class);
 
-        AppConfig appConfig = new AppConfig();
-        ConfluencePageRenderer renderer = new ConfluencePageRenderer(appConfig.freemarkerConfiguration());
-
         TranslationApiProperties props = new TranslationApiProperties();
         props.setBaseUrl("http://localhost:" + translationApiMock.port());
         props.setEnabled(true);
         props.setTimeoutSeconds(10);
 
-        // Real KwMonitoringDataTranslator backed by a mock TranslationApiClient
+        // Real KwMonitoringDataTranslator backed by a mock TranslationApiClient.
         KwMonitoringDataTranslator dataTranslator = new KwMonitoringDataTranslator(mockTranslationApiClient, props);
+
+        AppConfig appConfig = new AppConfig();
+        // Renderer receives the same translator so UI labels are translated alongside content.
+        ConfluencePageRenderer renderer = new ConfluencePageRenderer(
+                appConfig.freemarkerConfiguration(), dataTranslator);
 
         orchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService, renderer, confluenceApiClient, dataTranslator);
@@ -167,10 +166,10 @@ class ConfluenceMultiLanguageReportTest {
         assertThat(result.errorMessage()).as("job must not fail").isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
 
-        // Two pages published: English + target language
-        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
+        // ONE combined page published: English section + target language section
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
 
-        // capturedPublishRequest is the last call = translated page
+        // The single published page contains the translated snippet
         assertThat(capturedPublishRequest).isNotNull();
         assertThat(capturedPublishRequest.body())
                 .as("page body must contain the translated snippet for %s", displayName)
@@ -243,7 +242,7 @@ class ConfluenceMultiLanguageReportTest {
         AppConfig appConfig = new AppConfig();
         KwToConfluenceOrchestrator errorOrchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService,
-                new ConfluencePageRenderer(appConfig.freemarkerConfiguration()),
+                new ConfluencePageRenderer(appConfig.freemarkerConfiguration(), errorTranslator),
                 confluenceApiClient,
                 errorTranslator);
 
@@ -259,8 +258,8 @@ class ConfluenceMultiLanguageReportTest {
                 .isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
 
-        // English page + Japanese page (fallback) = 2 calls
-        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
+        // ONE combined page published (English + Japanese fallback section)
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
         assertThat(capturedPublishRequest).isNotNull();
         assertThat(capturedPublishRequest.body()).isNotBlank();
     }
@@ -288,7 +287,7 @@ class ConfluenceMultiLanguageReportTest {
         AppConfig appConfig = new AppConfig();
         KwToConfluenceOrchestrator offlineOrchestrator = new KwToConfluenceOrchestrator(
                 kwGraphQLService,
-                new ConfluencePageRenderer(appConfig.freemarkerConfiguration()),
+                new ConfluencePageRenderer(appConfig.freemarkerConfiguration(), offlineTranslator),
                 confluenceApiClient,
                 offlineTranslator);
 
@@ -299,8 +298,8 @@ class ConfluenceMultiLanguageReportTest {
 
         assertThat(result.errorMessage()).isNull();
         assertThat(result.totalRecords()).isEqualTo(1);
-        // English page + German fallback page = 2 calls
-        verify(confluenceApiClient, times(2)).createOrUpdatePage(any());
+        // ONE combined page published (English + German fallback section)
+        verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -308,8 +307,8 @@ class ConfluenceMultiLanguageReportTest {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     @org.junit.jupiter.api.Test
-    @DisplayName("when languageCodes contains source + target, separate pages are published")
-    void pipeline_mixedLanguageCodeList_publishesBothPages() {
+    @DisplayName("when languageCodes contains source + target, single combined page is published")
+    void pipeline_mixedLanguageCodeList_publishesSingleCombinedPage() {
         String japaneseContent = "日本語: 今日の監視レポート";
         stubContentTranslation("ja", japaneseContent);
         stubKwService();
@@ -319,8 +318,8 @@ class ConfluenceMultiLanguageReportTest {
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(2);
-        // Last captured is the Japanese page
+        assertThat(result.publishedPages()).hasSize(1);
+        // The single page contains the Japanese translated content
         assertThat(capturedPublishRequest.body()).contains(japaneseContent);
     }
 
@@ -329,21 +328,21 @@ class ConfluenceMultiLanguageReportTest {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Stubs mockTranslationApiClient so that for any batch request for {@code targetLanguage},
-     * the response contains the correct number of {@link KwMonitoringDataTranslator#SEG}-separated
-     * segments, each filled with {@code translatedValue}. This lets the KwMonitoringDataTranslator
-     * successfully re-inject the translated field values into each monitoring document.
+     * Stubs mockTranslationApiClient so that for any string request the response {@code Map}
+     * contains {@code translatedValue} for {@code targetLanguage}, and
+     * {@link Optional#empty()} for any other language.
      */
     private void stubContentTranslation(final String targetLanguage, final String translatedValue) {
-        when(mockTranslationApiClient.translate(anyString(), anyString(), org.mockito.ArgumentMatchers.eq(targetLanguage)))
+        when(mockTranslationApiClient.translateMulti(anyString(), anyString(), any()))
                 .thenAnswer(inv -> {
-                    String batch = (String) inv.getArgument(0);
-                    String[] segments = SEG_SPLIT.split(batch, -1);
-                    // Return translatedValue for every segment, joined with <<<SEG>>>
-                    String joinedResponse = Arrays.stream(segments)
-                            .map(ignored -> translatedValue)
-                            .collect(Collectors.joining("\n" + KwMonitoringDataTranslator.SEG + "\n"));
-                    return Optional.of(joinedResponse);
+                    List<String> langs = inv.getArgument(2);
+                    Map<String, Optional<String>> result = new LinkedHashMap<>();
+                    for (String lang : langs) {
+                        result.put(lang, lang.equals(targetLanguage)
+                                ? Optional.of(translatedValue)
+                                : Optional.empty());
+                    }
+                    return result;
                 });
     }
 

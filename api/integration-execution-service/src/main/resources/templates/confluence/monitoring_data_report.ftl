@@ -1,11 +1,14 @@
 <#-- ============================================================
      monitoring_data_report.ftl
-     Confluence Storage Format Template (aligned with confluence-daily-report.ftl)
-     Root model: ConfluenceMonitoringReport
+     Confluence Storage Format Template
+     Root model : ConfluenceMonitoringReport
+     UI labels  : section.uiLabels["key"] — fully data-driven,
+                  translated by KwMonitoringDataTranslator.translateLabelMaps().
+                  No hardcoded translated strings in this file.
      ============================================================ -->
 
 <#-- ══════════════════════════════════════════════════════════
-     HELPER FUNCTIONS
+     PRIORITY COLOUR / STYLE HELPERS  (language-independent)
      ══════════════════════════════════════════════════════════ -->
 
 <#function priorityColour p>
@@ -118,13 +121,10 @@
 <#function extractStructuredValues raw>
   <#assign source = (raw!"")?string?trim/>
   <#assign values = []/>
-
   <#if !source?has_content>
     <#return values/>
   </#if>
-
   <#assign normalized = source?replace("^\\[|\\]$", "", "r")/>
-
   <#if normalized?contains("title=")>
     <#assign parts = normalized?split("title=")/>
     <#if parts?size gt 1>
@@ -156,7 +156,6 @@
       </#list>
     </#if>
   </#if>
-
   <#if !values?has_content>
     <#if normalized?contains("=")>
       <#list normalized?replace("[", "")?replace("]", "")?replace("{", "")?replace("}", "")?split(",") as token>
@@ -170,9 +169,7 @@
         </#if>
       </#list>
     </#if>
-
   </#if>
-
   <#if !values?has_content>
     <#if normalized?contains(",")>
       <#list normalized?split(",") as part>
@@ -188,7 +185,6 @@
       </#if>
     </#if>
   </#if>
-
   <#return values/>
 </#function>
 
@@ -213,7 +209,7 @@
 </#macro>
 
 <#-- ══════════════════════════════════════════════════════════
-     COLLAPSIBLE MANUAL TABLE OF CONTENTS
+     TABLE OF CONTENTS  (shown once at top — always English)
      ══════════════════════════════════════════════════════════ -->
 <#macro renderToc>
 <#assign tocTotal = 0/>
@@ -248,19 +244,25 @@
 
 <#-- ══════════════════════════════════════════════════════════
      SINGLE REPORT BLOCK
+     uiLabels — Map<String,String> from LanguageSection.uiLabels().
+       • Structural headings: lowercase keys  e.g. uiLabels["summary"]
+       • Priority values    : UPPERCASE keys  e.g. uiLabels["HIGH"]
+       • Dynamic field keys : lowercase of dynamicData key
+       • Fallback via the ! operator if a key is missing.
      ══════════════════════════════════════════════════════════ -->
-<#macro renderReport report>
+<#macro renderReport report uiLabels>
 <ac:structured-macro ac:name="expand" ac:schema-version="1">
   <#assign caseTitle = ""/>
   <#if report.serialNumbers?? && report.serialNumbers?has_content>
     <#assign caseTitle = report.serialNumbers?join(", ")/>
   </#if>
-  <ac:parameter ac:name="title">${priorityEmoji(report.priority)} [${report.priority?upper_case?xml}] ${(caseTitle?has_content)?then(caseTitle?xml + " — ", "")}${report.title?xml}</ac:parameter>
+  <#assign priorityLabel = (uiLabels[report.priority?upper_case])!report.priority?upper_case/>
+  <ac:parameter ac:name="title">${priorityEmoji(report.priority)} [${priorityLabel?xml}] ${(caseTitle?has_content)?then(caseTitle?xml + " — ", "")}${report.title?xml}</ac:parameter>
   <ac:rich-text-body>
 
     <h3>${report.title?xml}</h3>
 
-    <#-- Pull special fields out of dynamicFields to match reference row order -->
+    <#-- Extract "Date" and "Entities" from dynamic fields into dedicated rows -->
     <#assign dateValue = ""/>
     <#assign entitiesValue = ""/>
     <#assign remainingFields = []/>
@@ -281,45 +283,46 @@
       <ac:parameter ac:name="borderStyle">solid</ac:parameter>
       <ac:parameter ac:name="borderColor">${priorityBorderHex(report.priority)}</ac:parameter>
       <ac:parameter ac:name="titleBGColor">${priorityBgHex(report.priority)}</ac:parameter>
-      <ac:parameter ac:name="title">Report Details</ac:parameter>
+      <ac:parameter ac:name="title">${((uiLabels["report_details"])!"Report Details")?xml}</ac:parameter>
       <ac:rich-text-body>
         <table data-layout="full-width" style="width:100%;table-layout:fixed;">
           <tbody>
 
-            <@row heading="Priority"><@badge label=report.priority?upper_case colour=priorityColour(report.priority)/></@row>
+            <@row heading=(uiLabels["priority"])!"Priority"><@badge label=priorityLabel colour=priorityColour(report.priority)/></@row>
 
             <#if report.serialNumbers?? && report.serialNumbers?has_content>
-            <@row heading="Case Numbers">
+            <@row heading=(uiLabels["case_numbers"])!"Case Numbers">
               <@bulletList values=report.serialNumbers code=true/>
             </@row>
             </#if>
 
-            <@row heading="Date">${displayOrDash((dateValue?has_content)?then(dateValue, report.createdAt))?xml}</@row>
+            <@row heading=(uiLabels["date"])!"Date">${displayOrDash((dateValue?has_content)?then(dateValue, report.createdAt))?xml}</@row>
 
-            <@row heading="Client">${displayOrDash(report.client)?xml}</@row>
+            <@row heading=(uiLabels["client"])!"Client">${displayOrDash((report.client?has_content && report.client != "Unknown")?then(report.client, (uiLabels["unknown"])!"Unknown"))?xml}</@row>
 
             <#if entitiesValue?has_content>
-            <@row heading="Entities">
+            <@row heading=(uiLabels["entities"])!"Entities">
               <@renderCleanField raw=entitiesValue forceList=true/>
             </@row>
             </#if>
 
-            <@row heading="Summary"><@renderHtmlOrDash value=report.body/></@row>
+            <@row heading=(uiLabels["summary"])!"Summary"><@renderHtmlOrDash value=report.body/></@row>
 
             <#if remainingFields?has_content>
               <#list remainingFields as field>
-                <@row heading=field.label><@renderCleanField raw=field.value/></@row>
+                <#-- Look up translated label by lowercase key; fall back to original label -->
+                <@row heading=(uiLabels[field.label?lower_case])!field.label><@renderCleanField raw=field.value/></@row>
               </#list>
             </#if>
 
             <#if report.authors?? && report.authors?has_content>
-            <@row heading="Authors">
+            <@row heading=(uiLabels["authors"])!"Authors">
               <@bulletList values=report.authors/>
             </@row>
             </#if>
 
-            <@row heading="Created">${displayOrDash(report.createdAt)?xml}</@row>
-            <@row heading="Updated">${displayOrDash(report.updatedAt)?xml}</@row>
+            <@row heading=(uiLabels["created"])!"Created">${displayOrDash(report.createdAt)?xml}</@row>
+            <@row heading=(uiLabels["updated"])!"Updated">${displayOrDash(report.updatedAt)?xml}</@row>
 
           </tbody>
         </table>
@@ -333,26 +336,28 @@
 <#-- ══════════════════════════════════════════════════════════
      CLIENT GROUP BLOCK
      ══════════════════════════════════════════════════════════ -->
-<#macro renderClientGroup group>
-<h2>${group.clientName?xml}</h2>
+<#macro renderClientGroup group uiLabels>
+<#assign displayClientName = (group.clientName?has_content && group.clientName != "Unknown")?then(group.clientName, (uiLabels["unknown"])!"Unknown")/>
+<h2>${displayClientName?xml}</h2>
 
 <ac:structured-macro ac:name="panel" ac:schema-version="1">
-  <ac:parameter ac:name="title">Client Summary</ac:parameter>
+  <ac:parameter ac:name="title">${((uiLabels["client_summary"])!"Client Summary")?xml}</ac:parameter>
   <ac:parameter ac:name="borderStyle">solid</ac:parameter>
   <ac:parameter ac:name="borderColor">#DCDFE4</ac:parameter>
   <ac:parameter ac:name="titleBGColor">#F7F8F9</ac:parameter>
   <ac:rich-text-body>
-    <p><strong>Total Reports:</strong> ${group.totalReports}</p>
+    <p><strong>${((uiLabels["total_reports"])!"Total Reports")?xml}:</strong> ${group.totalReports}</p>
     <p style="margin:0;line-height:1.8;">
       <#list group.priorityCounts as pc>
-        <span style="display:inline-block;margin-right:8px;margin-bottom:6px;"><@badge label=pc.level + " ×" + pc.count colour=pc.colour/></span>
+        <#assign pcLabel = (uiLabels[pc.level])!pc.level/>
+        <span style="display:inline-block;margin-right:8px;margin-bottom:6px;"><@badge label=pcLabel + " ×" + pc.count colour=pc.colour/></span>
       </#list>
     </p>
   </ac:rich-text-body>
 </ac:structured-macro>
 
 <#list group.reports as report>
-<@renderReport report=report/>
+<@renderReport report=report uiLabels=uiLabels/>
 </#list>
 </#macro>
 
@@ -395,9 +400,12 @@
 
 <hr/>
 
-<h1>📋 Monitoring Reports — English</h1>
+<#list model.languageSections as section>
+<h1>${section.languageDisplayName?xml}</h1>
 
-<#list model.clientGroups as group>
-<@renderClientGroup group=group/>
+<#list section.clientGroups as group>
+<@renderClientGroup group=group uiLabels=section.uiLabels/>
 <#if group?has_next><hr/></#if>
+</#list>
+<#if section?has_next><hr/><hr/></#if>
 </#list>

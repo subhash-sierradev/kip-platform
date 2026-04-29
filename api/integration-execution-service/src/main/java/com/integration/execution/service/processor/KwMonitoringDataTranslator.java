@@ -1,19 +1,17 @@
 package com.integration.execution.service.processor;
-
 import com.integration.execution.client.TranslationApiClient;
 import com.integration.execution.config.properties.TranslationApiProperties;
 import com.integration.execution.model.KwMonitoringDocument;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.regex.Pattern;
-
+import java.util.Set;
 /**
  * Translates the human-readable text fields of {@link KwMonitoringDocument} objects
  * <em>at the data level</em> — before FreeMarker renders the Confluence page.
@@ -26,18 +24,20 @@ import java.util.regex.Pattern;
  *       (keys / field-names are left in their original language as they are
  *       schema-defined identifiers).</li>
  *   <li>String entries inside {@code attributes.tags}.</li>
+ *   <li>{@code displayFullName} values inside {@code attributes.authors[]} — author display names.</li>
  * </ul>
  *
  * <h3>Non-translated fields</h3>
  * Structural fields ({@code id}, timestamps, {@code tenantId}, form definition
- * identifiers), author display names, and serial-number strings are never sent
- * to the translation API.
+ * identifiers), and serial-number strings are never sent to the translation API.
  *
- * <h3>Batching</h3>
- * All translatable strings are collected from every document, batched into chunks
- * of at most {@link TranslationApiProperties#getMaxChars()} characters, and sent
- * to the Translation API in a single pass per batch using a segment separator
- * {@value #SEG} to join/split strings within each batch.
+ * <h3>Translation strategy</h3>
+ * All translatable strings are collected from every document and each string is
+ * sent to the Translation API individually. For multi-language output
+ * {@link #translateAll} passes every string once carrying all target language
+ * codes ({@link TranslationApiClient#translateMulti}), replacing N × L calls
+ * with N calls. When a string cannot be translated the original is kept and a
+ * WARN is logged; the pipeline never fails due to translation errors.
  *
  * <h3>Failure handling</h3>
  * Any exception causes a {@code WARN} log and the original document list is
@@ -47,20 +47,20 @@ import java.util.regex.Pattern;
 @Component
 @RequiredArgsConstructor
 public class KwMonitoringDataTranslator {
-
-    /** Segment separator used when batching multiple strings into one API call. */
-    static final String SEG = "<<<SEG>>>";
-
-    /** Compiled pattern for splitting on the segment separator. */
-    private static final Pattern SEG_PATTERN = Pattern.compile(Pattern.quote("\n" + SEG + "\n"));
+    /**
+     * Dynamic-data keys (lowercase) whose values must NOT be sent to the translation API.
+     * <ul>
+     *   <li>{@code "date"} — pre-formatted date string; month names are universal enough
+     *       and the API cannot reliably reformat dates in another language.</li>
+     * </ul>
+     */
+    private static final Set<String> NON_TRANSLATABLE_DYNAMIC_KEYS = Set.of("date");
 
     private final TranslationApiClient translationApiClient;
     private final TranslationApiProperties translationApiProperties;
-
     // -----------------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------------
-
     /**
      * Translates the text content of all documents in {@code documents} from
      * {@code sourceLanguage} to {@code targetLanguage}.
@@ -81,51 +81,74 @@ public class KwMonitoringDataTranslator {
             log.debug("Translation disabled (translation.api.enabled=false); returning original monitoring data.");
             return documents;
         }
-
         if (documents == null || documents.isEmpty()) {
             return documents;
         }
-
         if (targetLanguage == null || targetLanguage.isBlank()
                 || targetLanguage.equalsIgnoreCase(sourceLanguage)) {
             log.debug("Target '{}' equals source '{}'; skipping data translation.", targetLanguage, sourceLanguage);
             return documents;
         }
-
         try {
-            // Step 1: Extract all translatable strings and record their positions
             List<FieldRef> fieldRefs = new ArrayList<>();
             List<String> originals = new ArrayList<>();
             for (int docIdx = 0; docIdx < documents.size(); docIdx++) {
                 collectFields(documents.get(docIdx), docIdx, fieldRefs, originals);
             }
-
             if (originals.isEmpty()) {
                 log.debug("No translatable fields found in monitoring data; returning originals.");
                 return documents;
             }
-
-            int totalChars = originals.stream().mapToInt(String::length).sum();
-            log.info("Translating monitoring data: {} strings ({} chars) from '{}' to '{}'",
-                    originals.size(), totalChars, sourceLanguage, targetLanguage);
-
-            // Step 2: Translate in batches
-            List<String> translated = translateInBatches(originals, sourceLanguage, targetLanguage);
-
-            // Step 3: Deep-copy documents and apply translated values
+            log.info("Translating monitoring data: {} strings from '{}' to '{}'",
+                    originals.size(), sourceLanguage, targetLanguage);
+            List<String> translated = translateStrings(originals, sourceLanguage, targetLanguage);
             return applyTranslations(documents, fieldRefs, translated);
-
         } catch (Exception ex) {
             log.warn("KwMonitoringDataTranslator: data translation failed; returning original documents. Error: {}",
                     ex.getMessage(), ex);
             return documents;
         }
     }
-
+    /**
+     * Translates all documents to <em>every</em> non-source target language in a
+     * single pass — one API call per string instead of one per language per string.
+     *
+     * <p>The original list and its documents are <em>not</em> mutated; each language
+     * receives its own deep-copied, translated document list.</p>
+     *
+     * @param documents       source documents
+     * @param sourceLanguage  BCP-47 source language code (e.g. {@code "en"})
+     * @param targetLanguages list of BCP-47 target language codes (may include source; filtered internally)
+     * @return map of languageCode → translated document list; source language and blank/null
+     *         codes are excluded; original documents returned on disabled/error
+     */
+    public Map<String, List<KwMonitoringDocument>> translateAll(
+            final List<KwMonitoringDocument> documents,
+            final String sourceLanguage,
+            final List<String> targetLanguages) {
+        List<String> targets = filterTargets(targetLanguages, sourceLanguage);
+        if (targets.isEmpty()) {
+            return Map.of();
+        }
+        if (!translationApiProperties.isEnabled()) {
+            log.warn("Translation disabled (translation.api.enabled=false); "
+                    + "returning source-language docs for target languages: {}", targets);
+            return fallbackAll(targets, documents);
+        }
+        if (documents == null || documents.isEmpty()) {
+            return fallbackAll(targets, documents);
+        }
+        try {
+            return doTranslateAll(documents, sourceLanguage, targets);
+        } catch (Exception ex) {
+            log.warn("KwMonitoringDataTranslator: multi-language translation failed; "
+                    + "returning original documents for all languages. Error: {}", ex.getMessage(), ex);
+            return fallbackAll(targets, documents);
+        }
+    }
     // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
-
     /**
      * Collects all translatable string fields from {@code doc} and records each
      * field's position as a {@link FieldRef} so it can be re-applied after translation.
@@ -136,15 +159,14 @@ public class KwMonitoringDataTranslator {
                                 final List<String> originals) {
         collectSimpleField(doc.getTitle(), FieldKind.TITLE, null, docIdx, refs, originals);
         collectSimpleField(doc.getBody(), FieldKind.BODY, null, docIdx, refs, originals);
-
         Map<String, Object> attributes = doc.getAttributes();
         if (attributes == null) {
             return;
         }
         collectDynamicDataFields(attributes, docIdx, refs, originals);
         collectTagFields(attributes, docIdx, refs, originals);
+        collectAuthorFields(attributes, docIdx, refs, originals);
     }
-
     /** Adds a single string field to the collection lists if it is non-blank. */
     private void collectSimpleField(final String value, final FieldKind kind, final String key,
                                      final int docIdx, final List<FieldRef> refs,
@@ -154,7 +176,6 @@ public class KwMonitoringDataTranslator {
             originals.add(value);
         }
     }
-
     /** Collects translatable string values from the {@code dynamicData} map. */
     private void collectDynamicDataFields(final Map<String, Object> attributes, final int docIdx,
                                            final List<FieldRef> refs, final List<String> originals) {
@@ -165,13 +186,13 @@ public class KwMonitoringDataTranslator {
         for (Map.Entry<?, ?> entry : dynMap.entrySet()) {
             if (entry.getKey() instanceof String key
                     && entry.getValue() instanceof String value
-                    && !value.isBlank()) {
+                    && !value.isBlank()
+                    && !NON_TRANSLATABLE_DYNAMIC_KEYS.contains(key.toLowerCase(Locale.ENGLISH))) {
                 refs.add(new FieldRef(docIdx, FieldKind.DYNAMIC_VALUE, key, -1));
                 originals.add(value);
             }
         }
     }
-
     /** Collects translatable string entries from the {@code tags} list. */
     private void collectTagFields(final Map<String, Object> attributes, final int docIdx,
                                    final List<FieldRef> refs, final List<String> originals) {
@@ -187,11 +208,27 @@ public class KwMonitoringDataTranslator {
         }
     }
 
+    /** Collects {@code displayFullName} values from the {@code authors} list for translation. */
+    private void collectAuthorFields(final Map<String, Object> attributes, final int docIdx,
+                                      final List<FieldRef> refs, final List<String> originals) {
+        Object rawAuthors = attributes.get("authors");
+        if (!(rawAuthors instanceof List<?> authorList)) {
+            return;
+        }
+        for (int i = 0; i < authorList.size(); i++) {
+            if (authorList.get(i) instanceof Map<?, ?> author) {
+                Object name = author.get("displayFullName");
+                if (name instanceof String s && !s.isBlank()) {
+                    refs.add(new FieldRef(docIdx, FieldKind.AUTHOR_NAME, null, i));
+                    originals.add(s);
+                }
+            }
+        }
+    }
     /**
      * Deep-copies {@code documents} and re-injects the translated values at the
      * positions recorded in {@code refs}.
      */
-    @SuppressWarnings("unchecked")
     private List<KwMonitoringDocument> applyTranslations(final List<KwMonitoringDocument> documents,
                                                           final List<FieldRef> refs,
                                                           final List<String> translated) {
@@ -199,37 +236,55 @@ public class KwMonitoringDataTranslator {
         for (KwMonitoringDocument doc : documents) {
             result.add(deepCopy(doc));
         }
-
         for (int i = 0; i < refs.size(); i++) {
-            FieldRef ref = refs.get(i);
-            String value = translated.get(i);
-            KwMonitoringDocument doc = result.get(ref.docIdx());
-
-            switch (ref.kind()) {
-                case TITLE -> doc.setTitle(value);
-                case BODY -> doc.setBody(value);
-                case DYNAMIC_VALUE -> {
-                    Map<String, Object> attrs = doc.getAttributes();
-                    if (attrs != null && attrs.get("dynamicData") instanceof Map<?, ?> rawMap) {
-                        ((Map<String, Object>) rawMap).put(ref.key(), value);
-                    }
-                }
-                case TAG -> {
-                    Map<String, Object> attrs = doc.getAttributes();
-                    if (attrs != null && attrs.get("tags") instanceof List<?> rawList) {
-                        List<Object> tagList = (List<Object>) rawList;
-                        if (ref.tagIdx() < tagList.size()) {
-                            tagList.set(ref.tagIdx(), value);
-                        }
-                    }
-                }
-                default -> throw new IllegalStateException("Unhandled FieldKind: " + ref.kind());
-            }
+            applyFieldValue(refs.get(i), translated.get(i), result.get(refs.get(i).docIdx()));
         }
-
         return result;
     }
 
+    /**
+     * Writes one translated value back into the correct field of {@code doc},
+     * as recorded by {@code ref}.
+     */
+    @SuppressWarnings("unchecked")
+    private void applyFieldValue(final FieldRef ref, final String value,
+                                 final KwMonitoringDocument doc) {
+        switch (ref.kind()) {
+            case TITLE -> doc.setTitle(value);
+            case BODY  -> doc.setBody(value);
+            case DYNAMIC_VALUE -> {
+                Map<String, Object> attrs = doc.getAttributes();
+                if (attrs != null && attrs.get("dynamicData") instanceof Map<?, ?> rawMap) {
+                    ((Map<String, Object>) rawMap).put(ref.key(), value);
+                }
+            }
+            case TAG -> {
+                Map<String, Object> attrs = doc.getAttributes();
+                if (attrs != null && attrs.get("tags") instanceof List<?> rawList) {
+                    List<Object> tagList = (List<Object>) rawList;
+                    if (ref.tagIdx() < tagList.size()) {
+                        tagList.set(ref.tagIdx(), value);
+                    }
+                }
+            }
+            case AUTHOR_NAME -> applyAuthorName(doc, ref.tagIdx(), value);
+            default -> throw new IllegalStateException("Unhandled FieldKind: " + ref.kind());
+        }
+    }
+
+    /** Writes a translated author display name at {@code authorIdx} in the authors list. */
+    @SuppressWarnings("unchecked")
+    private void applyAuthorName(final KwMonitoringDocument doc,
+                                  final int authorIdx, final String value) {
+        Map<String, Object> attrs = doc.getAttributes();
+        if (attrs != null && attrs.get("authors") instanceof List<?> rawList) {
+            List<Object> authorList = (List<Object>) rawList;
+            if (authorIdx < authorList.size()
+                    && authorList.get(authorIdx) instanceof Map<?, ?> m) {
+                ((Map<String, Object>) m).put("displayFullName", value);
+            }
+        }
+    }
     /**
      * Creates a mutable deep copy of {@code src} so that translated values can be
      * injected without mutating the original document or its nested maps/lists.
@@ -246,12 +301,13 @@ public class KwMonitoringDataTranslator {
                     attrsCopy.put(key, new LinkedHashMap<>((Map<String, Object>) m));
                 } else if ("tags".equals(key) && val instanceof List<?> l) {
                     attrsCopy.put(key, new ArrayList<>(l));
+                } else if ("authors".equals(key) && val instanceof List<?> l) {
+                    attrsCopy.put(key, deepCopyAuthorList(l));
                 } else {
                     attrsCopy.put(key, val);
                 }
             }
         }
-
         return KwMonitoringDocument.builder()
                 .id(src.getId())
                 .title(src.getTitle())
@@ -267,71 +323,190 @@ public class KwMonitoringDataTranslator {
     }
 
     /**
-     * Splits {@code texts} into batches of at most
-     * {@link TranslationApiProperties#getMaxChars()} characters, translates each
-     * batch via {@link TranslationApiClient}, and returns the full translated list
-     * in the same order.  Falls back to the original string for any batch that fails.
+     * Deep-copies a list of author objects so that {@code displayFullName} fields can
+     * be mutated per-language without affecting the original document.
+     * Non-Map entries (e.g. plain strings) are carried over by reference.
      */
-    private List<String> translateInBatches(final List<String> texts,
-                                             final String src,
-                                             final String target) {
-        List<String> result = new ArrayList<>(texts);
-        int start = 0;
-        int batchCharLimit = translationApiProperties.getMaxChars();
-
-        while (start < texts.size()) {
-            List<String> batch = new ArrayList<>();
-            int charCount = 0;
-            int end = start;
-
-            while (end < texts.size()) {
-                String text = texts.get(end);
-                int separatorCost = batch.isEmpty() ? 0 : (SEG.length() + 2); // "\n" + SEG + "\n"
-                int toAdd = text.length() + separatorCost;
-                if (!batch.isEmpty() && charCount + toAdd > batchCharLimit) {
-                    break;
-                }
-                batch.add(text);
-                charCount += toAdd;
-                end++;
-            }
-
-            String joined = String.join("\n" + SEG + "\n", batch);
-            Optional<String> translatedOpt = translationApiClient.translate(joined, src, target);
-
-            if (translatedOpt.isPresent()) {
-                String[] parts = SEG_PATTERN.split(translatedOpt.get(), -1);
-                if (parts.length == batch.size()) {
-                    for (int i = 0; i < batch.size(); i++) {
-                        result.set(start + i, parts[i].trim());
-                    }
-                    log.debug("Data batch [{}-{}]: {} strings translated successfully.",
-                            start, end - 1, batch.size());
-                } else {
-                    log.warn("Data batch [{}-{}]: received {} segments but expected {}; "
-                            + "keeping original text for this batch.",
-                            start, end - 1, parts.length, batch.size());
-                }
+    @SuppressWarnings("unchecked")
+    private List<Object> deepCopyAuthorList(final List<?> authorList) {
+        List<Object> copy = new ArrayList<>(authorList.size());
+        for (Object author : authorList) {
+            if (author instanceof Map<?, ?> m) {
+                copy.add(new LinkedHashMap<>((Map<String, Object>) m));
             } else {
-                log.warn("Data batch [{}-{}]: Translation API returned no result; "
-                        + "keeping original text for this batch.", start, end - 1);
+                copy.add(author);
+            }
+        }
+        return copy;
+    }
+
+    /**
+     * Translates each string in {@code texts} individually via
+     * {@link TranslationApiClient#translate}. When the API returns no result for a
+     * string the original is kept and a WARN is logged.
+     */
+    private List<String> translateStrings(final List<String> texts,
+                                           final String src,
+                                           final String target) {
+        List<String> result = new ArrayList<>(texts);
+        for (int i = 0; i < texts.size(); i++) {
+            Optional<String> translated = translationApiClient.translate(texts.get(i), src, target);
+            if (translated.isPresent()) {
+                result.set(i, translated.get());
+            } else {
+                log.warn("String [{}]: Translation API returned no result; keeping original.", i);
+            }
+        }
+        return result;
+    }
+    /**
+     * Like {@link #translateStrings} but sends each string to <em>all</em>
+     * {@code targets} in a single {@link TranslationApiClient#translateMulti} call,
+     * returning a per-language result list. When a language is absent from the
+     * response the original string is kept for that language and a WARN is logged.
+     */
+    private Map<String, List<String>> translateStringsMultiLang(final List<String> texts,
+                                                                  final String src,
+                                                                  final List<String> targets) {
+        Map<String, List<String>> resultByLang = new LinkedHashMap<>();
+        for (String target : targets) {
+            resultByLang.put(target, new ArrayList<>(texts));
+        }
+        for (int i = 0; i < texts.size(); i++) {
+            Map<String, Optional<String>> perLang =
+                    translationApiClient.translateMulti(texts.get(i), src, targets);
+            for (String target : targets) {
+                Optional<String> translated = perLang.getOrDefault(target, Optional.empty());
+                if (translated.isPresent()) {
+                    resultByLang.get(target).set(i, translated.get());
+                } else {
+                    log.warn("String [{}] - '{}': Translation API returned no result; keeping original.",
+                            i, target);
+                }
+            }
+        }
+        return resultByLang;
+    }
+    /**
+     * Filters {@code targetLanguages} to non-blank, non-source, distinct codes.
+     */
+    private List<String> filterTargets(final List<String> targetLanguages,
+                                        final String sourceLanguage) {
+        return targetLanguages.stream()
+                .filter(l -> l != null && !l.isBlank() && !l.equalsIgnoreCase(sourceLanguage))
+                .distinct()
+                .toList();
+    }
+    /**
+     * Returns a map keyed by each target language that maps to the original
+     * (untranslated) {@code documents} list. Used as the fallback when disabled or failing.
+     */
+    private Map<String, List<KwMonitoringDocument>> fallbackAll(
+            final List<String> targets, final List<KwMonitoringDocument> documents) {
+        Map<String, List<KwMonitoringDocument>> fallback = new LinkedHashMap<>();
+        for (String lang : targets) {
+            fallback.put(lang, documents);
+        }
+        return fallback;
+    }
+    /**
+     * Core multi-language translation: collects fields, translates each string for
+     * all targets, and applies per-language results.
+     * Extracted from {@link #translateAll} to keep NPath complexity low.
+     */
+    private Map<String, List<KwMonitoringDocument>> doTranslateAll(
+            final List<KwMonitoringDocument> documents,
+            final String sourceLanguage,
+            final List<String> targets) {
+        List<FieldRef> fieldRefs = new ArrayList<>();
+        List<String> originals = new ArrayList<>();
+        for (int docIdx = 0; docIdx < documents.size(); docIdx++) {
+            collectFields(documents.get(docIdx), docIdx, fieldRefs, originals);
+        }
+        if (originals.isEmpty()) {
+            log.debug("No translatable fields found; returning originals for all target languages.");
+            return fallbackAll(targets, documents);
+        }
+        log.info("Multi-language translation: {} strings from '{}' to {}",
+                originals.size(), sourceLanguage, targets);
+        Map<String, List<String>> translatedByLang =
+                translateStringsMultiLang(originals, sourceLanguage, targets);
+        Map<String, List<KwMonitoringDocument>> result = new LinkedHashMap<>();
+        for (String lang : targets) {
+            List<String> translated = translatedByLang.getOrDefault(lang, new ArrayList<>(originals));
+            result.put(lang, applyTranslations(documents, fieldRefs, translated));
+        }
+        return result;
+    }
+    /**
+     * Translates a map of source-language label strings into every requested target language.
+     *
+     * <p>One {@link TranslationApiClient#translateMulti} HTTP call is made <em>per label entry</em>,
+     * covering all target languages in that single request (N labels → N HTTP requests,
+     * each returning translations for all L languages at once).  The approach follows the
+     * same "collect once, apply many" pattern used by {@link #translateStringsMultiLang}.</p>
+     *
+     * <p>Any per-label or per-language failure is handled gracefully: the original
+     * English value is kept for that entry so the pipeline never breaks.</p>
+     *
+     * @param englishLabels  map of {@code labelKey → English display string}
+     * @param sourceLanguage BCP-47 source language code (e.g. {@code "en"})
+     * @param targetLanguages list of BCP-47 target language codes; the source language
+     *                        and blank/null entries are filtered out automatically
+     * @return map of {@code languageCode → (labelKey → translated value)};
+     *         languages absent from the response fall back to the English value
+     */
+    public Map<String, Map<String, String>> translateLabelMaps(
+            final Map<String, String> englishLabels,
+            final String sourceLanguage,
+            final List<String> targetLanguages) {
+
+        List<String> targets = filterTargets(targetLanguages, sourceLanguage);
+
+        Map<String, Map<String, String>> result = new LinkedHashMap<>();
+        for (String lang : targets) {
+            result.put(lang, new LinkedHashMap<>());
+        }
+
+        if (targets.isEmpty() || !translationApiProperties.isEnabled()
+                || englishLabels == null || englishLabels.isEmpty()) {
+            // Fallback: populate each language with the English labels unchanged.
+            for (String lang : targets) {
+                if (englishLabels != null) {
+                    result.get(lang).putAll(englishLabels);
+                }
+            }
+            return result;
+        }
+
+        for (Map.Entry<String, String> entry : englishLabels.entrySet()) {
+            String labelKey = entry.getKey();
+            String englishValue = entry.getValue();
+
+            if (englishValue == null || englishValue.isBlank()) {
+                for (String lang : targets) {
+                    result.get(lang).put(labelKey, englishValue != null ? englishValue : "");
+                }
+                continue;
             }
 
-            start = end;
+            // One translateMulti call per label, covering all target languages at once.
+            Map<String, Optional<String>> perLang =
+                    translationApiClient.translateMulti(englishValue, sourceLanguage, targets);
+
+            for (String lang : targets) {
+                String translated = perLang.getOrDefault(lang, Optional.empty())
+                        .orElse(englishValue);           // fall back to English on failure
+                result.get(lang).put(labelKey, translated);
+            }
         }
 
         return result;
     }
-
-    // -----------------------------------------------------------------------
-    // Inner types
-    // -----------------------------------------------------------------------
-
-    private enum FieldKind { TITLE, BODY, DYNAMIC_VALUE, TAG }
-
+    private enum FieldKind { TITLE, BODY, DYNAMIC_VALUE, TAG, AUTHOR_NAME }
     /**
      * Records the position of a translatable string within the document list so that
-     * the translated value can be re-injected after batched translation.
+     * the translated value can be re-injected after translation.
      *
      * @param docIdx  index of the document in the list
      * @param kind    which kind of field this refers to
@@ -340,5 +515,3 @@ public class KwMonitoringDataTranslator {
      */
     private record FieldRef(int docIdx, FieldKind kind, String key, int tagIdx) { }
 }
-
-

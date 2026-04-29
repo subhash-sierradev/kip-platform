@@ -8,7 +8,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Spring-managed bean that performs a <em>single</em> text-to-language translation
@@ -45,19 +47,44 @@ public class OllamaCachedTranslator {
 
     /**
      * Prompt template used for every Ollama request.
-     * Placeholders (positional): source language name, target language name,
-     * the text to translate.
      *
      * <p>Instructions are written in English regardless of the target language
-     * because instruction-tuned models (e.g. Mistral) respond more reliably to
-     * English directives.</p>
+     * because instruction-tuned models respond more reliably to English directives.
+     * The prompt is intentionally strict to suppress LLM verbosity (preambles,
+     * disclaimers, "Here is your translation:" copy-backs).</p>
      */
     static final String PROMPT_TEMPLATE =
-            "You are a professional translator. "
-            + "Translate the following text from %s to %s. "
-            + "Return ONLY the translated text — no explanations, no introduction, "
-            + "no quotation marks around the result.\n\n"
-            + "Text to translate:\n%s";
+            "Translate from %s to %s.\n"
+            + "Output ONLY the translated text. Nothing else.\n"
+            + "Rules:\n"
+            + "- No explanations, notes, or disclaimers\n"
+            + "- No parenthetical comments or annotations\n"
+            + "- No source text\n"
+            + "- Do not write in English unless the target language is English\n"
+            + "- Do not use phrases like 'Here is', 'Translation:', 'Note:', "
+            + "'This translation is', 'Please note', etc.\n\n"
+            + "Text:\n%s";
+
+    /** Matches common LLM preamble patterns at the start of a response. */
+    private static final Pattern LEADING_ARTIFACT_PATTERN = Pattern.compile(
+            "(?i)^(here is (your |the )translation[^:\\n]*:\\s*"
+            + "|translated text:\\s*"
+            + "|translation:\\s*)",
+            Pattern.CASE_INSENSITIVE);
+
+    /** Inline English markers after which target-language text should have ended. */
+    private static final List<String> ARTIFACT_INLINE_MARKERS =
+            List.of(" Here is", " Please note", " (Note:", " Note —", " Note:",
+                    " (The translation", " (Translation", " (This translation",
+                    " (This is a");
+
+    /** Lines whose lowercased start indicates an LLM artifact paragraph. */
+    private static final List<String> ARTIFACT_LINE_PREFIXES =
+            List.of("here is", "please note", "note:", "translation:", "i am an ai", "(note:",
+                    "this translation", "this is a machine", "machine translation",
+                    "(translation", "(the translation", "the translation is",
+                    "human review", "kindly note", "disclaimer:", "please be aware",
+                    "i cannot", "i'm unable");
 
     private final OllamaClient ollamaClient;
 
@@ -82,7 +109,8 @@ public class OllamaCachedTranslator {
      */
     @Cacheable(
         cacheNames = TranslationCacheConfig.CACHE_TRANSLATIONS,
-        keyGenerator = TranslationCacheConfig.KEY_GENERATOR
+        keyGenerator = TranslationCacheConfig.KEY_GENERATOR,
+        unless = "#result == #p0"   // Do not cache fallbacks: if result == source text, Ollama failed silently
     )
     public String translateSingleLanguage(
             final String text,
@@ -99,9 +127,13 @@ public class OllamaCachedTranslator {
         try {
             OllamaGenerateResponse response = ollamaClient.generate(prompt);
 
-            String translated = response.getResponse() == null
-                    ? text
-                    : response.getResponse().trim();
+            if (response.getResponse() == null) {
+                log.warn("Ollama returned null response body for targetLang={}; "
+                        + "falling back to source text", targetLang);
+                return text;
+            }
+
+            String translated = response.getResponse().trim();
 
             if (translated.isEmpty()) {
                 log.warn("Ollama returned empty translation for targetLang={}; "
@@ -109,9 +141,15 @@ public class OllamaCachedTranslator {
                 return text;
             }
 
+            String cleaned = cleanLlmResponse(translated);
+            if (!cleaned.equals(translated)) {
+                log.debug("Stripped LLM artifacts from {} translation (before={} chars, after={} chars)",
+                        targetLang, translated.length(), cleaned.length());
+            }
+
             log.debug("Ollama translation OK: targetLang={}, outputLength={}",
-                    targetLang, translated.length());
-            return translated;
+                    targetLang, cleaned.length());
+            return cleaned;
 
         } catch (Exception ex) {
             // If the exception is (or wraps) an InterruptedException, restore the
@@ -133,6 +171,101 @@ public class OllamaCachedTranslator {
     }
 
     /**
+     * Strips LLM verbosity artifacts from a raw Ollama response.
+     *
+     * <p>Handles three common patterns:</p>
+     * <ol>
+     *   <li><strong>Leading preamble</strong> — e.g. {@code "Here is your translation: 報告詳細"}
+     *       → {@code "報告詳細"}.</li>
+     *   <li><strong>Trailing English paragraph</strong> after either a single or double newline —
+     *       e.g. {@code "報告詳細\nHere is your translation: …\nPlease note…"}
+     *       or    {@code "報告詳細\n\nHere is your translation: …"}
+     *       → {@code "報告詳細"}.
+     *       {@code stripLeading()} is applied before the artifact check so that a blank
+     *       separator line between the translation and the note is tolerated.</li>
+     *   <li><strong>Inline English suffix</strong> — e.g.
+     *       {@code "著者 Here is the translation of your text 'Authors' into Japanese."}
+     *       → {@code "著者"}.</li>
+     * </ol>
+     *
+     * <p>Falls back to the original trimmed value when cleanup would produce a
+     * blank result (safety guard).</p>
+     */
+    String cleanLlmResponse(final String raw) {
+        if (raw == null || raw.isBlank()) {
+            return raw;
+        }
+        String t = raw.trim();
+
+        // 1. Strip leading artifact preamble ("Here is your translation: ...")
+        t = stripLeadingArtifact(t);
+
+        // 2. If a newline (single or double) separates the target-language content from an
+        //    English artifact paragraph, keep only the text before the first newline.
+        //    stripLeading() on the suffix absorbs any blank separator line, so both
+        //    "\n<artifact>" and "\n\n<artifact>" are handled uniformly.
+        int nIdx = t.indexOf("\n");
+        if (nIdx > 0) {
+            String after = t.substring(nIdx + 1).stripLeading();
+            if (isArtifactLine(after)) {
+                t = t.substring(0, nIdx).strip();
+            }
+        }
+
+        // 3. Strip inline English artifact suffix that follows the translation
+        //    on the same line, e.g. "著者 Here is the translation of ..."
+        //    To handle cases where the suffix ends with the target-language word again
+        //    (e.g. "(The translation of 'X' in Japanese is '合計レポート'.)"), we check
+        //    only the first 40 characters of the suffix for ASCII.
+        for (String marker : ARTIFACT_INLINE_MARKERS) {
+            int idx = t.indexOf(marker);
+            if (idx > 0) {
+                String suffix = t.substring(idx);
+                String prefixToCheck = suffix.length() <= 40 ? suffix : suffix.substring(0, 40);
+                if (isAsciiOnly(prefixToCheck)) {
+                    t = t.substring(0, idx).strip();
+                }
+            }
+        }
+
+        return t.isBlank() ? raw.trim() : t;
+    }
+
+    /** Removes a leading preamble such as {@code "Here is your translation: "}. */
+    private String stripLeadingArtifact(final String text) {
+        java.util.regex.Matcher m = LEADING_ARTIFACT_PATTERN.matcher(text);
+        if (m.lookingAt()) {
+            String remainder = text.substring(m.end()).strip();
+            return remainder.isBlank() ? text : remainder;
+        }
+        return text;
+    }
+
+    /**
+     * Returns {@code true} when {@code text} starts with a phrase that marks an
+     * LLM artifact paragraph (English explanation / disclaimer).
+     */
+    private boolean isArtifactLine(final String text) {
+        String lower = text.toLowerCase(Locale.ENGLISH);
+        for (String prefix : ARTIFACT_LINE_PREFIXES) {
+            if (lower.startsWith(prefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Returns {@code true} if every character in {@code text} is ASCII (≤ 127). */
+    private boolean isAsciiOnly(final String text) {
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) > 127) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * Converts a BCP-47 language code to a human-readable English name that
      * instruction-tuned LLMs understand more reliably than raw codes.
      *
@@ -151,4 +284,3 @@ public class OllamaCachedTranslator {
         return name.isBlank() ? langCode : name;
     }
 }
-
