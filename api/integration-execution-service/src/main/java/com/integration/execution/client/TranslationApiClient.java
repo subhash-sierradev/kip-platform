@@ -217,10 +217,10 @@ public class TranslationApiClient {
      * <ol>
      *   <li><strong>Leading preamble</strong> — {@code "Here is your translation: 報告詳細"}
      *       → {@code "報告詳細"}.</li>
-     *   <li><strong>Newline-separated English artifact</strong> — text after the first
-     *       {@code \n} (or {@code \n\n}) that starts with an artifact phrase is dropped;
-     *       {@code stripLeading()} absorbs blank separator lines so both single- and
-     *       double-newline cases are handled uniformly.</li>
+     *   <li><strong>Newline-separated content</strong> — everything after the first {@code \n}
+     *       is unconditionally discarded.  All translatable values in this system are
+     *       single-line phrases; any multi-line content is always an LLM
+     *       disclaimer/explanation.</li>
      *   <li><strong>Inline English suffix</strong> — ASCII-only text that follows a
      *       known English marker on the same line is stripped.</li>
      * </ol>
@@ -234,18 +234,14 @@ public class TranslationApiClient {
         // 1. Strip leading artifact preamble ("Here is your translation: ...")
         t = stripLeadingArtifactPreamble(t);
 
-        // 2. Truncate at the first newline when what follows is an English artifact.
-        //    Using indexOf("\n") catches both "\n" and "\n\n"; stripLeading() eats the
-        //    blank line that often appears between the translation and the disclaimer.
-        //    Also handles the legacy "\n(ASCII-only parenthetical)" pattern.
+        // 2. Unconditionally truncate at the first newline.
+        //    All translatable values in this system are single-line phrases;
+        //    any content after the first \n is always an LLM disclaimer/explanation.
         int nIdx = t.indexOf('\n');
         if (nIdx > 0) {
-            String after = t.substring(nIdx + 1).stripLeading();
-            if (isArtifactLine(after) || isAsciiParenthetical(after)) {
-                String candidate = t.substring(0, nIdx).strip();
-                if (!candidate.isBlank()) {
-                    t = candidate;
-                }
+            String candidate = t.substring(0, nIdx).strip();
+            if (!candidate.isBlank()) {
+                t = candidate;
             }
         }
 
@@ -301,15 +297,6 @@ public class TranslationApiClient {
         return false;
     }
 
-    /**
-     * Returns {@code true} for ASCII-only parenthetical notes of the form
-     * {@code "(Some English note)"} that appear after a newline.
-     * These are LLM transcription annotations, e.g.
-     * {@code "(Japanese transcription of 'zvdxfbg')"}.
-     */
-    private boolean isAsciiParenthetical(final String text) {
-        return text.startsWith("(") && text.endsWith(")") && isAsciiOnly(text);
-    }
 
     // -----------------------------------------------------------------------
     // Fallback-detection helpers  (unchanged)

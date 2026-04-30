@@ -79,10 +79,15 @@ public class OllamaTranslationService implements TranslationService {
             String translated = cachedTranslator.translateSingleLanguage(
                     text, sourceLang, targetLang);
 
+            // Apply cleanLlmResponse on EVERY response: cache hits return the raw
+            // stored value and bypass the cleaning inside translateSingleLanguage,
+            // so old dirty cache entries are still sanitised here.
+            String cleaned = cachedTranslator.cleanLlmResponse(translated);
+
             results.add(TranslationResult.builder()
                     .translatedTimestamp(Instant.now().getEpochSecond())
                     .languageCode(targetLang)
-                    .value(translated)
+                    .value(cleaned)
                     .build());
         }
 

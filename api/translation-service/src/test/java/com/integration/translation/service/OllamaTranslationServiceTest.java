@@ -12,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -39,6 +40,10 @@ class OllamaTranslationServiceTest {
     @BeforeEach
     void setUp() {
         service = new OllamaTranslationService(cachedTranslator);
+        // cleanLlmResponse is a defense layer called after every translateSingleLanguage.
+        // In these orchestration tests, stub it as a pass-through so mock return values
+        // flow through unchanged (cleaning logic is tested in OllamaCachedTranslatorTest).
+        when(cachedTranslator.cleanLlmResponse(any())).thenAnswer(inv -> inv.getArgument(0));
     }
 
     @Test
@@ -138,4 +143,3 @@ class OllamaTranslationServiceTest {
         assertThat(response.isExtractOnDisk()).isFalse();
     }
 }
-

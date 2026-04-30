@@ -308,8 +308,9 @@ class TranslationApiClientTest {
     }
 
     @Test
-    void translate_nonAsciiParenthetical_notStripped() {
-        // Parenthetical contains non-ASCII (e.g. Japanese) — should NOT be stripped
+    void translate_nonAsciiParenthetical_strippedAtNewline() {
+        // Parenthetical after \n is always an LLM explanation — unconditionally truncated
+        // regardless of whether it contains non-ASCII characters.
         wireMock.stubFor(post(urlEqualTo(TRANSLATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(200)
@@ -328,7 +329,7 @@ class TranslationApiClientTest {
 
         Optional<String> result = client.translate("Hello", "en", "ja");
 
-        assertThat(result).isPresent().hasValue("こんにちは\n(世界への挨拶)");
+        assertThat(result).isPresent().hasValue("こんにちは");
     }
 
     @Test
@@ -531,10 +532,18 @@ class TranslationApiClientTest {
     }
 
     @Test
-    void cleanTranslationResponse_multiLineNonArtifact_keptIntact() {
-        // Second line is legitimate Japanese, not an artifact
+    void cleanTranslationResponse_multiLineInput_truncatedAtFirstNewline() {
+        // All translatable values are single-line; everything after \n is always discarded
         String raw = "第一行\n第二行";
-        assertThat(client.cleanTranslationResponse(raw)).isEqualTo("第一行\n第二行");
+        assertThat(client.cleanTranslationResponse(raw)).isEqualTo("第一行");
+    }
+
+    @Test
+    void cleanTranslationResponse_nonAsciiParentheticalAfterNewline_truncated() {
+        // Real-world case: "総合レポート\n(total reports can be translated as \"総合\" which means...)"
+        // Previously NOT stripped because isAsciiParenthetical returned false (non-ASCII inside).
+        String raw = "総合レポート\n(total reports can be translated as \"総合\" which means \"total\" or \"comprehensive\".)";
+        assertThat(client.cleanTranslationResponse(raw)).isEqualTo("総合レポート");
     }
 
     @Test
