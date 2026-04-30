@@ -176,7 +176,8 @@ public class KwMonitoringDataTranslator {
             originals.add(value);
         }
     }
-    /** Collects translatable string values from the {@code dynamicData} map. */
+    /** Collects translatable string values from the {@code dynamicData} map,
+     *  including values that are themselves nested Maps (e.g. option/entity references). */
     private void collectDynamicDataFields(final Map<String, Object> attributes, final int docIdx,
                                            final List<FieldRef> refs, final List<String> originals) {
         Object rawDynamic = attributes.get("dynamicData");
@@ -184,12 +185,28 @@ public class KwMonitoringDataTranslator {
             return;
         }
         for (Map.Entry<?, ?> entry : dynMap.entrySet()) {
-            if (entry.getKey() instanceof String key
-                    && entry.getValue() instanceof String value
-                    && !value.isBlank()
-                    && !NON_TRANSLATABLE_DYNAMIC_KEYS.contains(key.toLowerCase(Locale.ENGLISH))) {
-                refs.add(new FieldRef(docIdx, FieldKind.DYNAMIC_VALUE, key, -1));
-                originals.add(value);
+            if (!(entry.getKey() instanceof String key)) {
+                continue;
+            }
+            if (NON_TRANSLATABLE_DYNAMIC_KEYS.contains(key.toLowerCase(Locale.ENGLISH))) {
+                continue;
+            }
+            Object val = entry.getValue();
+            if (val instanceof String strVal && !strVal.isBlank()) {
+                // Plain string value
+                refs.add(new FieldRef(docIdx, FieldKind.DYNAMIC_VALUE, key, -1, null));
+                originals.add(strVal);
+            } else if (val instanceof Map<?, ?> innerMap) {
+                // Nested map — find the first String value inside it (mirrors resolveStringValue logic)
+                for (Map.Entry<?, ?> inner : innerMap.entrySet()) {
+                    if (inner.getKey() instanceof String innerKey
+                            && inner.getValue() instanceof String innerStr
+                            && !innerStr.isBlank()) {
+                        refs.add(new FieldRef(docIdx, FieldKind.DYNAMIC_VALUE, key, -1, innerKey));
+                        originals.add(innerStr);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -255,7 +272,18 @@ public class KwMonitoringDataTranslator {
             case DYNAMIC_VALUE -> {
                 Map<String, Object> attrs = doc.getAttributes();
                 if (attrs != null && attrs.get("dynamicData") instanceof Map<?, ?> rawMap) {
-                    ((Map<String, Object>) rawMap).put(ref.key(), value);
+                    if (ref.innerKey() == null) {
+                        // Plain string value — replace directly
+                        ((Map<String, Object>) rawMap).put(ref.key(), value);
+                    } else {
+                        // Nested map value — write translated string back into the inner map.
+                        // The inner map is guaranteed to exist and be a Map by construction
+                        // (collectDynamicDataFields only creates an innerKey ref when the value IS a Map,
+                        // and deepCopy preserves those inner maps as LinkedHashMaps).
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> innerMap = (Map<String, Object>) rawMap.get(ref.key());
+                        innerMap.put(ref.innerKey(), value);
+                    }
                 }
             }
             case TAG -> {
@@ -298,7 +326,20 @@ public class KwMonitoringDataTranslator {
                 String key = entry.getKey();
                 Object val = entry.getValue();
                 if ("dynamicData".equals(key) && val instanceof Map<?, ?> m) {
-                    attrsCopy.put(key, new LinkedHashMap<>((Map<String, Object>) m));
+                    // Deep copy: also copy any Map values inside dynamicData so that
+                    // applyFieldValue mutations on inner maps don't bleed across language copies.
+                    Map<String, Object> dynCopy = new LinkedHashMap<>();
+                    for (Map.Entry<?, ?> dynEntry : m.entrySet()) {
+                        if (dynEntry.getKey() instanceof String dynKey) {
+                            Object dynVal = dynEntry.getValue();
+                            if (dynVal instanceof Map<?, ?> innerMap) {
+                                dynCopy.put(dynKey, new LinkedHashMap<>((Map<String, Object>) innerMap));
+                            } else {
+                                dynCopy.put(dynKey, dynVal);
+                            }
+                        }
+                    }
+                    attrsCopy.put(key, dynCopy);
                 } else if ("tags".equals(key) && val instanceof List<?> l) {
                     attrsCopy.put(key, new ArrayList<>(l));
                 } else if ("authors".equals(key) && val instanceof List<?> l) {
@@ -504,14 +545,23 @@ public class KwMonitoringDataTranslator {
         return result;
     }
     private enum FieldKind { TITLE, BODY, DYNAMIC_VALUE, TAG, AUTHOR_NAME }
+
     /**
      * Records the position of a translatable string within the document list so that
      * the translated value can be re-injected after translation.
      *
-     * @param docIdx  index of the document in the list
-     * @param kind    which kind of field this refers to
-     * @param key     map key — only used for {@link FieldKind#DYNAMIC_VALUE}
-     * @param tagIdx  list index — only used for {@link FieldKind#TAG}
+     * @param docIdx   index of the document in the list
+     * @param kind     which kind of field this refers to
+     * @param key      map key — only used for {@link FieldKind#DYNAMIC_VALUE}
+     * @param tagIdx   list index — only used for {@link FieldKind#TAG} and {@link FieldKind#AUTHOR_NAME}
+     * @param innerKey when the dynamic-data value is itself a Map, this is the key inside
+     *                 that inner map whose String value was extracted for translation.
+     *                 {@code null} when the dynamic-data value is a plain String.
      */
-    private record FieldRef(int docIdx, FieldKind kind, String key, int tagIdx) { }
+    private record FieldRef(int docIdx, FieldKind kind, String key, int tagIdx, String innerKey) {
+        /** Convenience constructor for non-nested fields (innerKey = null). */
+        FieldRef(int docIdx, FieldKind kind, String key, int tagIdx) {
+            this(docIdx, kind, key, tagIdx, null);
+        }
+    }
 }

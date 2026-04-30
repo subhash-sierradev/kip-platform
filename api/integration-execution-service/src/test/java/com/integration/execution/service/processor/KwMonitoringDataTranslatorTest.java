@@ -12,6 +12,7 @@ import org.mockito.quality.Strictness;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -560,17 +561,16 @@ class KwMonitoringDataTranslatorTest {
     }
 
     @Test
-    void translateLabelMaps_multipleTargetLanguages_translatesSeparately() {
-        when(translationApiClient.translateMulti("Priority", "en", List.of("ja", "de")))
-                .thenReturn(Map.of("ja", Optional.of("優先度"), "de", Optional.of("Priorität")));
-
-        Map<String, String> labels = Map.of("priority", "Priority");
+    void translateLabelMaps_nullLabelValue_storedAsEmptyStringWithoutApiCall() {
+        // englishValue == null branch in the null-or-blank check
+        Map<String, String> labels = new java.util.LinkedHashMap<>();
+        labels.put("optional_key", null);
 
         Map<String, Map<String, String>> result =
-                translator.translateLabelMaps(labels, "en", List.of("ja", "de"));
+                translator.translateLabelMaps(labels, "en", List.of("de"));
 
-        assertThat(result.get("ja")).containsEntry("priority", "優先度");
-        assertThat(result.get("de")).containsEntry("priority", "Priorität");
+        assertThat(result.get("de")).containsEntry("optional_key", "");
+        verify(translationApiClient, never()).translateMulti(anyString(), anyString(), any());
     }
 
     // ── Non-translatable dynamic keys ────────────────────────────────────────
@@ -657,8 +657,6 @@ class KwMonitoringDataTranslatorTest {
 
     @Test
     void translate_whenAuthorEntryIsNotAMap_entryIsSkippedInCollection() {
-        // An author entry that is a plain String (not a Map) should not be collected
-        // for translation and should be preserved as-is in the deep copy.
         List<Object> authors = new ArrayList<>(List.of("plain-string-author"));
         Map<String, Object> attrs = new HashMap<>();
         attrs.put("authors", authors);
@@ -682,10 +680,122 @@ class KwMonitoringDataTranslatorTest {
                 .id("id1").title("Hello").attributes(attrs).build();
         when(translationApiClient.translate(anyString(), anyString(), anyString()))
                 .thenReturn(Optional.of("Hallo"));
-        // Only title is translated (1 call); blank displayFullName is not sent to API
         List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "de");
         verify(translationApiClient, times(1)).translate(anyString(), anyString(), anyString());
         List<?> resultAuthors = (List<?>) result.getFirst().getAttributes().get("authors");
         assertThat(((Map<?, ?>) resultAuthors.get(0)).get("displayFullName")).isEqualTo("   ");
+    }
+
+    // -- collectDynamicDataFields - nested Map value handling --
+
+    @Test
+    void translate_whenDynamicDataValueIsMapWithStringEntry_innerStringIsTranslated() {
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("label", "Laptop");
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("Client 1 Devices", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument doc = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Laptop", "en", "ja")).thenReturn(Optional.of("ラップトップ"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "ja");
+
+        Map<?, ?> resultDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        Map<?, ?> resultInner = (Map<?, ?>) resultDyn.get("Client 1 Devices");
+        assertThat(resultInner.get("label")).isEqualTo("ラップトップ");
+    }
+
+    @Test
+    void translate_whenDynamicDataValueIsMapWithNoStringEntry_entryIsSkipped() {
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("id", 42);
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("EntityRef", innerMap);
+        dynData.put("Status", "Active");
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument doc = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Active", "en", "ja")).thenReturn(Optional.of("アクティブ"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "ja");
+
+        Map<?, ?> resultDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        assertThat(((Map<?, ?>) resultDyn.get("EntityRef")).get("id")).isEqualTo(42);
+        assertThat(resultDyn.get("Status")).isEqualTo("アクティブ");
+        verify(translationApiClient, times(1)).translate(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void translate_whenDynamicDataValueIsMapWithBlankStringEntry_entryIsSkipped() {
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("label", "   ");
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("EmptyField", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument doc = KwMonitoringDocument.builder()
+                .id("id1").title("Hello").attributes(attrs).build();
+        when(translationApiClient.translate(anyString(), anyString(), anyString()))
+                .thenReturn(Optional.of("Hallo"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "ja");
+
+        verify(translationApiClient, times(1)).translate(anyString(), anyString(), anyString());
+        Map<?, ?> resultDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        assertThat(((Map<?, ?>) resultDyn.get("EmptyField")).get("label")).isEqualTo("   ");
+    }
+
+    @Test
+    void translate_nestedMapTranslation_doesNotMutateOriginalDocument() {
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("label", "Department A");
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("Department Data", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument original = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Department A", "en", "ja"))
+                .thenReturn(Optional.of("部門A"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(original), "en", "ja");
+
+        Map<?, ?> translatedDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        assertThat(((Map<?, ?>) translatedDyn.get("Department Data")).get("label")).isEqualTo("部門A");
+        assertThat(innerMap.get("label")).isEqualTo("Department A");
+    }
+
+    @Test
+    void translate_dynamicDataDateField_isNotSentToTranslationApi() {
+        when(translationApiClient.translate(anyString(), anyString(), anyString()))
+                .thenReturn(Optional.of("translated"));
+
+        Map<String, Object> dynData = new HashMap<>();
+        dynData.put("Status", "Open");
+        dynData.put("Date", "01 May 2025");
+
+        KwMonitoringDocument doc = KwMonitoringDocument.builder()
+                .id("d1")
+                .attributes(Map.of("dynamicData", dynData))
+                .build();
+
+        translator.translate(List.of(doc), "en", "ja");
+
+        verify(translationApiClient, never()).translate(
+                org.mockito.ArgumentMatchers.eq("01 May 2025"), anyString(), anyString());
+    }
+
+    @Test
+    void translateLabelMaps_multipleTargetLanguages_translatesSeparately() {
+        when(translationApiClient.translateMulti("Priority", "en", List.of("ja", "de")))
+                .thenReturn(Map.of("ja", Optional.of("優先度"), "de", Optional.of("Priorität")));
+
+        Map<String, String> labels = Map.of("priority", "Priority");
+
+        Map<String, Map<String, String>> result =
+                translator.translateLabelMaps(labels, "en", List.of("ja", "de"));
+
+        assertThat(result.get("ja")).containsEntry("priority", "優先度");
+        assertThat(result.get("de")).containsEntry("priority", "Priorität");
     }
 }
