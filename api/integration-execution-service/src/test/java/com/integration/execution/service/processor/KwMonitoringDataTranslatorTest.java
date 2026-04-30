@@ -727,6 +727,77 @@ class KwMonitoringDataTranslatorTest {
     }
 
     @Test
+    void translate_whenDynamicDataValueIsMapWithListEntry_listItemsAreTranslated() {
+        // Inner map has a List value — each String item should be translated individually
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("Client 1 Devices", new ArrayList<>(List.of("Device 1", "Device 4", "Other")));
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("Client 1 Devices", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument doc = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Device 1", "en", "ja")).thenReturn(Optional.of("デバイス1"));
+        when(translationApiClient.translate("Device 4", "en", "ja")).thenReturn(Optional.of("デバイス4"));
+        when(translationApiClient.translate("Other", "en", "ja")).thenReturn(Optional.of("その他"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "ja");
+
+        Map<?, ?> resultDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        Map<?, ?> resultInner = (Map<?, ?>) resultDyn.get("Client 1 Devices");
+        @SuppressWarnings("unchecked")
+        List<String> resultList = (List<String>) resultInner.get("Client 1 Devices");
+        assertThat(resultList).containsExactly("デバイス1", "デバイス4", "その他");
+        // Original not mutated
+        @SuppressWarnings("unchecked")
+        List<String> originalListCheck = (List<String>) innerMap.get("Client 1 Devices");
+        assertThat(originalListCheck).containsExactly("Device 1", "Device 4", "Other");
+    }
+
+    @Test
+    void translate_whenDynamicDataValueIsMapWithListContainingBlankItems_blankItemsSkipped() {
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("devices", new ArrayList<>(List.of("Device 1", "  ", "Device 4")));
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("Devices", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument doc = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Device 1", "en", "ja")).thenReturn(Optional.of("デバイス1"));
+        when(translationApiClient.translate("Device 4", "en", "ja")).thenReturn(Optional.of("デバイス4"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(doc), "en", "ja");
+
+        Map<?, ?> resultDyn = (Map<?, ?>) result.getFirst().getAttributes().get("dynamicData");
+        List<?> resultList = (List<?>) ((Map<?, ?>) resultDyn.get("Devices")).get("devices");
+        assertThat(resultList.get(0)).isEqualTo("デバイス1");
+        assertThat(resultList.get(1)).isEqualTo("  "); // blank untouched
+        assertThat(resultList.get(2)).isEqualTo("デバイス4");
+        verify(translationApiClient, times(2)).translate(anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void translate_nestedMapWithListTranslation_doesNotMutateOriginalDocument() {
+        List<String> originalList = new ArrayList<>(List.of("Device 1", "Device 4"));
+        Map<String, Object> innerMap = new LinkedHashMap<>();
+        innerMap.put("items", originalList);
+        Map<String, Object> dynData = new LinkedHashMap<>();
+        dynData.put("Equipment", innerMap);
+        Map<String, Object> attrs = new HashMap<>();
+        attrs.put("dynamicData", dynData);
+        KwMonitoringDocument original = KwMonitoringDocument.builder().id("id1").attributes(attrs).build();
+        when(translationApiClient.translate("Device 1", "en", "ja")).thenReturn(Optional.of("デバイス1"));
+        when(translationApiClient.translate("Device 4", "en", "ja")).thenReturn(Optional.of("デバイス4"));
+
+        List<KwMonitoringDocument> result = translator.translate(List.of(original), "en", "ja");
+
+        @SuppressWarnings("unchecked")
+        List<String> translatedList = (List<String>) ((Map<?, ?>) ((Map<?, ?>) result.getFirst()
+                .getAttributes().get("dynamicData")).get("Equipment")).get("items");
+        assertThat(translatedList).containsExactly("デバイス1", "デバイス4");
+        assertThat(originalList).containsExactly("Device 1", "Device 4"); // original unchanged
+    }
+
+    @Test
     void translate_whenDynamicDataValueIsMapWithBlankStringEntry_entryIsSkipped() {
         Map<String, Object> innerMap = new LinkedHashMap<>();
         innerMap.put("label", "   ");
