@@ -12,7 +12,7 @@ class JiraWebhookBasicDetailsPage extends BasePage {
   }
 
   async fillWebhookName(name) {
-    await this.type(this.webhookNameInput, name);
+    await this.fill(this.webhookNameInput, name);
   }
 
   async fillDescription(description) {

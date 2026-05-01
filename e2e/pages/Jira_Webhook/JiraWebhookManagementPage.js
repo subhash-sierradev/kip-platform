@@ -36,13 +36,17 @@ export class JiraWebhookManagementPage extends BasePage {
     this.enableSuccessNotification = page.locator('.notification, .toast, .alert, [role="alert"]').filter({ hasText: /enabled successfully|webhook has been enabled/i }).first();
     
     // Connection verification buttons
-    this.verifyConnectionButton = page.getByRole('button', { name: 'Verify Connection' });
+    this.verifyConnectionButton = page.getByRole('button', { name: 'Test Connection' });
     this.verifiedButton = page.getByRole('button', { name: 'Verified' });
     
-    // Data Grid Elements for History
+    // Data Grid Elements for History - aligned with ArcGIS pattern
     this.dataGrid = page.locator('[role="grid"]');
-    // Get data rows by excluding rows that contain columnheader
-    this.gridRows = page.locator('[role="grid"] [role="row"]:not(:has([role="columnheader"]))');
+    // Get data rows excluding header rows - simplified selector like ArcGIS
+    this.gridRows = page.locator('[role="grid"] [role="row"]');
+    
+    // History tab locators - aligned with ArcGIS pattern  
+    this.webhookHistoryTab = page.getByRole('tab', { name: 'Webhook History' });
+    this.webhookDetailsTab = page.getByRole('tab', { name: 'Webhook Details' });
   }
 
   //Search for a webhook by name
@@ -203,21 +207,22 @@ export class JiraWebhookManagementPage extends BasePage {
     const notification = this.page.locator('text=/Webhook test completed successfully/i');
     await expect(notification).toBeVisible({ timeout: 15000 });
     
-    // Navigate to Webhook History tab
-    const historyTab = this.uiCommon.getTab('Webhook History');
-    await historyTab.click();
+    // Navigate to Webhook History tab using instance variables (ArcGIS pattern)
+    await expect(this.webhookHistoryTab).toBeVisible({ timeout: 10000 });
+    await this.webhookHistoryTab.click();
     await this.dataGrid.waitFor({ state: 'visible', timeout: 10000 });
     
     // Verify first history record data if expected values provided
     if (expectedRecordData) {
-      const firstRow = this.gridRows.first();
-      await firstRow.waitFor({ state: 'visible', timeout: 10000 });
-      
-      const cells = firstRow.locator('[role="gridcell"]');
-      
+      // Webhook processing is async — poll by toggling tabs to force grid refresh (ArcGIS pattern)
       if (expectedRecordData.status) {
-        const status = await cells.nth(2).textContent();
-        expect(status?.trim()).toContain(expectedRecordData.status);
+        await expect(async () => {
+          await this.webhookDetailsTab.click();
+          await this.webhookHistoryTab.click();
+          await this.gridRows.first().waitFor({ state: 'visible', timeout: 10000 });
+          const statusText = await this.gridRows.first().locator('[role=\"gridcell\"]').nth(2).textContent();
+          expect(statusText?.trim()).toContain(expectedRecordData.status);
+        }).toPass({ timeout: 60000, intervals: [3000, 5000, 7000] });
       }
     }
     

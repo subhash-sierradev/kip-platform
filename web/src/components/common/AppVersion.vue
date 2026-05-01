@@ -1,14 +1,18 @@
 <template>
   <div class="app-version">
-    <div class="version-row">
-      <span class="version-label">Web</span>
-      <span class="version-value">{{ version }}</span>
-      <span class="version-sep">·</span>
-      <span class="version-label">IMS</span>
-      <span class="version-value">{{ imsVersion }}</span>
-      <span class="version-sep">·</span>
-      <span class="version-label">IES</span>
-      <span class="version-value">{{ iesVersion }}</span>
+    <div class="version-stack">
+      <div class="version-badge">
+        <span class="vb-label">Web</span>
+        <span class="vb-val">{{ version }}</span>
+      </div>
+      <div class="version-badge">
+        <span class="vb-label">IMS</span>
+        <span class="vb-val">{{ imsVersion }}</span>
+      </div>
+      <div class="version-badge">
+        <span class="vb-label">IES</span>
+        <span class="vb-val">{{ iesVersion }}</span>
+      </div>
     </div>
     <span class="copyright-text">© {{ currentYear }} Kaseware Inc.</span>
   </div>
@@ -58,37 +62,45 @@ export default {
 </script>
 
 <style scoped>
-.version-row {
+.app-version {
+  width: 100%;
+}
+
+.version-stack {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 0.25rem;
+  flex-direction: column;
+  gap: 3px;
   font-size: 10px;
   font-family: 'Segoe UI', system-ui, sans-serif;
   line-height: 1.4;
 }
 
-.version-label {
-  color: rgba(255, 255, 255, 0.4);
+.version-badge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.vb-label {
+  color: rgba(255, 255, 255, 0.35);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
+  flex-shrink: 0;
 }
 
-.version-value {
-  color: rgba(255, 255, 255, 0.6);
+.vb-val {
+  color: rgba(255, 255, 255, 0.65);
   font-variant-numeric: tabular-nums;
-}
-
-.version-sep {
-  color: rgba(255, 255, 255, 0.2);
+  font-family: 'SF Mono', 'Consolas', 'Courier New', monospace;
+  font-size: 9.5px;
 }
 
 .copyright-text {
   display: block;
-  margin-top: 0.25rem;
+  margin-top: 6px;
   font-size: 9px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.25);
   letter-spacing: 0.2px;
   text-align: center;
 }

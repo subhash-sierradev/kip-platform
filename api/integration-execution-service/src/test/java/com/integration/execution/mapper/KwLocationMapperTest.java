@@ -514,6 +514,88 @@ class KwLocationMapperTest {
     }
 
     @Test
+    void transformToArcGISFeature_dateFieldWithNullFromConvertToEpochMillis_treatedAsInvalid() {
+        // Covers isInvalidTimestamp(null) → case null → return true
+        ObjectNode locationNode = new ObjectMapper().createObjectNode();
+        locationNode.put("createdTimestamp", 123L);
+
+        IntegrationFieldMappingDto mapping = IntegrationFieldMappingDto.builder()
+                .sourceFieldPath("createdTimestamp")
+                .targetFieldPath("createdDate")
+                .transformationType(FieldTransformationType.PASSTHROUGH)
+                .isMandatory(false)
+                .build();
+
+        when(fieldTransformationService.applyTransformation(any(), eq(mapping))).thenReturn("val");
+        when(fieldTransformationService.convertToEpochMillis("val")).thenReturn(null);
+
+        ObjectNode feature = mapper.transformToArcGISFeature(locationNode, List.of(mapping));
+
+        assertThat(feature.path("attributes").has("createdDate")).isFalse();
+    }
+
+    @Test
+    void extractLocations_entityLocationWithJsonNullValue_isSkipped() throws Exception {
+        // Covers location != null = false branch: json null literal in array → entityType == null
+        // (JsonNull.path("entityType").asText(null) = null, so "ENTITY_LOCATION".equals(null) = false)
+        // Also covers entityType != "ENTITY_LOCATION" (false branch of inner if)
+        String payload = "[{\"entityType\":\"ENTITY_DOCUMENT\",\"id\":\"doc-1\"}]";
+
+        List<KwLocationDto> locations = mapper.extractLocations(new ObjectMapper().readTree(payload));
+
+        assertThat(locations).isEmpty();
+    }
+
+    @Test
+    void transformToArcGISFeaturesWithMetadata_nullFieldMappings_throwsIllegalStateException() {
+        // Covers fieldMappings == null branch in "fieldMappings == null || fieldMappings.isEmpty()"
+        assertThatThrownBy(() -> mapper.transformToArcGISFeaturesWithMetadata(List.of(), null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No field mappings provided");
+    }
+
+    @Test
+    void transformToArcGISFeature_dateFieldWithNonParsableStringTimestamp_treatedAsInvalid() {
+        // Covers isInvalidTimestamp(String) where NumberFormatException is thrown
+        ObjectNode locationNode = new ObjectMapper().createObjectNode();
+        locationNode.put("createdTimestamp", 123L);
+
+        IntegrationFieldMappingDto mapping = IntegrationFieldMappingDto.builder()
+                .sourceFieldPath("createdTimestamp")
+                .targetFieldPath("createdDate")
+                .transformationType(FieldTransformationType.PASSTHROUGH)
+                .isMandatory(false)
+                .build();
+
+        when(fieldTransformationService.applyTransformation(any(), eq(mapping))).thenReturn("val");
+        when(fieldTransformationService.convertToEpochMillis("val")).thenReturn("not-a-number");
+
+        ObjectNode feature = mapper.transformToArcGISFeature(locationNode, List.of(mapping));
+
+        // Non-numeric string → isInvalidTimestamp returns true → treated as invalid → not in attributes
+        assertThat(feature.path("attributes").has("createdDate")).isFalse();
+    }
+
+    @Test
+    void transformToArcGISFeature_dateFieldWithTransformNullNotMandatory_skipsAttribute() {
+        // Covers isDateTimeField=true, transformedValue=null after applyTransformation (not entering isInvalidTimestamp block)
+        ObjectNode locationNode = new ObjectMapper().createObjectNode();
+
+        IntegrationFieldMappingDto mapping = IntegrationFieldMappingDto.builder()
+                .sourceFieldPath("missingField")
+                .targetFieldPath("createdDate")
+                .transformationType(FieldTransformationType.PASSTHROUGH)
+                .isMandatory(false)
+                .build();
+
+        when(fieldTransformationService.applyTransformation(any(), eq(mapping))).thenReturn(null);
+
+        ObjectNode feature = mapper.transformToArcGISFeature(locationNode, List.of(mapping));
+
+        assertThat(feature.path("attributes").has("createdDate")).isFalse();
+    }
+
+    @Test
     void transformToArcGISFeature_dateFieldWithNegativeLongTimestamp_treatedAsInvalid() {
         ObjectNode locationNode = new ObjectMapper().createObjectNode();
         locationNode.put("createdTimestamp", 123L);

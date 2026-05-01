@@ -5,10 +5,9 @@ class JiraWebhookFieldMappingPage extends BasePage {
   constructor(page) {
     super(page);
     
-    // Static locators
+    // Static locators - updated to match actual form structure
     this.projectDropdown = page.getByRole('combobox').nth(2);
-    this.issueTypeDropdown = page.getByRole('combobox').nth(3);
-    this.assigneeDropdown = page.getByRole('combobox').nth(4);
+    this.issueTypeDropdown = page.getByRole('combobox').nth(4);
     this.summaryTemplateInput = page.getByRole('textbox', { name: 'Enter issue summary template' });
     this.descriptionTemplateInput = page.getByRole('textbox', { name: 'Enter issue description' });
     this.nextButton = page.getByRole('button', { name: 'Next →' });

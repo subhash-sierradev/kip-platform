@@ -16,7 +16,7 @@ integration:
 
   http-clients:
     proxy:
-      enabled: ${HTTP_PROXY_ENABLED:false}
+      enabled: ${HTTP_PROXY_ENABLED:true}
       host: ${HTTP_PROXY_HOST}
       port: ${HTTP_PROXY_PORT}
 

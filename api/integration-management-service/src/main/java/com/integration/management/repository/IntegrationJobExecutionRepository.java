@@ -62,13 +62,16 @@ public interface IntegrationJobExecutionRepository
             @Param("tenantId") String tenantId,
             Sort sort);
 
-    @Query(value = "SELECT DISTINCT ON (e.original_job_id) e.* "
+    @Query(value = "SELECT * FROM ("
+            + "SELECT DISTINCT ON (e.original_job_id) e.* "
             + "FROM integration_platform.integration_job_executions e "
             + "JOIN integration_platform.confluence_integrations ci ON ci.schedule_id = e.schedule_id "
             + "WHERE ci.id = :integrationId "
             + "  AND ci.tenant_id = :tenantId "
             + "  AND ci.is_deleted = false "
-            + "ORDER BY e.original_job_id, e.retry_attempt DESC, e.started_at DESC",
+            + "ORDER BY e.original_job_id, e.retry_attempt DESC, e.started_at DESC"
+            + ") latest_executions "
+            + "ORDER BY latest_executions.started_at DESC, latest_executions.id DESC",
             nativeQuery = true)
     List<IntegrationJobExecution> findByConfluenceIntegrationAndTenant(
             @Param("integrationId") UUID integrationId,

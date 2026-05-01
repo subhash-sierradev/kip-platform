@@ -1,8 +1,10 @@
 import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
+import { nextTick } from 'vue';
 import { createMemoryHistory, createRouter } from 'vue-router';
 
 import AppShell from '@/components/layout/AppShell.vue';
+import { useAuthStore } from '@/store/auth';
 
 vi.mock('@/composables/useNotifications', () => ({
   useNotifications: vi.fn(),
@@ -299,5 +301,58 @@ describe('AppShell branches', () => {
 
     await wrapper.find('.mobile-overlay').trigger('click');
     expect(wrapper.find('.mobile-overlay').exists()).toBe(false);
+  });
+});
+
+describe('ArcGIS Verify nav item visibility', () => {
+  const baseUserInfo = {
+    userName: 'test',
+    userMail: 'test@example.com',
+    tenantId: 'tenant-1',
+    userId: 'user-1',
+  };
+
+  function mountShell() {
+    const router = buildRouter();
+    return mount(AppShell, {
+      global: {
+        plugins: [router],
+        stubs: { TopBar: TopBarStub, SideNav: SideNavStub },
+      },
+    });
+  }
+
+  function getAdminChildren(wrapper: ReturnType<typeof mount>) {
+    const sections = wrapper.findComponent({ name: 'SideNav' }).props('sections') as Array<{
+      label: string;
+      children?: Array<{ label: string }>;
+    }>;
+    return sections.find(s => s.label === 'Admin')?.children ?? [];
+  }
+
+  it('hides ArcGIS Verify when user has only tenant_admin', async () => {
+    const authStore = useAuthStore();
+    authStore.$patch({ userInfo: { ...baseUserInfo, roles: ['tenant_admin'] } });
+    const wrapper = mountShell();
+    await nextTick();
+    expect(getAdminChildren(wrapper).some(c => c.label === 'ArcGIS Verify')).toBe(false);
+  });
+
+  it('hides ArcGIS Verify when user has only feature_arcgis_integration', async () => {
+    const authStore = useAuthStore();
+    authStore.$patch({ userInfo: { ...baseUserInfo, roles: ['feature_arcgis_integration'] } });
+    const wrapper = mountShell();
+    await nextTick();
+    expect(getAdminChildren(wrapper).some(c => c.label === 'ArcGIS Verify')).toBe(false);
+  });
+
+  it('shows ArcGIS Verify when user has both tenant_admin and feature_arcgis_integration', async () => {
+    const authStore = useAuthStore();
+    authStore.$patch({
+      userInfo: { ...baseUserInfo, roles: ['tenant_admin', 'feature_arcgis_integration'] },
+    });
+    const wrapper = mountShell();
+    await nextTick();
+    expect(getAdminChildren(wrapper).some(c => c.label === 'ArcGIS Verify')).toBe(true);
   });
 });

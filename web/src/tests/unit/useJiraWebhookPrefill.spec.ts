@@ -353,4 +353,60 @@ describe('useJiraWebhookPrefill', () => {
 
     consoleErrorSpy.mockRestore();
   });
+
+  // ── Bug fix: Clone flow — Next button must be disabled when name exceeds 100 chars ──
+
+  it('sets isBasicDetailsValid to false when clone name exceeds 100 characters', async () => {
+    const options = createOptions();
+    options.cloneMode.value = true;
+    // 95-char original name → "Copy of " (8) + 95 = 103 chars → exceeds 100
+    options.cloningWebhookData.value = {
+      id: '5',
+      name: 'A'.repeat(95),
+      webhookUrl: 'https://example.test/webhook',
+      jiraFieldMappings: [],
+      isEnabled: true,
+      isDeleted: false,
+      createdBy: 'tester',
+      createdDate: '2024-01-01T00:00:00Z',
+      lastEventHistory: { eventId: 'e1', eventType: 'TEST', timestamp: '2024-01-01T00:00:00Z', status: 'SUCCESS' },
+      description: '',
+      samplePayload: '{}',
+      connectionId: 'conn-1',
+    } as JiraWebhook;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({ ...options });
+    await handleOpenChange(true);
+    await flushPromises();
+
+    expect(options.integrationName.value.length).toBeGreaterThan(100);
+    expect(options.isBasicDetailsValid.value).toBe(false);
+  });
+
+  it('sets isBasicDetailsValid to true when clone name is within 100 characters', async () => {
+    const options = createOptions();
+    options.cloneMode.value = true;
+    // 88-char original name → "Copy of " (8) + 88 = 96 chars → valid
+    options.cloningWebhookData.value = {
+      id: '6',
+      name: 'A'.repeat(88),
+      webhookUrl: 'https://example.test/webhook',
+      jiraFieldMappings: [],
+      isEnabled: true,
+      isDeleted: false,
+      createdBy: 'tester',
+      createdDate: '2024-01-01T00:00:00Z',
+      lastEventHistory: { eventId: 'e1', eventType: 'TEST', timestamp: '2024-01-01T00:00:00Z', status: 'SUCCESS' },
+      description: '',
+      samplePayload: '{}',
+      connectionId: 'conn-1',
+    } as JiraWebhook;
+
+    const { handleOpenChange } = useJiraWebhookPrefill({ ...options });
+    await handleOpenChange(true);
+    await flushPromises();
+
+    expect(options.integrationName.value.length).toBeLessThanOrEqual(100);
+    expect(options.isBasicDetailsValid.value).toBe(true);
+  });
 });

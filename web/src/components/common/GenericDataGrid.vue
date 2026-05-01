@@ -51,7 +51,7 @@
       :show-navigation-buttons="true"
       :display-mode="'adaptive'"
       :show-page-size-selector="true"
-      :allowed-page-sizes="[10, 20, 50, 100]"
+      :allowed-page-sizes="props.allowedPageSizes"
       :show-info="true"
       :visible="true"
       :info-text="pagerInfoText"
@@ -122,6 +122,7 @@ const props = withDefaults(
     columns: GridColumn[];
     pageSize?: number;
     pageIndex?: number;
+    allowedPageSizes?: number[];
     rowKey?: string;
     enableExport?: boolean;
     enableClearFilters?: boolean;
@@ -133,6 +134,7 @@ const props = withDefaults(
     columns: () => [],
     pageSize: 10,
     pageIndex: 0,
+    allowedPageSizes: () => [10, 20, 50, 100],
     rowKey: 'id',
     enableExport: false,
     enableClearFilters: false,
