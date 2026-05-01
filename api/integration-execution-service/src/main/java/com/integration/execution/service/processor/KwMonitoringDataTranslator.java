@@ -47,20 +47,9 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class KwMonitoringDataTranslator {
-    /**
-     * Dynamic-data keys (lowercase) whose values must NOT be sent to the translation API.
-     * <ul>
-     *   <li>{@code "date"} — pre-formatted date strings cannot be reliably reformatted.</li>
-     *   <li>{@code "priority"} — used exclusively for colour/badge resolution via
-     *       {@code normalizedPriority}; the translated display label is provided by
-     *       {@code uiLabels["HIGH"]} etc. — translating the raw value here would break
-     *       colour logic and waste an API call since the field is excluded from rendered
-     *       dynamic-field rows.</li>
-     *   <li>{@code "client"} — used exclusively for client-group aggregation;
-     *       translating it would break grouping and the value is never shown directly
-     *       in dynamic-field rows.</li>
-     * </ul>
-     */
+    /** Dynamic-data keys (lowercase) excluded from translation: "date" (pre-formatted),
+     * "priority" (colour resolution key; display label comes from uiLabels["HIGH"] etc.),
+     * "client" (used for grouping only; never rendered directly in dynamic-field rows). */
     private static final Set<String> NON_TRANSLATABLE_DYNAMIC_KEYS = Set.of("date", "priority", "client");
 
     private final TranslationApiClient translationApiClient;

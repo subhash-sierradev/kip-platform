@@ -363,48 +363,13 @@
 </#macro>
 
 <#-- ══════════════════════════════════════════════════════════
-     PAGE BODY
+     PAGE BODY — one section per language (English first)
      ══════════════════════════════════════════════════════════ -->
-
-<ac:structured-macro ac:name="info" ac:schema-version="1">
-  <ac:parameter ac:name="title">Aggregated Daily Report — ${model.reportDateLong?xml}</ac:parameter>
-  <ac:rich-text-body>
-    <p><strong>Report Date:</strong> ${model.reportDate?xml} &nbsp;|&nbsp; <strong>Generated:</strong> ${model.generatedAt?xml} &nbsp;|&nbsp; <strong>Total Reports:</strong> ${model.totalReports} &nbsp;|&nbsp; <strong>Clients:</strong> ${model.clientCount}</p>
-  </ac:rich-text-body>
-</ac:structured-macro>
-
-<ac:structured-macro ac:name="panel" ac:schema-version="1">
-  <ac:parameter ac:name="title">Priority Summary</ac:parameter>
-  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
-  <ac:parameter ac:name="borderColor">#DCDFE4</ac:parameter>
-  <ac:parameter ac:name="titleBGColor">#F7F8F9</ac:parameter>
-  <ac:rich-text-body>
-    <table>
-      <tbody>
-        <tr>
-          <#list model.prioritySummary as entry>
-          <th style="text-align:center;background:${priorityBgHex(entry.level)};color:${priorityTextHex(entry.level)};padding:8px 24px;border:1px solid ${priorityBorderHex(entry.level)};">${priorityEmoji(entry.level)} ${entry.level}</th>
-          </#list>
-        </tr>
-        <tr>
-          <#list model.prioritySummary as entry>
-          <td style="text-align:center;color:${priorityTextHex(entry.level)};padding:12px;">${entry.count}</td>
-          </#list>
-        </tr>
-      </tbody>
-    </table>
-  </ac:rich-text-body>
-</ac:structured-macro>
-
-<h2>📑 Table of Contents</h2>
-<@renderToc clientGroups=model.clientGroups/>
-
-<hr/>
 
 <#list model.languageSections as section>
 <h1>${section.languageDisplayName?xml}</h1>
 
-<#-- ── Translated page header info ──────────────────────────────────── -->
+<#-- ── Header info ───────────────────────────────────────────────────── -->
 <ac:structured-macro ac:name="info" ac:schema-version="1">
   <ac:parameter ac:name="title">${((section.uiLabels["aggregated_daily_report"])!"Aggregated Daily Report")?xml} — ${model.reportDateLong?xml}</ac:parameter>
   <ac:rich-text-body>
@@ -412,7 +377,7 @@
   </ac:rich-text-body>
 </ac:structured-macro>
 
-<#-- ── Translated priority summary ──────────────────────────────────── -->
+<#-- ── Priority summary ──────────────────────────────────────────────── -->
 <ac:structured-macro ac:name="panel" ac:schema-version="1">
   <ac:parameter ac:name="title">${((section.uiLabels["priority_summary"])!"Priority Summary")?xml}</ac:parameter>
   <ac:parameter ac:name="borderStyle">solid</ac:parameter>
@@ -437,7 +402,7 @@
   </ac:rich-text-body>
 </ac:structured-macro>
 
-<#-- ── Translated table of contents ─────────────────────────────────── -->
+<#-- ── Table of contents ─────────────────────────────────────────────── -->
 <h2>📑 ${((section.uiLabels["table_of_contents"])!"Table of Contents")?xml}</h2>
 <@renderToc clientGroups=section.clientGroups/>
 
