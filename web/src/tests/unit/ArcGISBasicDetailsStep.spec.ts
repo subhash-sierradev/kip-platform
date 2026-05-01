@@ -315,7 +315,7 @@ describe('ArcGIS BasicDetailsStep', () => {
 
   // ── Bug 2: Integration Name max-length validation ──
 
-  it('shows max-length error and emits false when name exceeds 100 characters', async () => {
+  it('truncates typed names longer than 100 characters and keeps the step valid', async () => {
     const wrapper = mount(IntegrationDetailsStep, {
       props: {
         modelValue: { name: '', description: '', itemType: 'DOCUMENT', subType: 'DOCUMENT_PDF' },
@@ -325,22 +325,21 @@ describe('ArcGIS BasicDetailsStep', () => {
     });
     await nextTick();
 
-    // Use setProps to bypass the HTML maxlength truncation — the prop watcher
-    // calls validateName directly with the raw value, triggering the JS error.
-    await wrapper.setProps({
-      modelValue: {
-        name: 'A'.repeat(INTEGRATION_NAME_MAX_LENGTH + 1),
-        description: '',
-        itemType: 'DOCUMENT',
-        subType: 'DOCUMENT_PDF',
-      },
-    });
+    const input = wrapper.find('input.uis-input');
+    const longName = 'A'.repeat(INTEGRATION_NAME_MAX_LENGTH + 1);
+    (input.element as HTMLInputElement).value = longName;
+    await input.trigger('input');
+
+    vi.advanceTimersByTime(350);
     await nextTick();
 
-    expect(wrapper.text()).toContain(`Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`);
+    expect((input.element as HTMLInputElement).value).toHaveLength(INTEGRATION_NAME_MAX_LENGTH);
+    expect(wrapper.text()).not.toContain(
+      `Maximum ${INTEGRATION_NAME_MAX_LENGTH} characters allowed`
+    );
 
     const validations = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
-    expect(validations?.at(-1)?.[0]).toBe(false);
+    expect(validations?.at(-1)?.[0]).toBe(true);
   });
 
   it('allows a name of exactly 100 characters and emits true when subtype is selected', async () => {

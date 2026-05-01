@@ -50,4 +50,26 @@ class ConnectionAuthHeaderBuilderTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("No auth strategy for type");
     }
+
+    @Test
+    void buildAuthHeaders_nonMatchingStrategy_throwsIllegalStateException() {
+        AuthHeaderStrategy strategy = new AuthHeaderStrategy() {
+            @Override
+            public CredentialAuthType supports() {
+                return CredentialAuthType.OAUTH2;
+            }
+
+            @Override
+            public void apply(Map<String, String> headers, IntegrationSecret ref) {
+                // not used
+            }
+        };
+
+        ConnectionAuthHeaderBuilder builder = new ConnectionAuthHeaderBuilder(List.of(strategy));
+        IntegrationSecret secret = IntegrationSecret.builder().authType(CredentialAuthType.BASIC_AUTH).build();
+
+        assertThatThrownBy(() -> builder.buildAuthHeaders(secret))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No auth strategy for type");
+    }
 }

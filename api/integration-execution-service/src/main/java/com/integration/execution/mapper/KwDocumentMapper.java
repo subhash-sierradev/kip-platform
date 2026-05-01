@@ -23,19 +23,32 @@ public class KwDocumentMapper {
             return List.of();
         }
 
+        int rawInputCount = searchResults.size();
+        log.info("KwDocumentMapper input: {} documents to convert", rawInputCount);
+
         List<KwDocumentDto> documents = new ArrayList<>();
+        int skippedNoId = 0;
+        int skippedNoLocation = 0;
         for (JsonNode docNode : searchResults) {
             try {
+                String docId = docNode.path("id").asText(null);
+                if (docId == null || docId.isBlank()) {
+                    skippedNoId++;
+                }
                 KwDocumentDto document = convertToDocumentDto(docNode);
                 if (document != null) {
                     documents.add(document);
+                } else if (docId != null && !docId.isBlank()) {
+                    skippedNoLocation++;
                 }
             } catch (Exception e) {
                 String docId = docNode.path("id").asText("unknown");
                 log.error("Failed to convert document with id={}: {}", docId, e.getMessage(), e);
             }
         }
-        log.info("Converted {} documents from search results", documents.size());
+        log.info("KwDocumentMapper output: rawInput={}, withLocations={}, "
+                + "skippedNoLocation={}, skippedNoId={}",
+                rawInputCount, documents.size(), skippedNoLocation, skippedNoId);
         return documents;
     }
 

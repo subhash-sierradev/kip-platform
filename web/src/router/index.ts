@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router';
 
-import { roleGuard } from './guards';
+import { allRolesGuard, roleGuard } from './guards';
 import { ROUTES } from './routes';
 
 // Centralized lazy-loaded components with chunk names for consistency
@@ -147,6 +147,15 @@ const routes: RouteRecordRaw[] = [
   },
   { path: ROUTES.allNotifications, component: NotificationsAllPage },
   { path: ROUTES.unauthorized, component: UnauthorizedPage },
+  // TODO KIP-547 REMOVE — Temporary ArcGIS feature service verification
+  {
+    path: ROUTES.arcgisVerification,
+    component: () =>
+      import(
+        /* webpackChunkName: "admin" */ '@/components/admin/arcgisverification/ArcGISVerificationPage.vue'
+      ),
+    beforeEnter: allRolesGuard(['tenant_admin', 'feature_arcgis_integration']),
+  },
 
   // Catch all route
   { path: '/:pathMatch(.*)*', redirect: ROUTES.home },
