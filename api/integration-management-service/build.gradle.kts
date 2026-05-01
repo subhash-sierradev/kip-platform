@@ -6,7 +6,7 @@ plugins {
     jacoco
 }
 
-version = "0.0.2-rc.7"
+version = "0.0.2-rc.8"
 description = "Integration Management Service - REST API (port 8085)"
 
 dependencyManagement {
