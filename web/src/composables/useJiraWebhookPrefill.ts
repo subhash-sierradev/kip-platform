@@ -8,6 +8,7 @@ import { MappingData } from '@/api/models/jirawebhook/MappingData';
 import { JiraIntegrationService } from '@/api/services/JiraIntegrationService';
 import type { CustomFieldMapping } from '@/api/services/JiraWebhookService';
 import { generateUid } from '@/components/outbound/jirawebhooks/utils/CustomFieldHelper';
+import { WEBHOOK_NAME_MAX_LENGTH } from '@/components/outbound/jirawebhooks/utils/jiraWebhookConstants';
 import type { ConnectionStepData } from '@/types/ConnectionStepData';
 
 interface UseJiraWebhookPrefillOptions {
@@ -263,7 +264,9 @@ const hydrateIfNeeded = async (
 };
 
 const finalizePrefill = (options: UseJiraWebhookPrefillOptions) => {
-  options.isBasicDetailsValid.value = true;
+  const trimmedName = options.integrationName.value.trim();
+  options.isBasicDetailsValid.value =
+    trimmedName.length > 0 && trimmedName.length <= WEBHOOK_NAME_MAX_LENGTH;
   options.isMappingValid.value = true;
 };
 
