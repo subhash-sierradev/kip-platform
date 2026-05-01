@@ -149,6 +149,7 @@ import { useJiraWebhookConnection } from '@/composables/useJiraWebhookConnection
 import { useJiraWebhookSubmit } from '@/composables/useJiraWebhookSubmit';
 import { useJiraSprints } from '@/composables/useJiraSprints';
 import { extractParentKey } from '@/utils/parentFieldUtils';
+import { WEBHOOK_NAME_MAX_LENGTH } from '../utils/jiraWebhookConstants';
 import type { MappingData } from '@/api/models/jirawebhook/MappingData';
 import type { JiraWebhook } from '@/types/JiraWebhook';
 import type { JiraWebhookDetail } from '@/api/services/JiraWebhookService';
@@ -257,7 +258,10 @@ const { allWebhookNormalizedNames, isDuplicateName, loadNormalizedNames } =
   });
 
 const isBasicDetailsStepValid = computed(
-  () => integrationName.value.trim() !== '' && !isDuplicateName.value
+  () =>
+    integrationName.value.trim() !== '' &&
+    integrationName.value.trim().length <= WEBHOOK_NAME_MAX_LENGTH &&
+    !isDuplicateName.value
 );
 
 watch(

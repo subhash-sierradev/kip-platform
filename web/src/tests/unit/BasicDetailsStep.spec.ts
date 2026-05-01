@@ -300,6 +300,63 @@ describe('BasicDetailsStep', () => {
       expect(String(nameEmits?.at(-1)?.[0]).length).toBe(100);
       expect((nameInput.element as HTMLInputElement).value.length).toBe(100);
     });
+
+    // ── Bug fix: Clone flow max-length validation ──
+
+    it('emits false and shows max-length error when prefilled with name exceeding 100 characters (clone flow)', async () => {
+      const wrapper = mount(BasicDetailsStep, {
+        props: {
+          integrationName: 'a'.repeat(101),
+          description: '',
+          cloneMode: true,
+        },
+      });
+
+      await nextTick();
+      await vi.runAllTimersAsync();
+      await nextTick();
+
+      expect(wrapper.find('.bd-helper-error').exists()).toBe(true);
+      expect(wrapper.find('.bd-helper-error').text()).toBe('Maximum 100 characters allowed');
+      expect(wrapper.find('.bd-input-error').exists()).toBe(true);
+
+      const events = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
+      expect(events?.at(-1)?.[0]).toBe(false);
+    });
+
+    it('emits false when integrationName prop is updated to exceed 100 characters', async () => {
+      const wrapper = mount(BasicDetailsStep, {
+        props: { integrationName: 'Short Name', description: '' },
+      });
+
+      await vi.runAllTimersAsync();
+
+      await wrapper.setProps({ integrationName: 'a'.repeat(101) });
+      await vi.runAllTimersAsync();
+      await nextTick();
+
+      expect(wrapper.find('.bd-helper-error').exists()).toBe(true);
+      expect(wrapper.find('.bd-helper-error').text()).toBe('Maximum 100 characters allowed');
+
+      const events = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
+      expect(events?.at(-1)?.[0]).toBe(false);
+    });
+
+    it('emits true when name is exactly 100 characters', async () => {
+      const wrapper = mount(BasicDetailsStep, {
+        props: {
+          integrationName: 'a'.repeat(100),
+          description: '',
+        },
+      });
+
+      await nextTick();
+      await vi.runAllTimersAsync();
+      await nextTick();
+
+      const events = wrapper.emitted('validation-change') as Array<[boolean]> | undefined;
+      expect(events?.at(-1)?.[0]).toBe(true);
+    });
   });
 
   describe('Description Input', () => {
