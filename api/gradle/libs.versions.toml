@@ -35,7 +35,6 @@ jacksonAnnotations = "2.21"
 jacksonDatabind = "2.21.2"
 hibernateValidator = "8.0.1.Final"
 freemarker = "2.3.34"
-jsoup = "1.20.1"
 tomcat = "11.0.21"
 
 [libraries]
@@ -86,7 +85,6 @@ httpcore5 = { module = "org.apache.httpcomponents.core5:httpcore5", version.ref 
 # Transformation
 jolt-core = { module = "com.bazaarvoice.jolt:jolt-core", version.ref = "joltCore" }
 freemarker = { module = "org.freemarker:freemarker", version.ref = "freemarker" }
-jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 
 # Resilience
 resilience4j-bulkhead = { module = "io.github.resilience4j:resilience4j-bulkhead", version.ref = "resilience4j" }

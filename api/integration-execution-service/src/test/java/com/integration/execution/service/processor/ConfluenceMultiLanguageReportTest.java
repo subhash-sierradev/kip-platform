@@ -318,7 +318,7 @@ class ConfluenceMultiLanguageReportTest {
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.pageUrl()).isNotNull();
         // The single page contains the Japanese translated content
         assertThat(capturedPublishRequest.body()).contains(japaneseContent);
     }

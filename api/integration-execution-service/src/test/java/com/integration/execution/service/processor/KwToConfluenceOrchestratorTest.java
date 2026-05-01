@@ -81,8 +81,8 @@ class KwToConfluenceOrchestratorTest {
 
         assertThat(result.errorMessage()).isNull();
         assertThat(result.totalRecords()).isEqualTo(2);
-        assertThat(result.confluencePageUrl()).isEqualTo("https://example.com/page/42");
-        assertThat(result.confluencePageId()).isEqualTo("42");
+        assertThat(result.pageUrl()).isEqualTo("https://example.com/page/42");
+        assertThat(result.pageId()).isEqualTo("42");
 
         String expectedDate = DateTimeFormatter.ofPattern("yyyy/MM/dd")
                 .format(Instant.parse("2026-01-31T23:59:59Z").atZone(ZoneId.of("UTC")));
@@ -135,8 +135,8 @@ class KwToConfluenceOrchestratorTest {
         assertThat(captor.getValue().pageTitle()).isEqualTo("2026/01/31");
         assertThat(captor.getValue().body()).isEqualTo("<p>EN+JA+DE combined</p>");
 
-        assertThat(result.publishedPages()).hasSize(1);
-        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
+        assertThat(result.pageUrl()).isEqualTo("https://page.url");
+        assertThat(result.pageId()).isEqualTo("1");
         assertThat(result.errorMessage()).isNull();
     }
 
@@ -173,8 +173,8 @@ class KwToConfluenceOrchestratorTest {
         // Data translator must never be called when only the source language is requested
         verify(kwMonitoringDataTranslator, never()).translate(any(), anyString(), anyString());
         verify(kwMonitoringDataTranslator, never()).translateAll(any(), anyString(), any());
-        assertThat(result.publishedPages()).hasSize(1);
-        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
+        assertThat(result.pageUrl()).isEqualTo("https://page.url");
+        assertThat(result.pageId()).isEqualTo("1");
     }
 
     @Test
@@ -216,8 +216,8 @@ class KwToConfluenceOrchestratorTest {
         // ONE combined page published; job succeeds
         verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(1);
-        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
+        assertThat(result.pageUrl()).isEqualTo("https://page.url/combined");
+        assertThat(result.pageId()).isEqualTo("1");
     }
 
     @Test
@@ -231,7 +231,7 @@ class KwToConfluenceOrchestratorTest {
 
         assertThat(result.errorMessage()).isNull();
         assertThat(result.totalRecords()).isZero();
-        assertThat(result.confluencePageUrl()).isNull();
+        assertThat(result.pageUrl()).isNull();
         verify(confluenceApiClient, never()).createOrUpdatePage(any());
     }
 
@@ -252,7 +252,7 @@ class KwToConfluenceOrchestratorTest {
 
         assertThat(result.errorMessage()).contains("Confluence API unavailable");
         assertThat(result.totalRecords()).isZero();
-        assertThat(result.confluencePageUrl()).isNull();
+        assertThat(result.pageUrl()).isNull();
     }
 
     @Test
@@ -381,7 +381,7 @@ class KwToConfluenceOrchestratorTest {
 
         verify(confluenceApiClient, times(1)).createOrUpdatePage(any());
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.pageUrl()).isEqualTo("https://page.url");
     }
 
     @Test
@@ -414,7 +414,7 @@ class KwToConfluenceOrchestratorTest {
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(1);
+        assertThat(result.pageUrl()).isEqualTo("https://page.url");
     }
 
     @Test
@@ -448,9 +448,8 @@ class KwToConfluenceOrchestratorTest {
         ConfluenceJobExecutionResult result = orchestrator.processExecution(cmd);
 
         assertThat(result.errorMessage()).isNull();
-        assertThat(result.publishedPages()).hasSize(1);
-        // Blank sourceLanguage resolved to "en"
-        assertThat(result.publishedPages().get(0).languageCode()).isEqualTo("en");
+        assertThat(result.pageUrl()).isEqualTo("https://page.url");
+        assertThat(result.pageId()).isEqualTo("1");
     }
 
     private ConfluenceExecutionCommand buildCommand(

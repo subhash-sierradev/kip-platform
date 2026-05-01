@@ -286,17 +286,6 @@ public class TranslationApiClient {
         return text;
     }
 
-    /** Returns {@code true} when {@code text} starts with a known English artifact phrase. */
-    private boolean isArtifactLine(final String text) {
-        String lower = text.toLowerCase(Locale.ENGLISH);
-        for (String prefix : ARTIFACT_LINE_PREFIXES) {
-            if (lower.startsWith(prefix)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
 
     // -----------------------------------------------------------------------
     // Fallback-detection helpers  (unchanged)

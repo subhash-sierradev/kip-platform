@@ -4,12 +4,10 @@ import com.integration.execution.contract.message.ConfluenceExecutionCommand;
 import com.integration.execution.contract.message.ConfluenceExecutionResult;
 import com.integration.execution.contract.model.enums.JobExecutionStatus;
 import com.integration.execution.model.ConfluenceJobExecutionResult;
-import com.integration.execution.model.ConfluenceJobExecutionResult.PublishedPage;
 import org.mapstruct.Mapper;
 
 import java.time.Instant;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,29 +35,12 @@ public interface ConfluenceExecutionMapper {
     }
 
     default Map<String, String> buildExecutionMetadata(final ConfluenceJobExecutionResult orchResult) {
-        List<PublishedPage> pages = orchResult.publishedPages();
-        if (pages == null || pages.isEmpty()) {
+        if (orchResult.pageUrl() == null) {
             return Map.of();
         }
-
         Map<String, String> metadata = new HashMap<>();
-
-        // Per-language entries: confluencePageUrl_en, confluencePageUrl_ja, etc.
-        for (PublishedPage page : pages) {
-            String lang = page.languageCode() != null ? page.languageCode() : "unknown";
-            if (page.pageUrl() != null) {
-                metadata.put("confluencePageUrl_" + lang, page.pageUrl());
-            }
-            metadata.put("confluencePageId_" + lang, page.pageId() != null ? page.pageId() : "");
-        }
-
-        // Backward-compatible keys point to the English (first) page
-        PublishedPage first = pages.get(0);
-        if (first.pageUrl() != null) {
-            metadata.put("confluencePageUrl", first.pageUrl());
-        }
-        metadata.put("confluencePageId", first.pageId() != null ? first.pageId() : "");
-
+        metadata.put("confluencePageUrl", orchResult.pageUrl());
+        metadata.put("confluencePageId", orchResult.pageId() != null ? orchResult.pageId() : "");
         return Map.copyOf(metadata);
     }
 }

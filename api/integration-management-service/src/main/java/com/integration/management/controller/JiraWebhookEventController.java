@@ -50,7 +50,6 @@ public class JiraWebhookEventController {
         return jiraWebhookEventService.retryTrigger(id, tenantId, userId);
     }
 
-    @PreAuthorize("hasRole('webhook_client')")
     @AuditLoggable(entityType = JIRA_WEBHOOK, action = EXECUTE)
     @PostMapping("/execute/{id}")
     public ResponseEntity<JiraWebhookEventResponse> executeWebhook(

@@ -4,7 +4,6 @@ import com.integration.execution.client.ConfluenceApiClient;
 import com.integration.execution.client.ConfluenceApiClient.ConfluencePublishRequest;
 import com.integration.execution.contract.message.ConfluenceExecutionCommand;
 import com.integration.execution.model.ConfluenceJobExecutionResult;
-import com.integration.execution.model.ConfluenceJobExecutionResult.PublishedPage;
 import com.integration.execution.model.KwMonitoringDocument;
 import com.integration.execution.service.KwGraphQLService;
 import lombok.RequiredArgsConstructor;
@@ -103,16 +102,13 @@ public class KwToConfluenceOrchestrator {
                             baseTitle,
                             combinedContent));
 
-            List<PublishedPage> publishedPages = List.of(
-                    new PublishedPage(sourceLanguage,
-                            pageResult.confluencePageUrl(), pageResult.confluencePageId()));
-
             log.info("Confluence integration {} — published combined page '{}' with languages: {}",
                     cmd.getIntegrationId(), baseTitle,
                     targetLanguages.isEmpty() ? List.of(sourceLanguage)
                             : Stream.concat(Stream.of(sourceLanguage), targetLanguages.stream()).toList());
 
-            return ConfluenceJobExecutionResult.success(monitoringData.size(), publishedPages);
+            return ConfluenceJobExecutionResult.success(monitoringData.size(),
+                    pageResult.confluencePageUrl(), pageResult.confluencePageId());
 
         } catch (Exception ex) {
             log.error("Confluence execution failed for integration {}", cmd.getIntegrationId(), ex);

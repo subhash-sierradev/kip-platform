@@ -56,7 +56,6 @@ dependencies {
     // FreeMarker for template rendering
     implementation(libs.freemarker)
 
-
     // Transformation & Utilities
     implementation(libs.jolt.core)
     implementation(libs.commons.validator)
