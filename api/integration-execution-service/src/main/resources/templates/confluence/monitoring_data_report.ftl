@@ -209,11 +209,12 @@
 </#macro>
 
 <#-- ══════════════════════════════════════════════════════════
-     TABLE OF CONTENTS  (shown once at top — always English)
+     TABLE OF CONTENTS
+     clientGroups : the ClientGroup list to iterate (English or translated)
      ══════════════════════════════════════════════════════════ -->
-<#macro renderToc>
+<#macro renderToc clientGroups>
 <#assign tocTotal = 0/>
-<#list model.clientGroups as cg>
+<#list clientGroups as cg>
   <#assign tocTotal = tocTotal + cg.totalReports/>
 </#list>
 
@@ -221,7 +222,7 @@
   <ac:parameter ac:name="title">${model.clientCount} Client<#if model.clientCount != 1>s</#if>, ${tocTotal} Report<#if tocTotal != 1>s</#if></ac:parameter>
   <ac:rich-text-body>
 <ul style="margin:4px 0;padding-left:16px;">
-<#list model.clientGroups as cg>
+<#list clientGroups as cg>
   <li style="list-style-type:none;margin-top:10px;margin-bottom:4px;"><strong style="color:#1B3A6B;">📁 ${cg.clientName?xml}</strong></li>
   <li style="list-style-type:none;padding-left:0;margin:0;">
     <ul style="margin-top:2px;margin-bottom:4px;">
@@ -396,12 +397,51 @@
 </ac:structured-macro>
 
 <h2>📑 Table of Contents</h2>
-<@renderToc/>
+<@renderToc clientGroups=model.clientGroups/>
 
 <hr/>
 
 <#list model.languageSections as section>
 <h1>${section.languageDisplayName?xml}</h1>
+
+<#-- ── Translated page header info ──────────────────────────────────── -->
+<ac:structured-macro ac:name="info" ac:schema-version="1">
+  <ac:parameter ac:name="title">${((section.uiLabels["aggregated_daily_report"])!"Aggregated Daily Report")?xml} — ${model.reportDateLong?xml}</ac:parameter>
+  <ac:rich-text-body>
+    <p><strong>${((section.uiLabels["report_date_label"])!"Report Date")?xml}:</strong> ${model.reportDate?xml} &nbsp;|&nbsp; <strong>${((section.uiLabels["generated_label"])!"Generated")?xml}:</strong> ${model.generatedAt?xml} &nbsp;|&nbsp; <strong>${((section.uiLabels["total_reports"])!"Total Reports")?xml}:</strong> ${model.totalReports} &nbsp;|&nbsp; <strong>${((section.uiLabels["clients_label"])!"Clients")?xml}:</strong> ${model.clientCount}</p>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<#-- ── Translated priority summary ──────────────────────────────────── -->
+<ac:structured-macro ac:name="panel" ac:schema-version="1">
+  <ac:parameter ac:name="title">${((section.uiLabels["priority_summary"])!"Priority Summary")?xml}</ac:parameter>
+  <ac:parameter ac:name="borderStyle">solid</ac:parameter>
+  <ac:parameter ac:name="borderColor">#DCDFE4</ac:parameter>
+  <ac:parameter ac:name="titleBGColor">#F7F8F9</ac:parameter>
+  <ac:rich-text-body>
+    <table>
+      <tbody>
+        <tr>
+          <#list section.prioritySummary as entry>
+          <#assign levelLabel = (section.uiLabels[entry.level])!entry.level/>
+          <th style="text-align:center;background:${priorityBgHex(entry.level)};color:${priorityTextHex(entry.level)};padding:8px 24px;border:1px solid ${priorityBorderHex(entry.level)};">${priorityEmoji(entry.level)} ${levelLabel?xml}</th>
+          </#list>
+        </tr>
+        <tr>
+          <#list section.prioritySummary as entry>
+          <td style="text-align:center;color:${priorityTextHex(entry.level)};padding:12px;">${entry.count}</td>
+          </#list>
+        </tr>
+      </tbody>
+    </table>
+  </ac:rich-text-body>
+</ac:structured-macro>
+
+<#-- ── Translated table of contents ─────────────────────────────────── -->
+<h2>📑 ${((section.uiLabels["table_of_contents"])!"Table of Contents")?xml}</h2>
+<@renderToc clientGroups=section.clientGroups/>
+
+<hr/>
 
 <#list section.clientGroups as group>
 <@renderClientGroup group=group uiLabels=section.uiLabels/>
