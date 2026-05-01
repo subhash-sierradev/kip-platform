@@ -16,7 +16,7 @@
           :class="{ 'bd-input-error': validationError }"
           type="text"
           :value="integrationName"
-          maxlength="100"
+          :maxlength="WEBHOOK_NAME_MAX_LENGTH"
           placeholder="Jira Webhook Name"
           @input="onNameInput"
         />
@@ -55,6 +55,7 @@ import { computed, ref, watch, onMounted } from 'vue';
 import { useCharacterCounter } from '../../../../composables/useCharacterCounter';
 import { checkDuplicateName } from '@/utils/globalNormalizedUtils';
 import { syncTextInputValue } from '@/utils/textInputUtils';
+import { WEBHOOK_NAME_MAX_LENGTH } from '../utils/jiraWebhookConstants';
 
 const props = defineProps<{
   integrationName: string;
@@ -101,6 +102,14 @@ function validateName(name: string) {
     validationHelperText.value = 'Jira webhook name is required';
     emit('validation-change', false);
     hasInteracted.value = false; // Reset interaction flag
+    return;
+  }
+
+  // Immediate max-length validation (covers clone/programmatic prefill scenarios)
+  if (trimmed.length > WEBHOOK_NAME_MAX_LENGTH) {
+    validationError.value = true;
+    validationHelperText.value = `Maximum ${WEBHOOK_NAME_MAX_LENGTH} characters allowed`;
+    emit('validation-change', false);
     return;
   }
 
