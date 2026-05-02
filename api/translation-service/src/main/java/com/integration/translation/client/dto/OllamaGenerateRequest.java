@@ -1,5 +1,6 @@
 package com.integration.translation.client.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
@@ -40,5 +41,14 @@ public class OllamaGenerateRequest {
      */
     @JsonProperty("stream")
     private boolean stream;
+
+    /**
+     * Optional output format. Set to {@code "json"} to enable Ollama's native
+     * structured JSON output mode, which constrains the model to return valid JSON.
+     * When {@code null} this field is omitted from the request body entirely.
+     */
+    @JsonProperty("format")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String format;
 }
 

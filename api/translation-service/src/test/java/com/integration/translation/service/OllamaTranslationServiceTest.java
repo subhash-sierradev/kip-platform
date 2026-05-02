@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
@@ -20,9 +21,10 @@ import static org.mockito.Mockito.when;
  * Unit tests for {@link OllamaTranslationService}.
  *
  * <p>These tests verify the <em>orchestration</em> logic of the service:
- * iterating target languages, assembling the response envelope, and billing
- * character counts.  Actual Ollama HTTP calls and cache behaviour are exercised
- * separately in {@link OllamaCachedTranslatorTest}.</p>
+ * delegating to {@link OllamaCachedTranslator#translateAllLanguages} in a single
+ * call, assembling the response envelope, and billing character counts.
+ * Actual Ollama HTTP calls and cache behaviour are exercised separately in
+ * {@link OllamaCachedTranslatorTest}.</p>
  *
  * <p>{@link OllamaCachedTranslator} is mocked here, which also confirms that the
  * service correctly delegates through the injected bean (rather than via
@@ -47,10 +49,8 @@ class OllamaTranslationServiceTest {
         TranslationRequest request = new TranslationRequest(
                 "Hello world.", "en", List.of("ja", "ru"));
 
-        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ja"))
-                .thenReturn("こんにちは、世界。");
-        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ru"))
-                .thenReturn("Привет мир.");
+        when(cachedTranslator.translateAllLanguages("Hello world.", "en", List.of("ja", "ru")))
+                .thenReturn(Map.of("ja", "こんにちは、世界。", "ru", "Привет мир."));
 
         TranslationResponse response = service.translate(request);
 
@@ -68,10 +68,9 @@ class OllamaTranslationServiceTest {
     void translate_populatesCharacterCount() {
         TranslationRequest request = new TranslationRequest(
                 "Hello world.", "en", List.of("ja", "ru"));
-        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ja"))
-                .thenReturn("こんにちは");
-        when(cachedTranslator.translateSingleLanguage("Hello world.", "en", "ru"))
-                .thenReturn("Привет");
+
+        when(cachedTranslator.translateAllLanguages("Hello world.", "en", List.of("ja", "ru")))
+                .thenReturn(Map.of("ja", "こんにちは", "ru", "Привет"));
 
         TranslationResponse result = service.translate(request);
 
@@ -82,19 +81,18 @@ class OllamaTranslationServiceTest {
     }
 
     @Test
-    @DisplayName("translate() delegates to cachedTranslator once per language — not this.method()")
+    @DisplayName("translate() delegates to cachedTranslator once for all languages — not this.method()")
     void translate_delegatesToCachedTranslatorPerLanguage() {
         TranslationRequest request = new TranslationRequest(
                 "Hi", "en", List.of("ja", "ru"));
-        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja")).thenReturn("こんにちは");
-        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ru")).thenReturn("Привет");
+
+        when(cachedTranslator.translateAllLanguages("Hi", "en", List.of("ja", "ru")))
+                .thenReturn(Map.of("ja", "こんにちは", "ru", "Привет"));
 
         service.translate(request);
 
         verify(cachedTranslator, times(1))
-                .translateSingleLanguage("Hi", "en", "ja");
-        verify(cachedTranslator, times(1))
-                .translateSingleLanguage("Hi", "en", "ru");
+                .translateAllLanguages("Hi", "en", List.of("ja", "ru"));
     }
 
     @Test
@@ -103,8 +101,8 @@ class OllamaTranslationServiceTest {
         TranslationRequest request = new TranslationRequest(
                 "Hello", "en", List.of("ja"));
         // Simulate fallback: OllamaCachedTranslator returns the source text
-        when(cachedTranslator.translateSingleLanguage("Hello", "en", "ja"))
-                .thenReturn("Hello");
+        when(cachedTranslator.translateAllLanguages("Hello", "en", List.of("ja")))
+                .thenReturn(Map.of("ja", "Hello"));
 
         TranslationResponse response = service.translate(request);
 
@@ -115,8 +113,8 @@ class OllamaTranslationServiceTest {
     @DisplayName("translate() sets translatedTimestamp to a recent epoch second")
     void translate_setsTimestamp() {
         long before = System.currentTimeMillis() / 1000L;
-        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja"))
-                .thenReturn("こんにちは");
+        when(cachedTranslator.translateAllLanguages("Hi", "en", List.of("ja")))
+                .thenReturn(Map.of("ja", "こんにちは"));
 
         TranslationResponse response = service.translate(
                 new TranslationRequest("Hi", "en", List.of("ja")));
@@ -129,8 +127,8 @@ class OllamaTranslationServiceTest {
     @Test
     @DisplayName("translate() returns extractOnDisk=false")
     void translate_extractOnDiskIsFalse() {
-        when(cachedTranslator.translateSingleLanguage("Hi", "en", "ja"))
-                .thenReturn("こんにちは");
+        when(cachedTranslator.translateAllLanguages("Hi", "en", List.of("ja")))
+                .thenReturn(Map.of("ja", "こんにちは"));
 
         TranslationResponse response = service.translate(
                 new TranslationRequest("Hi", "en", List.of("ja")));
@@ -138,4 +136,3 @@ class OllamaTranslationServiceTest {
         assertThat(response.isExtractOnDisk()).isFalse();
     }
 }
-

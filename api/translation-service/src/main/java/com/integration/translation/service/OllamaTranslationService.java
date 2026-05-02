@@ -9,8 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@link TranslationService} implementation backed by a locally hosted
@@ -56,9 +56,14 @@ public class OllamaTranslationService implements TranslationService {
     /**
      * {@inheritDoc}
      *
-     * <p>Iterates over every requested target language, delegating to
-     * {@link OllamaCachedTranslator#translateSingleLanguage} for each one.
-     * {@link CognitiveServicesUsage#getTranslatorTranslateTextCharacterCount()}
+     * <p>Sends a <strong>single</strong> Ollama request for all target languages
+     * using {@code format=json}, then parses the JSON response to assemble each
+     * {@link TranslationResult}.  Each per-language result is also written into
+     * the Caffeine cache by {@link OllamaCachedTranslator#translateAllLanguages},
+     * so subsequent requests for the same text and any of those languages are
+     * served entirely from memory without an Ollama round-trip.</p>
+     *
+     * <p>{@link CognitiveServicesUsage#getTranslatorTranslateTextCharacterCount()}
      * is set to {@code len(text) * numberOfLanguages} to give callers a rough
      * cost indicator equivalent to what a cloud provider would report.</p>
      */
@@ -71,20 +76,17 @@ public class OllamaTranslationService implements TranslationService {
         log.info("Translation request: sourceLang={}, targets={}, textLength={}",
                 sourceLang, targets, text.length());
 
-        List<TranslationResult> results = new ArrayList<>(targets.size());
+        // Single Ollama call for all languages; results are also written into cache
+        Map<String, String> translations =
+                cachedTranslator.translateAllLanguages(text, sourceLang, targets);
 
-        for (String targetLang : targets) {
-            // Call via the injected proxy — NOT this.translateSingleLanguage() —
-            // so that Spring's @Cacheable AOP advice is active.
-            String translated = cachedTranslator.translateSingleLanguage(
-                    text, sourceLang, targetLang);
-
-            results.add(TranslationResult.builder()
-                    .translatedTimestamp(Instant.now().getEpochSecond())
-                    .languageCode(targetLang)
-                    .value(translated)
-                    .build());
-        }
+        List<TranslationResult> results = targets.stream()
+                .map(targetLang -> TranslationResult.builder()
+                        .translatedTimestamp(Instant.now().getEpochSecond())
+                        .languageCode(targetLang)
+                        .value(translations.get(targetLang))
+                        .build())
+                .toList();
 
         int charCount = text.length() * targets.size();
         log.info("Translation complete: {} result(s), {} characters billed",
