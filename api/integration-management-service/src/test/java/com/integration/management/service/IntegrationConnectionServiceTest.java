@@ -205,22 +205,19 @@ class IntegrationConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("should throw IllegalArgumentException on invalid UUID")
-        void invalidUuid_throwsIllegalArgumentException() {
-            assertThatThrownBy(() -> service.getIntegrationConnectionNameById("not-a-uuid", "t"))
-                    .isInstanceOf(IllegalArgumentException.class);
+        @DisplayName("should return null on invalid UUID (exception is swallowed)")
+        void invalidUuid_returnsNull() {
+            assertThat(service.getIntegrationConnectionNameById("not-a-uuid", "t")).isNull();
         }
 
         @Test
-        @DisplayName("should throw when repository throws")
-        void repositoryThrows_propagatesException() {
+        @DisplayName("should return null when repository throws (exception is swallowed)")
+        void repositoryThrows_returnsNull() {
             UUID id = UUID.randomUUID();
             when(connectionRepository.findSecretNameByIdAndTenantId(id, "t"))
                     .thenThrow(new RuntimeException("boom"));
 
-            assertThatThrownBy(() -> service.getIntegrationConnectionNameById(id.toString(), "t"))
-                    .isInstanceOf(RuntimeException.class)
-                    .hasMessageContaining("boom");
+            assertThat(service.getIntegrationConnectionNameById(id.toString(), "t")).isNull();
         }
     }
 
@@ -570,10 +567,9 @@ class IntegrationConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("getIntegrationConnectionNameById throws for invalid UUID")
+    @DisplayName("getIntegrationConnectionNameById returns null for invalid UUID (exception swallowed)")
     void getIntegrationConnectionNameById_invalidUuid_throwsIllegalArgumentException() {
-        assertThatThrownBy(() -> service.getIntegrationConnectionNameById("not-a-uuid", "t1"))
-                .isInstanceOf(IllegalArgumentException.class);
+        assertThat(service.getIntegrationConnectionNameById("not-a-uuid", "t1")).isNull();
     }
 
     @Test

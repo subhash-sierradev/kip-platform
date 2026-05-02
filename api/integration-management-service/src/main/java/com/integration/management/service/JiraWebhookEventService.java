@@ -216,7 +216,14 @@ public class JiraWebhookEventService {
     }
 
     public List<JiraWebhookEventResponse> getWebhookEventsByWebhookId(final String webhookId, final String tenantId) {
-        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(webhookId, tenantId)
+        // Assert tenant ownership before returning events — prevents tenant A from reading
+        // events that belong to tenant B's webhooks.
+        jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(webhookId, tenantId)
+                .orElseThrow(() -> new IntegrationNotFoundException(
+                        "Jira webhook not found with ID: " + webhookId + " for tenant: " + tenantId));
+        // Use owner-tenant scoped query so that system-triggered events (stored with
+        // tenantId='GLOBAL') are visible to the owning organisation.
+        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookOwnerTenant(webhookId, tenantId)
                 .stream().map(mapper::toResponse).toList();
     }
 
