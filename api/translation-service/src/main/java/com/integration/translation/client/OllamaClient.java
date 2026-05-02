@@ -14,7 +14,6 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 /**
  * Low-level HTTP client for the <a href="https://ollama.com">Ollama</a> REST API.
@@ -63,13 +62,38 @@ public class OllamaClient {
      * @throws OllamaClientException if the HTTP call fails for any reason
      */
     public OllamaGenerateResponse generate(final String prompt) {
+        return doGenerate(prompt, null);
+    }
+
+    /**
+     * Like {@link #generate(String)} but sets {@code format=json} so Ollama
+     * constrains its output to valid JSON (supported in Ollama ≥ 0.1.9).
+     *
+     * <p>Use this when the prompt instructs the model to return a JSON object,
+     * e.g. for multi-language translation in one call.</p>
+     *
+     * @param prompt the full prompt to send to the model
+     * @return Ollama's {@link OllamaGenerateResponse}; never {@code null}
+     * @throws OllamaClientException if the HTTP call fails for any reason
+     */
+    public OllamaGenerateResponse generateJson(final String prompt) {
+        return doGenerate(prompt, "json");
+    }
+
+    /**
+     * Shared HTTP transport for {@link #generate} and {@link #generateJson}.
+     *
+     * @param prompt the prompt to send
+     * @param format {@code "json"} to enable structured output, or {@code null} for plain text
+     */
+    private OllamaGenerateResponse doGenerate(final String prompt, final String format) {
         String url = ollamaProperties.getBaseUrl() + GENERATE_PATH;
 
         OllamaGenerateRequest request = OllamaGenerateRequest.builder()
                 .model(ollamaProperties.getModel())
                 .prompt(prompt)
                 .stream(false)
-                .options(Map.of("num_predict", ollamaProperties.getNumPredict()))
+                .format(format)
                 .build();
 
         HttpHeaders headers = new HttpHeaders();
@@ -79,8 +103,8 @@ public class OllamaClient {
 
         HttpEntity<OllamaGenerateRequest> entity = new HttpEntity<>(request, headers);
 
-        log.debug("Calling Ollama generate: url={}, model={}, promptLength={}",
-                url, ollamaProperties.getModel(), prompt.length());
+        log.debug("Calling Ollama generate: url={}, model={}, format={}, promptLength={}",
+                url, ollamaProperties.getModel(), format, prompt.length());
 
         try {
             ResponseEntity<OllamaGenerateResponse> response =

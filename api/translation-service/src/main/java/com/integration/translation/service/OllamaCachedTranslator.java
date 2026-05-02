@@ -1,21 +1,27 @@
 package com.integration.translation.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.integration.translation.client.OllamaClient;
 import com.integration.translation.client.dto.OllamaGenerateResponse;
 import com.integration.translation.config.TranslationCacheConfig;
+import com.integration.translation.config.cache.TranslationCacheKeyGenerator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * Spring-managed bean that performs a <em>single</em> text-to-language translation
- * and caches the result through Spring's AOP proxy.
+ * Spring-managed bean that performs text-to-language translation via Ollama
+ * and caches results through Spring's AOP proxy.
  *
  * <h3>Why this class exists (proxy-safe caching)</h3>
  * <p>{@link OllamaTranslationService#translate} must iterate over multiple target
@@ -30,9 +36,16 @@ import java.util.regex.Pattern;
  *
  * <h3>Cache behaviour</h3>
  * <p>Results are stored in the {@value TranslationCacheConfig#CACHE_TRANSLATIONS}
- * Caffeine cache, keyed on {@code text + "::" + sourceLang + "::" + targetLang}.
+ * Caffeine cache, keyed on a SHA-256 digest of the text plus the two language codes.
  * The TTL is 24 hours (see {@link TranslationCacheConfig}).  Repeated calls with
  * identical parameters are served entirely from memory — no Ollama round-trip.</p>
+ *
+ * <h3>Multi-language translation</h3>
+ * <p>{@link #translateAllLanguages} sends a single Ollama request for all target
+ * languages at once using {@code format=json}, then parses the JSON response and
+ * writes each per-language result directly into the Caffeine cache.  Subsequent
+ * calls to {@link #translateSingleLanguage} for any of those languages are served
+ * from cache without an Ollama round-trip.</p>
  *
  * <h3>Fallback strategy</h3>
  * <p>If Ollama is unreachable or returns an empty/null body, the original source
@@ -47,37 +60,123 @@ import java.util.regex.Pattern;
 public class OllamaCachedTranslator {
 
     /**
-     * Mistral-native {@code [INST]...[/INST]} prompt format.
-     *
-     * <p>Mistral instruction-tuned models are trained to produce <em>only</em> the
-     * continuation after {@code [/INST]}.  Framing the request as a completion task
-     * — rather than a rule list — suppresses preambles, disclaimers, and parenthetical
-     * notes far more reliably than any post-processing heuristic.</p>
+     * Prompt template for single-language translation.
+     * Placeholders: source language name, target language name, text to translate.
      */
     static final String PROMPT_TEMPLATE =
-            "[INST] You are a translation function. "
-            + "Output ONLY the translated text — nothing else. "
-            + "No preamble, explanation, notes, annotations, or source text. "
-            + "Do not write in English unless the target language is English.\n\n"
-            + "Translate from %s to %s:\n\n%s [/INST]";
+            "You are a professional translator. "
+            + "Translate the following text from %s to %s. "
+            + "Return ONLY the translated text — no explanations, no introduction, "
+            + "no quotation marks around the result.\n\n"
+            + "Text to translate:\n%s";
 
-    /** Matches common LLM preamble patterns at the start of a response. */
-    private static final Pattern LEADING_ARTIFACT_PATTERN = Pattern.compile(
-            "(?i)^(here is (your |the )translation[^:\\n]*:\\s*"
-            + "|translated text:\\s*"
-            + "|translation:\\s*"
-            + "|this is the translated text[^:\\n]*:\\s*)",
-            Pattern.CASE_INSENSITIVE);
-
-    /** Inline English markers after which target-language text should have ended. */
-    private static final List<String> ARTIFACT_INLINE_MARKERS =
-            List.of(" Here is", " Please note", " (Note:", " Note —", " Note:",
-                    " (The translation", " (Translation", " (This translation",
-                    " (This is a", " (This is the");
-
-
+    /**
+     * Prompt template for multi-language translation (single Ollama call).
+     * Placeholders: source language name, comma-separated target language names
+     * with BCP-47 codes in parentheses, text to translate.
+     *
+     * <p>The model is instructed to return a JSON object keyed by BCP-47 code
+     * (e.g. {@code {"ja": "...", "ru": "..."}}).  The request uses
+     * {@code format=json} so Ollama guarantees valid JSON output.</p>
+     */
+    static final String MULTI_PROMPT_TEMPLATE =
+            "You are a professional translator. "
+            + "Translate the following text from %s into these languages: %s. "
+            + "Return ONLY a valid JSON object where each key is the BCP-47 language code "
+            + "and the value is the translated text. "
+            + "No explanations. No markdown. No extra fields. Just the JSON object.\n\n"
+            + "Text to translate:\n%s";
 
     private final OllamaClient ollamaClient;
+    private final CacheManager cacheManager;
+    private final ObjectMapper objectMapper;
+    private final TranslationCacheKeyGenerator cacheKeyGenerator;
+
+    /**
+     * Translates {@code text} from {@code sourceLang} into all {@code targetLangs}
+     * in a <strong>single</strong> Ollama call using structured JSON output mode.
+     *
+     * <p>After a successful Ollama response each per-language result is written
+     * directly into the {@value TranslationCacheConfig#CACHE_TRANSLATIONS} Caffeine
+     * cache using the same {@link com.integration.translation.config.cache.TranslationCacheKey}
+     * that {@link #translateSingleLanguage}'s {@code @Cacheable} reads.  This means
+     * any subsequent call to {@code translateSingleLanguage} for the same text and
+     * language will be a cache hit and will not call Ollama.</p>
+     *
+     * <p>Languages whose translation is missing from, or blank in, the Ollama
+     * response fall back to the source text individually — other languages are
+     * not affected.</p>
+     *
+     * @param text        the UTF-8 source text (max 50 000 characters)
+     * @param sourceLang  BCP-47 source language code (e.g. {@code "en"})
+     * @param targetLangs BCP-47 target language codes (e.g. {@code ["ja", "ru"]})
+     * @return map of targetLang → translated text (falls back to {@code text} per language on failure)
+     */
+    public Map<String, String> translateAllLanguages(
+            final String text,
+            final String sourceLang,
+            final List<String> targetLangs) {
+
+        String sourceName = languageDisplayName(sourceLang);
+
+        // Build a human-readable list like "Japanese (ja), Russian (ru)"
+        String targetDescriptions = targetLangs.stream()
+                .map(code -> languageDisplayName(code) + " (" + code + ")")
+                .collect(Collectors.joining(", "));
+
+        String prompt = String.format(MULTI_PROMPT_TEMPLATE, sourceName, targetDescriptions, text);
+
+        log.debug("Invoking Ollama multi-language: {} → [{}], promptLength={}",
+                sourceLang, targetLangs, prompt.length());
+
+        Map<String, String> parsed = new HashMap<>();
+
+        try {
+            OllamaGenerateResponse response = ollamaClient.generateJson(prompt);
+            String raw = response.getResponse() == null ? "" : response.getResponse().trim();
+
+            if (!raw.isEmpty()) {
+                parsed = objectMapper.readValue(raw, new TypeReference<Map<String, String>>() { });
+                log.debug("Ollama multi-language response parsed: keys={}", parsed.keySet());
+            } else {
+                log.warn("Ollama returned empty response for multi-language request; "
+                        + "falling back to source text for all languages");
+            }
+        } catch (Exception ex) {
+            if (ex instanceof InterruptedException || ex.getCause() instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+                log.warn("Multi-language translation interrupted; falling back to source text.");
+            } else {
+                log.warn("Ollama multi-language translation failed: {}. "
+                        + "Falling back to source text for all languages.", ex.getMessage());
+            }
+        }
+
+        // Resolve final values, apply fallback, and populate the cache for each language
+        Map<String, String> results = new HashMap<>(targetLangs.size());
+        Cache cache = cacheManager.getCache(TranslationCacheConfig.CACHE_TRANSLATIONS);
+
+        for (String targetLang : targetLangs) {
+            String value = parsed.get(targetLang);
+            if (value == null || value.isBlank()) {
+                log.warn("No translation found for targetLang={} in Ollama response; "
+                        + "falling back to source text.", targetLang);
+                value = text;
+            }
+            results.put(targetLang, value);
+
+            // Write into the same Caffeine cache that @Cacheable on translateSingleLanguage reads.
+            // putIfAbsent avoids overwriting a concurrent cache population.
+            if (cache != null) {
+                Object key = cacheKeyGenerator.generate(this, null, text, sourceLang, targetLang);
+                cache.putIfAbsent(key, value);
+                log.trace("Cache populated for targetLang={}", targetLang);
+            }
+        }
+
+        log.debug("Multi-language translation complete: {} language(s) resolved", results.size());
+        return results;
+    }
 
     /**
      * Translates {@code text} from {@code sourceLang} into {@code targetLang} via
@@ -100,8 +199,7 @@ public class OllamaCachedTranslator {
      */
     @Cacheable(
         cacheNames = TranslationCacheConfig.CACHE_TRANSLATIONS,
-        keyGenerator = TranslationCacheConfig.KEY_GENERATOR,
-        unless = "#result == #p0"   // Do not cache fallbacks: if result == source text, Ollama failed silently
+        keyGenerator = TranslationCacheConfig.KEY_GENERATOR
     )
     public String translateSingleLanguage(
             final String text,
@@ -118,13 +216,9 @@ public class OllamaCachedTranslator {
         try {
             OllamaGenerateResponse response = ollamaClient.generate(prompt);
 
-            if (response.getResponse() == null) {
-                log.warn("Ollama returned null response body for targetLang={}; "
-                        + "falling back to source text", targetLang);
-                return text;
-            }
-
-            String translated = response.getResponse().trim();
+            String translated = response.getResponse() == null
+                    ? text
+                    : response.getResponse().trim();
 
             if (translated.isEmpty()) {
                 log.warn("Ollama returned empty translation for targetLang={}; "
@@ -132,22 +226,11 @@ public class OllamaCachedTranslator {
                 return text;
             }
 
-            String cleaned = cleanLlmResponse(translated);
-            if (!cleaned.equals(translated)) {
-                log.debug("Stripped LLM artifacts from {} translation (before={} chars, after={} chars)",
-                        targetLang, translated.length(), cleaned.length());
-            }
-
             log.debug("Ollama translation OK: targetLang={}, outputLength={}",
-                    targetLang, cleaned.length());
-            return cleaned;
+                    targetLang, translated.length());
+            return translated;
 
         } catch (Exception ex) {
-            // If the exception is (or wraps) an InterruptedException, restore the
-            // interrupt flag so the thread pool / shutdown logic can detect it.
-            // OllamaClient.generate() does not declare InterruptedException, but the
-            // underlying HTTP stack may wrap one inside a RuntimeException on timeout
-            // or when the application is shutting down.
             if (ex instanceof InterruptedException
                     || ex.getCause() instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
@@ -162,87 +245,11 @@ public class OllamaCachedTranslator {
     }
 
     /**
-     * Strips LLM verbosity artifacts from a raw Ollama response.
-     *
-     * <p>Strategy: since all translatable values in this system are short phrases
-     * (labels, names, summaries), the translated text is always a single line.
-     * Any content after the first {@code \n} is an LLM disclaimer/explanation
-     * and is unconditionally discarded.</p>
-     *
-     * <p>After newline-truncation, inline English artifact suffixes on the same
-     * line (e.g. {@code "著者 Here is the translation…"}) are stripped.</p>
-     *
-     * <p>Leading preambles such as {@code "Here is your translation: 報告詳細"} or
-     * {@code "This is the translated text…: 報告詳細"} are also stripped.</p>
-     *
-     * <p>Falls back to the original trimmed value if cleanup produces a blank
-     * result (safety guard).</p>
-     */
-    String cleanLlmResponse(final String raw) {
-        if (raw == null || raw.isBlank()) {
-            return raw;
-        }
-        String t = raw.trim();
-
-        // 1. Strip leading preamble e.g. "Here is your translation: 報告詳細"
-        t = stripLeadingArtifact(t);
-
-        // 2. Truncate everything after the first \n — unconditionally.
-        //    All translatable values in this system are single-line phrases.
-        //    Any content after \n is always an LLM disclaimer/explanation.
-        int nIdx = t.indexOf('\n');
-        if (nIdx > 0) {
-            t = t.substring(0, nIdx).strip();
-        }
-
-        // 3. Strip inline English artifact suffix on the same line,
-        //    e.g. "著者 Here is the translation of 'Authors' into Japanese."
-        //    Check only the first 40 chars of the suffix for ASCII to avoid stripping
-        //    suffixes that happen to end with the translated word.
-        for (String marker : ARTIFACT_INLINE_MARKERS) {
-            int idx = t.indexOf(marker);
-            if (idx > 0) {
-                String suffix = t.substring(idx);
-                String prefixToCheck = suffix.length() <= 40 ? suffix : suffix.substring(0, 40);
-                if (isAsciiOnly(prefixToCheck)) {
-                    t = t.substring(0, idx).strip();
-                }
-            }
-        }
-
-        return t.isBlank() ? raw.trim() : t;
-    }
-
-    /** Removes a leading preamble matched by {@link #LEADING_ARTIFACT_PATTERN}. */
-    private String stripLeadingArtifact(final String text) {
-        Matcher m = LEADING_ARTIFACT_PATTERN.matcher(text);
-        if (m.lookingAt()) {
-            String remainder = text.substring(m.end()).strip();
-            return remainder.isBlank() ? text : remainder;
-        }
-        return text;
-    }
-
-
-    /** Returns {@code true} if every character in {@code text} is ASCII (≤ 127). */
-    private boolean isAsciiOnly(final String text) {
-        for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) > 127) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
      * Converts a BCP-47 language code to a human-readable English name that
      * instruction-tuned LLMs understand more reliably than raw codes.
      *
      * <p>Examples: {@code "ja"} → {@code "Japanese"},
      * {@code "ru"} → {@code "Russian"}, {@code "zh"} → {@code "Chinese"}.</p>
-     *
-     * <p>{@link Locale#getDisplayLanguage(Locale)} is specified to always return a
-     * non-null value, so only the blank check is required.</p>
      *
      * @param langCode BCP-47 language tag
      * @return display name in English, or {@code langCode} if no mapping exists
@@ -253,3 +260,4 @@ public class OllamaCachedTranslator {
         return name.isBlank() ? langCode : name;
     }
 }
+
