@@ -82,11 +82,12 @@ public class JiraWebhookEventService {
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
         JiraWebhook webhook = findWebhook(id);
+        String effectiveTenantId = webhook.getTenantId();
         JiraWebhookEvent event = recordJiraWebhookEvent(
-                id, webhook.getTenantId(), userId, jiraWebhookPayload, null, 0);
+                id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, event, jiraWebhookPayload, webhook.getTenantId(), userId);
+                webhook, event, jiraWebhookPayload, effectiveTenantId, userId);
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
