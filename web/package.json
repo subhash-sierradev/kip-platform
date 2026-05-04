@@ -1,6 +1,6 @@
 {
   "name": "kip-web",
-  "version": "0.0.2-rc.10",
+  "version": "0.0.2-rc.12",
   "private": true,
   "type": "module",
   "engines": {
@@ -118,6 +118,7 @@
     "rollup": "^4.59.0",
     "@eslint/config-array": "^0.23.2",
     "@eslint/eslintrc": "^3.3.4",
-    "follow-redirects": "^1.16.0"
+    "follow-redirects": "^1.16.0",
+    "uuid": ">=14.0.0"
   }
 }

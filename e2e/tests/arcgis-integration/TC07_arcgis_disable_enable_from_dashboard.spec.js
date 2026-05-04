@@ -1,6 +1,3 @@
-// spec: Based on Kaseware Integration Platform Test Plan - ArcGIS Integration Actions and Management
-// seed: tests/seed.spec.js
-
 import { test, expect } from '@playwright/test';
 import { POManager } from '../../pages/Common_Files/POManager.js';
 import { ArcGISIntegrationTestCaseDesc } from '../../TestCases/ArcGISIntegrationTestCaseDesc.js';
@@ -8,12 +5,10 @@ import { GenerateTestData } from '../../utils/GenerateTestData.js';
 
 test.describe('ArcGIS Integration Management', () => {
   let integrationConfig;
-  let createdIntegrationName;
   let poManager;
 
   test.beforeEach(async ({ page }) => {
     integrationConfig = new GenerateTestData().getArcGISIntegrationConfig();
-    createdIntegrationName = integrationConfig.name;
 
     poManager = new POManager(page);
 
@@ -22,7 +17,7 @@ test.describe('ArcGIS Integration Management', () => {
     await poManager.loginPage.loginAsync();
 
     // Wait for home page to be fully loaded
-    await expect(poManager.basePage.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
+    await expect(poManager.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
   });
 
   test(ArcGISIntegrationTestCaseDesc.disableEnableIntegrationFromDashboardTestCase, async () => {
@@ -31,14 +26,14 @@ test.describe('ArcGIS Integration Management', () => {
     await poManager.arcgisIntegrationCreatorPage.createArcGISIntegration(integrationConfig);
 
     // Verify Grid View is active after creation
-    await expect(poManager.basePage.ui.buttons.gridView).toBeVisible();
+    await expect(poManager.ui.buttons.gridView).toBeVisible();
 
     // Search for the created integration and verify it appears in the grid
-    await poManager.arcgisIntegrationManagementPage.searchIntegration(createdIntegrationName);
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(createdIntegrationName)).toBeVisible();
+    await poManager.arcgisIntegrationManagementPage.searchIntegration(integrationConfig.name);
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(integrationConfig.name)).toBeVisible();
 
     // Open Integration options kebab menu and click Disable
-    await poManager.arcgisIntegrationManagementPage.disableIntegration(createdIntegrationName);
+    await poManager.arcgisIntegrationManagementPage.disableIntegration(integrationConfig.name);
 
     // Verify the Disable confirmation dialog and warning message are visible
     await expect(poManager.arcgisIntegrationManagementPage.disableDialog).toBeVisible();
@@ -51,12 +46,12 @@ test.describe('ArcGIS Integration Management', () => {
     await expect(poManager.arcgisIntegrationManagementPage.disableSuccessNotification).toBeVisible({ timeout: 10000 });
 
     // Re-search and verify Disabled status badge
-    await poManager.arcgisIntegrationManagementPage.clearAndSearchIntegration(createdIntegrationName);
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(createdIntegrationName)).toBeVisible({ timeout: 5000 });
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationStatusBadge(createdIntegrationName, 'Disabled')).toBeVisible();
+    await poManager.arcgisIntegrationManagementPage.searchIntegration(integrationConfig.name);
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(integrationConfig.name)).toBeVisible({ timeout: 5000 });
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationStatusBadge(integrationConfig.name, 'Disabled')).toBeVisible();
 
     // Open Integration options kebab menu and click Enable
-    await poManager.arcgisIntegrationManagementPage.enableIntegration(createdIntegrationName);
+    await poManager.arcgisIntegrationManagementPage.enableIntegration(integrationConfig.name);
 
     // Verify the Enable confirmation dialog and warning message are visible
     await expect(poManager.arcgisIntegrationManagementPage.enableDialog).toBeVisible();
@@ -69,8 +64,8 @@ test.describe('ArcGIS Integration Management', () => {
     await expect(poManager.arcgisIntegrationManagementPage.enableSuccessNotification).toBeVisible({ timeout: 10000 });
 
     // Re-search and verify Enabled status badge
-    await poManager.arcgisIntegrationManagementPage.clearAndSearchIntegration(createdIntegrationName);
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(createdIntegrationName)).toBeVisible({ timeout: 5000 });
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationStatusBadge(createdIntegrationName, 'Enabled')).toBeVisible();
+    await poManager.arcgisIntegrationManagementPage.searchIntegration(integrationConfig.name);
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(integrationConfig.name)).toBeVisible({ timeout: 5000 });
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationStatusBadge(integrationConfig.name, 'Enabled')).toBeVisible();
   });
 });

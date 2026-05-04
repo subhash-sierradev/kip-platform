@@ -167,6 +167,8 @@ public class ArcGISApiClient {
                 validateResponse(response);
                 try {
                     return handler.handle(response);
+                } catch (IntegrationApiException e) {
+                    throw e;
                 } catch (Exception e) {
                     throw new RuntimeException(e);
                 }

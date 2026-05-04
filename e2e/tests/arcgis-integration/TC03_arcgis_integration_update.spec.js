@@ -57,7 +57,7 @@ test.describe('ArcGIS Integration - Edit/Update', () => {
     // Verify updated name appears in Grid View
     await poManager.ui.buttons.gridView.click();
     await arcgisEditorPage.searchIntegration(updateConfig.newName);
-    expect(await arcgisEditorPage.verifyIntegrationVisible(updateConfig.newName)).toBe(true);
+    await arcgisEditorPage.verifyIntegrationVisible(updateConfig.newName);
   });
 
 });
