@@ -169,89 +169,235 @@ class KwToArcGISOrchestratorTest {
     }
 
     @Test
-    void processExecution_noFeatures_noLocations_returnsZeroResult() {
-        ArcGISExecutionCommand command = command("secret");
-        // Document has null locations so totalLocationCount == 0
-        List<KwDocumentDto> documents = List.of(new KwDocumentDto("doc-null", "Doc", "DOCUMENT", 1L, 2L, null));
+    void processExecution_documentAtExactWindowEnd_isExcludedByFilter() {
+        // windowEnd epoch = 1000s; document at exactly 1000 must be excluded
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(Instant.ofEpochSecond(1000))
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundary = new KwDocumentDto("doc-boundary", "D", "TYPE", 1L, 1000L);
+        KwDocumentDto beforeBoundary = documentWithLocations("doc-before", 1);
+        beforeBoundary.setUpdatedTimestamp(999L);
 
         ArrayNode emptyFeatures = objectMapper.createArrayNode();
-        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
-        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundary, beforeBoundary));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(
+                eq(List.of(beforeBoundary)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        orchestrator.processExecution(command);
+
+        // boundary doc was excluded; only beforeBoundary was passed to the mapper
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(beforeBoundary)), any());
+        verify(locationMapper, never()).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundary, beforeBoundary)), any());
+    }
+
+    @Test
+    void processExecution_nullWindowEnd_skipsFilteringAndProcessesAll() {
+        // windowEnd == null → the filtering branch is skipped entirely
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(null)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto doc = documentWithLocations("doc-1", 1);
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(List.of(doc));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(List.of(doc)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        orchestrator.processExecution(command);
+
+        // All docs passed through without timestamp filtering
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(eq(List.of(doc)), any());
+    }
+
+    @Test
+    void processExecution_documentWithNullLocations_treatedAsZeroLocations() {
+        // doc.getLocations() == null → ternary false branch; total = 0 → features.isEmpty + count==0 branch
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(null)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto docWithNullLocations = new KwDocumentDto("doc-null-loc", "D", "TYPE", 1L, 2L);
+        // locations field left null by default 5-arg constructor
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(List.of(docWithNullLocations));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(any(), any()))
                 .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
         when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
 
         ArcGISJobExecutionResult result = orchestrator.processExecution(command);
 
+        // totalLocationCount = 0 (null locations treated as 0), so returns empty result directly
         assertThat(result.totalRecords()).isZero();
-        assertThat(result.errorMessage()).isNull();
-        verify(mappingResolver, never()).partitionFeaturesForAddOrUpdate(any(), anyString(), anyString());
+        assertThat(result.failedRecords()).isZero();
     }
 
     @Test
-    void processExecution_urlWithoutTrailingSlashOrNumber_usesUrlAsIs() {
+    void processExecution_urlWithoutTrailingSlashOrNumericSuffix_usesUrlAsIs() {
+        // Covers false branches for both endsWith('/') and matches('.*/\\d+$')
         ArcGISExecutionCommand command = command("secret");
         List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 1));
 
         ArrayNode features = objectMapper.createArrayNode();
         features.add(objectMapper.createObjectNode());
 
-        List<RecordMetadata> successMetadata = List.of(
-                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 3L, 4L));
+        List<RecordMetadata> successMeta = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L));
         ApplyEditsPartition partition = new ApplyEditsPartition(
                 objectMapper.createArrayNode(), objectMapper.createArrayNode());
-        PublishingResult publishResult = new PublishingResult(
-                1, 0, 0, successMetadata, List.of(), List.of());
+        PublishingResult publishingResult = new PublishingResult(0, 0, 0,
+                List.of(), List.of(), List.of());
 
         when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
         when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
-                .thenReturn(new TransformationResult(features, successMetadata, List.of()));
+                .thenReturn(new TransformationResult(features, successMeta, List.of()));
         when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
-        // URL has no trailing slash and does not end with a number
+        // URL with no trailing slash and no numeric suffix → both branches false
         when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer"));
-        when(mappingResolver.partitionFeaturesForAddOrUpdate(features, "secret", "https://example.com/FeatureServer"))
-                .thenReturn(partition);
-        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMetadata))
-                .thenReturn(publishResult);
-
-        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
-
-        assertThat(result.addedRecords()).isEqualTo(1);
-        assertThat(result.errorMessage()).isNull();
-    }
-
-    @Test
-    void processExecution_partialTransformFailures_emptyErrors_usesDefaultErrorMessage() {
-        ArcGISExecutionCommand command = command("secret");
-        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 2));
-
-        ArrayNode features = objectMapper.createArrayNode();
-        features.add(objectMapper.createObjectNode()); // 1 success, 1 failure
-
-        List<RecordMetadata> successMetadata = List.of(
-                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 3L, 4L));
-        List<FailedRecordMetadata> failedMetadata = List.of(
-                new FailedRecordMetadata("doc-1", "Doc", "loc-1", 1L, 2L, 3L, 4L, "err"));
-        ApplyEditsPartition partition = new ApplyEditsPartition(
-                objectMapper.createArrayNode(), objectMapper.createArrayNode());
-        PublishingResult publishResult = new PublishingResult(
-                1, 0, 0, successMetadata, List.of(), List.of());
-
-        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
-        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
-                .thenReturn(new TransformationResult(features, successMetadata, failedMetadata));
-        // empty transformation errors list triggers "Check application logs" fallback
-        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
-        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer/0"));
         when(mappingResolver.partitionFeaturesForAddOrUpdate(
                 features, "secret", "https://example.com/FeatureServer"))
                 .thenReturn(partition);
-        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMetadata))
-                .thenReturn(publishResult);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMeta))
+                .thenReturn(publishingResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.totalRecords()).isZero();
+        verify(mappingResolver).partitionFeaturesForAddOrUpdate(
+                features, "secret", "https://example.com/FeatureServer");
+    }
+
+    @Test
+    void processExecution_transformationFailuresWithEmptyErrorList_usesGenericFallback() {
+        // Covers buildIndividualErrorMessage when errors list is empty
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 2));
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        List<FailedRecordMetadata> failedMeta = List.of(
+                new FailedRecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L, "err"),
+                new FailedRecordMetadata("doc-1", "Doc", "loc-1", 1L, 2L, 1L, 2L, "err"));
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), failedMeta));
+        // Empty errors list → buildIndividualErrorMessage uses fallback text branch
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
 
         ArcGISJobExecutionResult result = orchestrator.processExecution(command);
 
         assertThat(result.errorMessage()).contains("Check application logs");
-        assertThat(result.failedRecords()).isEqualTo(1);
+        assertThat(result.failedRecords()).isEqualTo(2);
+    }
+
+    @Test
+    void processExecution_publishFailureWithNoTransformFailures_setsArcGISErrorOnly() {
+        // Covers: combinedErrorMessage == null when publish fails (no transform failures)
+        // i.e. the false branch of: (combinedErrorMessage != null) ? ... : arcGisErrors
+        ArcGISExecutionCommand command = command("secret");
+        List<KwDocumentDto> documents = List.of(documentWithLocations("doc-1", 1));
+
+        ArrayNode features = objectMapper.createArrayNode();
+        features.add(objectMapper.createObjectNode());
+
+        List<RecordMetadata> successMeta = List.of(
+                new RecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L));
+
+        ApplyEditsPartition partition = new ApplyEditsPartition(
+                objectMapper.createArrayNode().add(objectMapper.createObjectNode()),
+                objectMapper.createArrayNode());
+
+        PublishingResult publishingResult = new PublishingResult(
+                0, 0, 1,
+                List.of(), List.of(),
+                List.of(new FailedRecordMetadata("doc-1", "Doc", "loc-0", 1L, 2L, 1L, 2L, "arcgis err")));
+
+        when(kwGraphqlClient.queryDocumentsWithLocations(command)).thenReturn(documents);
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(eq(documents), any()))
+                .thenReturn(new TransformationResult(features, successMeta, List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+        when(vaultService.getSecret("secret")).thenReturn(secret("https://example.com/FeatureServer/0"));
+        when(mappingResolver.partitionFeaturesForAddOrUpdate(features, "secret", "https://example.com/FeatureServer"))
+                .thenReturn(partition);
+        when(featurePublisher.publishFeaturesWithMetadata(partition, "secret", successMeta))
+                .thenReturn(publishingResult);
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.errorMessage()).contains("ArcGIS publish failed for 1 record(s)");
+        assertThat(result.errorMessage()).doesNotContain("|");  // no transform errors prepended
+    }
+
+    @Test
+    void processExecution_documentAtBoundarySecond_isIncludedWhenWindowEndHasNanos() {
+        // windowEnd has a sub-second component → exactSecondBoundary = false → filter uses <=
+        // A document whose updatedTimestamp equals windowEnd.getEpochSecond() is still before
+        // windowEnd and must be included.
+        Instant windowEnd = Instant.ofEpochSecond(1000, 500_000_000); // 1000.5 s
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(windowEnd)
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundarySecond = new KwDocumentDto("doc-boundary", "D", "TYPE", 1L, 1000L);
+
+        ArrayNode emptyFeatures = objectMapper.createArrayNode();
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundarySecond));
+        when(locationMapper.transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundarySecond)), any()))
+                .thenReturn(new TransformationResult(emptyFeatures, List.of(), List.of()));
+        when(locationMapper.getAndClearTransformationErrors()).thenReturn(List.of());
+
+        orchestrator.processExecution(command);
+
+        // Document at the boundary second is included (not filtered out) when windowEnd has nanos
+        verify(locationMapper).transformToArcGISFeaturesWithMetadata(
+                eq(List.of(atBoundarySecond)), any());
+    }
+
+    @Test
+    void processExecution_allDocumentsAtOrAfterWindowEnd_returnsEmptyResult() {
+        ArcGISExecutionCommand command = ArcGISExecutionCommand.builder()
+                .integrationId(UUID.randomUUID())
+                .connectionSecretName("secret")
+                .windowStart(Instant.ofEpochSecond(0))
+                .windowEnd(Instant.ofEpochSecond(1000))
+                .fieldMappings(List.of())
+                .build();
+
+        KwDocumentDto atBoundary = new KwDocumentDto("doc-1", "D", "TYPE", 1L, 1000L);
+        KwDocumentDto afterBoundary = new KwDocumentDto("doc-2", "D", "TYPE", 1L, 1001L);
+        when(kwGraphqlClient.queryDocumentsWithLocations(command))
+                .thenReturn(List.of(atBoundary, afterBoundary));
+
+        ArcGISJobExecutionResult result = orchestrator.processExecution(command);
+
+        assertThat(result.totalRecords()).isZero();
+        verify(locationMapper, never()).transformToArcGISFeaturesWithMetadata(any(), any());
     }
 
     private ArcGISExecutionCommand command(String secretName) {

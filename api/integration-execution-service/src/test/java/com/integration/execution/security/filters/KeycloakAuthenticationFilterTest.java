@@ -210,5 +210,27 @@ class KeycloakAuthenticationFilterTest {
             assertThat(response.getStatus()).isEqualTo(403);
             verify(chain, never()).doFilter(request, response);
         }
+
+        @Test
+        @DisplayName("tenantId list with non-String first item skips it and uses next String")
+        void tenantIdListWithNonStringItem_skipsAndUsesString() throws Exception {
+            // Covers: item instanceof String branch false when list contains non-String item
+            // Java List.of can only hold Objects; wrap in a list that has a non-String at index 0
+            List<Object> mixedList = new java.util.ArrayList<>();
+            mixedList.add(42);            // non-String -> skipped by instanceof check
+            mixedList.add("tenant-xyz"); // String -> used
+            setAuthContext(Map.of(
+                    props.getJwt().getTenantIdClaim(), mixedList,
+                    props.getJwt().getUserIdClaim(), "eve"
+            ));
+            MockHttpServletRequest request = new MockHttpServletRequest("GET", "/x");
+            MockHttpServletResponse response = new MockHttpServletResponse();
+            FilterChain chain = mock(FilterChain.class);
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertThat(request.getAttribute(props.getJwt().getTenantIdClaim())).isEqualTo("tenant-xyz");
+            verify(chain).doFilter(request, response);
+        }
     }
 }

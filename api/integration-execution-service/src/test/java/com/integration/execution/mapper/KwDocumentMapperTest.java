@@ -32,6 +32,11 @@ class KwDocumentMapperTest {
     }
 
     @Test
+    void convertToDocumentDtos_withNullInput_returnsEmpty() {
+        assertThat(mapper.convertToDocumentDtos(null)).isEmpty();
+    }
+
+    @Test
     void convertToDocumentDtos_withNonArray_returnsEmpty() throws Exception {
         JsonNode node = objectMapper.readTree("{\"id\":\"a\"}");
 
@@ -62,6 +67,19 @@ class KwDocumentMapperTest {
     @Test
     void convertToDocumentDto_nullNode_returnsNull() {
         assertThat(mapper.convertToDocumentDto(null)).isNull();
+    }
+
+    @Test
+    void convertToDocumentDto_jsonNullNode_returnsNull() {
+        // Covers the docNode.isNull() branch (JsonNode exists but is JSON null)
+        assertThat(mapper.convertToDocumentDto(objectMapper.nullNode())).isNull();
+    }
+
+    @Test
+    void convertToDocumentDto_blankId_returnsNull() throws Exception {
+        // Covers the id.isBlank() branch
+        JsonNode doc = objectMapper.readTree("{\"id\":\"   \",\"relatedEntities\":[]}");
+        assertThat(mapper.convertToDocumentDto(doc)).isNull();
     }
 
     @Test
