@@ -10,7 +10,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -30,8 +29,7 @@ import java.util.stream.Collectors;
  * internal {@code this.method()} calls bypass the AOP proxy that intercepts and
  * applies the cache advice.</p>
  *
- * <p>Extracting the cacheable logic into this dedicated bean means every call from
- * {@link OllamaTranslationService} goes <em>through</em> the proxy, so the cache
+ * <p>{@link OllamaTranslationService} goes <em>through</em> the proxy, so the cache
  * is correctly consulted before — and populated after — each Ollama request.</p>
  *
  * <h3>Cache behaviour</h3>
@@ -43,9 +41,7 @@ import java.util.stream.Collectors;
  * <h3>Multi-language translation</h3>
  * <p>{@link #translateAllLanguages} sends a single Ollama request for all target
  * languages at once using {@code format=json}, then parses the JSON response and
- * writes each per-language result directly into the Caffeine cache.  Subsequent
- * calls to {@link #translateSingleLanguage} for any of those languages are served
- * from cache without an Ollama round-trip.</p>
+ * writes each per-language result directly into the Caffeine cache.</p>
  *
  * <h3>Fallback strategy</h3>
  * <p>If Ollama is unreachable or returns an empty/null body, the original source
@@ -59,16 +55,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OllamaCachedTranslator {
 
-    /**
-     * Prompt template for single-language translation.
-     * Placeholders: source language name, target language name, text to translate.
-     */
-    static final String PROMPT_TEMPLATE =
-            "You are a professional translator. "
-            + "Translate the following text from %s to %s. "
-            + "Return ONLY the translated text — no explanations, no introduction, "
-            + "no quotation marks around the result.\n\n"
-            + "Text to translate:\n%s";
 
     /**
      * Prompt template for multi-language translation (single Ollama call).
@@ -99,9 +85,7 @@ public class OllamaCachedTranslator {
      * <p>After a successful Ollama response each per-language result is written
      * directly into the {@value TranslationCacheConfig#CACHE_TRANSLATIONS} Caffeine
      * cache using the same {@link com.integration.translation.config.cache.TranslationCacheKey}
-     * that {@link #translateSingleLanguage}'s {@code @Cacheable} reads.  This means
-     * any subsequent call to {@code translateSingleLanguage} for the same text and
-     * language will be a cache hit and will not call Ollama.</p>
+     * produced by {@link com.integration.translation.config.cache.TranslationCacheKeyGenerator}.</p>
      *
      * <p>Languages whose translation is missing from, or blank in, the Ollama
      * response fall back to the source text individually — other languages are
@@ -178,71 +162,6 @@ public class OllamaCachedTranslator {
         return results;
     }
 
-    /**
-     * Translates {@code text} from {@code sourceLang} into {@code targetLang} via
-     * Ollama, caching the result for 24 hours.
-     *
-     * <p>This method <strong>must</strong> be called from another Spring bean (not
-     * via {@code this}) so that the AOP caching proxy is active.  It is intentionally
-     * {@code public} — Spring proxies only intercept public methods.</p>
-     *
-     * <p>Cache key: a {@link com.integration.translation.config.cache.TranslationCacheKey}
-     * built by {@link com.integration.translation.config.cache.TranslationCacheKeyGenerator}
-     * using a SHA-256 digest of the text plus the two language codes. Keys are
-     * compact (constant size) regardless of input text length.</p>
-     *
-     * @param text       the UTF-8 source text (max 50 000 characters)
-     * @param sourceLang BCP-47 source language code (e.g. {@code "en"})
-     * @param targetLang BCP-47 target language code (e.g. {@code "ja"})
-     * @return translated text trimmed of surrounding whitespace,
-     *         or {@code text} unchanged if Ollama fails or returns empty output
-     */
-    @Cacheable(
-        cacheNames = TranslationCacheConfig.CACHE_TRANSLATIONS,
-        keyGenerator = TranslationCacheConfig.KEY_GENERATOR
-    )
-    public String translateSingleLanguage(
-            final String text,
-            final String sourceLang,
-            final String targetLang) {
-
-        String sourceName = languageDisplayName(sourceLang);
-        String targetName = languageDisplayName(targetLang);
-        String prompt = String.format(PROMPT_TEMPLATE, sourceName, targetName, text);
-
-        log.debug("Invoking Ollama: {} → {}, promptLength={}",
-                sourceLang, targetLang, prompt.length());
-
-        try {
-            OllamaGenerateResponse response = ollamaClient.generate(prompt);
-
-            String translated = response.getResponse() == null
-                    ? text
-                    : response.getResponse().trim();
-
-            if (translated.isEmpty()) {
-                log.warn("Ollama returned empty translation for targetLang={}; "
-                        + "falling back to source text", targetLang);
-                return text;
-            }
-
-            log.debug("Ollama translation OK: targetLang={}, outputLength={}",
-                    targetLang, translated.length());
-            return translated;
-
-        } catch (Exception ex) {
-            if (ex instanceof InterruptedException
-                    || ex.getCause() instanceof InterruptedException) {
-                Thread.currentThread().interrupt();
-                log.warn("Translation interrupted for targetLang={}; "
-                        + "falling back to source text.", targetLang);
-            } else {
-                log.warn("Ollama translation failed for targetLang={}: {}. "
-                        + "Falling back to source text.", targetLang, ex.getMessage());
-            }
-            return text;
-        }
-    }
 
     /**
      * Converts a BCP-47 language code to a human-readable English name that
