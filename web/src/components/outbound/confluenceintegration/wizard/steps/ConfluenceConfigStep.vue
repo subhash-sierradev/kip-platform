@@ -329,6 +329,27 @@ const isValid = computed(() => {
   return !!key && hasLangs && hasTemplate;
 });
 
+// Must be declared BEFORE the deep localData watcher so it runs first in Vue's flush queue.
+// If declared after, the deep watcher emits stale label data (label not yet set) and the
+// props.modelValue watcher resets localData, losing the label update entirely.
+watch(
+  () => localData.value.confluenceSpaceKey,
+  (newKey, oldKey) => {
+    if (newKey !== oldKey) {
+      localData.value.confluenceSpaceKeyFolderKey = 'ROOT';
+      localData.value.confluenceSpaceFolderLabel = '';
+      if (newKey) {
+        const found = spaceOptions.value.find(o => o.key === newKey);
+        localData.value.confluenceSpaceLabel = found?.displayText || newKey;
+        loadPages(newKey);
+      } else {
+        localData.value.confluenceSpaceLabel = '';
+        pagesApi.setData([]);
+      }
+    }
+  }
+);
+
 watch(localData, v => emit('update:modelValue', { ...v }), { deep: true });
 watch(isValid, v => emit('validation-change', v), { immediate: true });
 
@@ -345,24 +366,6 @@ watch(
   () => props.connectionId,
   newId => {
     if (newId) loadSpaces();
-  }
-);
-
-watch(
-  () => localData.value.confluenceSpaceKey,
-  (newKey, oldKey) => {
-    if (newKey !== oldKey) {
-      localData.value.confluenceSpaceKeyFolderKey = 'ROOT';
-      localData.value.confluenceSpaceFolderLabel = '';
-      if (newKey) {
-        const found = spaceOptions.value.find(o => o.key === newKey);
-        localData.value.confluenceSpaceLabel = found?.displayText || newKey;
-        loadPages(newKey);
-      } else {
-        localData.value.confluenceSpaceLabel = '';
-        pagesApi.setData([]);
-      }
-    }
   }
 );
 

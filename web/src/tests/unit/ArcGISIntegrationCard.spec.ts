@@ -310,6 +310,6 @@ describe('ArcGISIntegrationCard', () => {
     const wrapper = mount(ArcGISIntegrationCard, {
       props: { integration: makeBaseIntegration(), menuItems: [] },
     });
-    expect(wrapper.text()).toContain('Updated:');
+    expect(wrapper.text()).toContain('U:');
   });
 });

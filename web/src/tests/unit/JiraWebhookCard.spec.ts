@@ -100,6 +100,6 @@ describe('JiraWebhookCard', () => {
         },
       },
     });
-    expect(wrapper.text()).toContain('Updated:');
+    expect(wrapper.text()).toContain('U:');
   });
 });

@@ -1,8 +1,9 @@
 import { expect } from '@playwright/test';
+import { BasePage } from '../Common_Files/BasePage.js';
 
-export class ArcGISIntegrationViewPage {
+export class ArcGISIntegrationViewPage extends BasePage {
   constructor(page) {
-    this.page = page;
+    super(page);
 
     // Breadcrumb / navigation
     this.breadcrumbText = page.getByText('ArcGIS Integration Details');
@@ -16,10 +17,10 @@ export class ArcGISIntegrationViewPage {
     this.fieldMappingTab = page.getByRole('tab', { name: 'Field Mapping' });
     this.jobHistoryTab = page.getByRole('tab', { name: 'Job History' });
 
-    // Basic Details tab fields (stable CSS class locators from DOM)
+    // Basic Details tab fields
     this.integrationNameValue = page.locator('.config-value.name-value');
-    this.descriptionValue     = page.locator('.config-value.description-value');
-    this.itemSubtypeValue     = page.locator('.config-item')
+    this.descriptionValue = page.locator('.config-value.description-value');
+    this.itemSubtypeValue = page.locator('.config-item')
       .filter({ hasText: /Item Subtype/i })
       .locator('.config-value');
 
@@ -33,7 +34,7 @@ export class ArcGISIntegrationViewPage {
       .filter({ hasText: /Start Date/i })
       .locator('.value');
 
-    // Schedule Info tab – day chips (scoped to Days row → tag-list → individual tag spans)
+    // Day chips (scoped to Days row)
     this.dayChips = page.locator('.info-row')
       .filter({ hasText: /Days/i })
       .locator('.tag-list .tag');
@@ -44,35 +45,26 @@ export class ArcGISIntegrationViewPage {
 
   // ── Tab navigation ────────────────────────────────────────────────────────
 
-  //Navigate to and click the Basic Details tab
   async clickBasicDetailsTab() {
     await expect(this.basicDetailsTab).toBeVisible({ timeout: 10000 });
     await this.basicDetailsTab.click();
-    await this.page.waitForLoadState('domcontentloaded');
   }
 
-  //Navigate to and click the Schedule Info tab
   async clickScheduleInfoTab() {
     await expect(this.scheduleInfoTab).toBeVisible({ timeout: 10000 });
     await this.scheduleInfoTab.click();
-    await this.page.waitForLoadState('domcontentloaded');
   }
 
-  //Navigate to and click the Field Mapping tab
   async clickFieldMappingTab() {
     await expect(this.fieldMappingTab).toBeVisible({ timeout: 10000 });
     await this.fieldMappingTab.click();
-    await this.page.waitForLoadState('domcontentloaded');
   }
 
-  //Navigate to and click the Job History tab
   async clickJobHistoryTab() {
     await expect(this.jobHistoryTab).toBeVisible({ timeout: 10000 });
     await this.jobHistoryTab.click();
-    await this.page.waitForLoadState('domcontentloaded');
   }
 
-  //Navigate back to the ArcGIS Integration list page using the breadcrumb
   async navigateBackToList() {
     const breadcrumb = this.page.getByRole('navigation', { name: 'Breadcrumb' });
     await breadcrumb.getByText('ArcGIS Integration', { exact: true }).click();
@@ -81,7 +73,6 @@ export class ArcGISIntegrationViewPage {
 
   // ── Basic Details ─────────────────────────────────────────────────────────
 
-  //Return the integration name text from the Basic Details tab
   async getIntegrationName() {
     try {
       await expect(this.integrationNameValue).toBeVisible({ timeout: 5000 });
@@ -91,7 +82,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Return the description text from the Basic Details tab
   async getDescription() {
     try {
       await expect(this.descriptionValue).toBeVisible({ timeout: 5000 });
@@ -101,7 +91,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Return the item subtype text from the Basic Details tab
   async getItemSubtype() {
     try {
       await expect(this.itemSubtypeValue).toBeVisible({ timeout: 5000 });
@@ -113,7 +102,6 @@ export class ArcGISIntegrationViewPage {
 
   // ── Schedule Info ─────────────────────────────────────────────────────────
 
-  //Return the schedule pattern badge text from the Schedule Info tab
   async getPattern() {
     try {
       await expect(this.patternValue).toBeVisible({ timeout: 5000 });
@@ -123,7 +111,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Return the schedule pattern detail text (e.g. "Custom schedule pattern") from the Schedule Info tab
   async getPatternDetail() {
     try {
       await expect(this.patternDetailValue).toBeVisible({ timeout: 5000 });
@@ -133,7 +120,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Return an array of visible day-chip label strings from the Schedule Info tab
   async getScheduleDayChips() {
     const count = await this.dayChips.count();
     const labels = [];
@@ -144,7 +130,6 @@ export class ArcGISIntegrationViewPage {
     return labels;
   }
 
-  //Return the CRON expression value from the Schedule Info tab
   async getCronExpression() {
     try {
       await expect(this.cronValue).toBeVisible({ timeout: 5000 });
@@ -154,7 +139,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Return the start date text from the Schedule Info tab
   async getStartDate() {
     try {
       await expect(this.startDateValue).toBeVisible({ timeout: 5000 });
@@ -164,7 +148,6 @@ export class ArcGISIntegrationViewPage {
     }
   }
 
-  //Convert a YYYY-MM-DD date string to the display format used by the app
   formatStartDate(isoDate) {
     if (!isoDate) return null;
     const [year, month, day] = isoDate.split('-').map(Number);
@@ -179,63 +162,12 @@ export class ArcGISIntegrationViewPage {
 
   // ── Field Mapping grid ────────────────────────────────────────────────────
 
-  //Return cell text for a specific row in the field mapping grid (Kaseware Field, ArcGIS Field, Transformation)
   async getFieldMappingRow(rowIndex) {
     await this.fieldMappingRows.first().waitFor({ state: 'visible', timeout: 10000 });
-
     const row = this.fieldMappingRows.nth(rowIndex);
-
-    const kasField   = (await row.locator('[aria-colindex="2"]').first().textContent())?.trim();
+    const kasField = (await row.locator('[aria-colindex="2"]').first().textContent())?.trim();
     const arcgisField = (await row.locator('[aria-colindex="3"]').first().textContent())?.trim();
-    const transform  = (await row.locator('[aria-colindex="4"]').first().textContent())?.trim();
-
+    const transform = (await row.locator('[aria-colindex="4"]').first().textContent())?.trim();
     return { kasField, arcgisField, transform };
-  }
-
-  // ── Complete verification ─────────────────────────────────────────────────
-
-  //Run all tab verifications and return a structured result object for basic details, schedule info, and field mapping
-  async verifyAllData(config) {
-    // ── Basic Details ──
-    await this.clickBasicDetailsTab();
-    const actualName = await this.getIntegrationName();
-    const actualDesc = await this.getDescription();
-    const actualSubtype = await this.getItemSubtype();
-
-    // ── Schedule Info ──
-    await this.clickScheduleInfoTab();
-    const actualPattern = await this.getPattern();
-    const actualDays = await this.getScheduleDayChips();
-    const actualDate = await this.getStartDate();
-    const expectedDate = this.formatStartDate(config?.schedule?.startDate);
-
-    // ── Field Mapping ──
-    await this.clickFieldMappingTab();
-    const row1 = await this.getFieldMappingRow(0);
-    const row2 = await this.getFieldMappingRow(1);
-
-    return {
-      basicDetails: {
-        nameMatches: actualName === config?.name,
-        descMatches: actualDesc === config?.description,
-        subtypeMatches: actualSubtype === config?.itemSubtype,
-        actualName,
-        actualDesc,
-        actualSubtype
-      },
-      scheduleInfo: {
-        patternMatches: actualPattern === 'Weekly',
-        daysMatchAll: (config?.schedule?.days || []).every(d => actualDays.includes(d)),
-        dateMatches: actualDate === expectedDate,
-        actualPattern,
-        actualDays,
-        actualDate,
-        expectedDate
-      },
-      fieldMapping: {
-        row1,
-        row2
-      }
-    };
   }
 }

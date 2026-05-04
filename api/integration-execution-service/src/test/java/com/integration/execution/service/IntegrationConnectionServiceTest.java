@@ -26,6 +26,7 @@ import java.util.UUID;
 
 import static jakarta.servlet.http.HttpServletResponse.SC_BAD_REQUEST;
 import static jakarta.servlet.http.HttpServletResponse.SC_OK;
+import static jakarta.servlet.http.HttpServletResponse.SC_UNAUTHORIZED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -88,10 +89,34 @@ class IntegrationConnectionServiceTest {
         ResponseEntity<ConnectionTestResponse> entity =
                 service.testAndCreateConnection(request, "tenant-b", "user-b");
 
+        assertThat(entity.getStatusCode().value()).isEqualTo(SC_BAD_REQUEST);
         assertThat(entity.getBody()).isNotNull();
         assertThat(entity.getBody().isSuccess()).isFalse();
+        assertThat(entity.getBody().getStatusCode()).isEqualTo(SC_BAD_REQUEST);
         assertThat(entity.getBody().getConnectionStatus()).isEqualTo(ConnectionStatus.FAILED);
         assertThat(entity.getBody().getSecretName()).isNull();
+        verify(vaultService, never()).saveSecret(any(String.class), any(IntegrationSecret.class));
+    }
+
+    @Test
+    void testAndCreateConnection_unauthorizedCredentials_returnsHttpStatus401NotOk() {
+        IntegrationConnectionRequest request = new IntegrationConnectionRequest(
+                "Conn",
+                ServiceType.ARCGIS,
+                basicSecret("wrong-password")
+        );
+        when(integrationConnectionTestService.testConnection(ServiceType.ARCGIS, request.integrationSecret()))
+                .thenReturn(new ApiResponse(SC_UNAUTHORIZED, false, "Invalid credentials - authentication failed"));
+
+        ResponseEntity<ConnectionTestResponse> entity =
+                service.testAndCreateConnection(request, "tenant-c", "user-c");
+
+        assertThat(entity.getStatusCode().value()).isEqualTo(SC_UNAUTHORIZED);
+        assertThat(entity.getBody()).isNotNull();
+        assertThat(entity.getBody().isSuccess()).isFalse();
+        assertThat(entity.getBody().getStatusCode()).isEqualTo(SC_UNAUTHORIZED);
+        assertThat(entity.getBody().getConnectionStatus()).isEqualTo(ConnectionStatus.FAILED);
+        assertThat(entity.getBody().getMessage()).contains("Invalid credentials");
         verify(vaultService, never()).saveSecret(any(String.class), any(IntegrationSecret.class));
     }
 
