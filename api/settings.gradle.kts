@@ -7,5 +7,6 @@ gradle.startParameter.isBuildCacheEnabled = true
 include(
     "integration-execution-contract",
     "integration-management-service",
-    "integration-execution-service"
+    "integration-execution-service",
+    "translation-service"
 )

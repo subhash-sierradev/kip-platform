@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: translation-service
+
+  profiles:
+    active: dev
+
+  # Ensure Jackson serialises all responses as UTF-8 JSON.
+  # Detailed ObjectMapper configuration is in AppConfig.java to avoid
+  # Spring Boot 4 / Jackson 2 property-name incompatibilities.
+  jackson:
+    default-property-inclusion: always
+
+server:
+  port: 8083
+  address: 0.0.0.0
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      # Never expose stack traces or internal component details in non-dev environments.
+      # Overridden to 'always' in application-dev.yml for local debugging convenience.
+      show-details: never
+  info:
+    build:
+      enabled: true
+
+# ─── Ollama LLM Sidecar ──────────────────────────────────────────────────────
+# Default values are suitable for a local developer machine (Ollama on localhost).
+# The dev profile overrides base-url to the Docker service name 'ollama'.
+ollama:
+  base-url: http://localhost:11434
+  model: mistral
+  timeout-seconds: 120
+  connect-timeout-seconds: 10
+
+logging:
+  level:
+    com.integration.translation: INFO
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %-45.45logger{45}:%4line : %msg%n'
+
