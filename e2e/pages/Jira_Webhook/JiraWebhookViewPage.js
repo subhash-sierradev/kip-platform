@@ -30,10 +30,13 @@ class JiraWebhookViewPage {
     this.backToListButton = page.locator('button:has-text("← Back"), .back-button, [aria-label="Back"]').first();
     
     // Management buttons
-    this.testWebhookButton = page.locator('button:has-text("Test Webhook")').first();
-    this.editWebhookButton = page.locator('button:has-text("Edit Webhook")').first();
-    this.cloneWebhookButton = page.locator('button:has-text("Clone Webhook")').first();
-    this.deleteWebhookButton = page.locator('button:has-text("Delete Webhook")').first();
+    const actionsCard = page.locator('.details-card.actions-card');
+    this.testWebhookButton   = actionsCard.locator('[role="button"][aria-label="Test Webhook"]');
+    this.editWebhookButton   = actionsCard.locator('[role="button"][aria-label="Edit Webhook"]');
+    this.cloneWebhookButton  = actionsCard.locator('[role="button"][aria-label="Clone Webhook"]');
+    this.deleteWebhookButton = actionsCard.locator('[role="button"][aria-label="Delete Webhook"]');
+    this.enableWebhookButton = actionsCard.locator('[role="button"][aria-label="Enable Webhook"]');
+    this.disableWebhookButton= actionsCard.locator('[role="button"][aria-label="Disable Webhook"]');
   }
 
   // Navigate to specific tabs

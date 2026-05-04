@@ -23,7 +23,7 @@ test.describe('ArcGIS Integration View Data Verification', () => {
     // Login
     await poManager.loginPage.pageUrlAsync();
     await poManager.loginPage.loginAsync();
-    await expect(poManager.basePage.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
+    await expect(poManager.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
   });
 
   test(ArcGISIntegrationTestCaseDesc.arcGISViewDataVerificationTestCase, async ({ page }) => {
@@ -32,7 +32,7 @@ test.describe('ArcGIS Integration View Data Verification', () => {
     await arcgisCreatorPage.createArcGISIntegration(integrationConfig);
 
     // Confirm redirect back to the integration list (Grid View button visible)
-    await expect(page.getByRole('button', { name: 'Grid View' })).toBeVisible({ timeout: 10000 });
+    await expect(poManager.ui.buttons.gridView).toBeVisible({ timeout: 10000 });
 
     // ── STEP 2: Search for the created integration ────────────────────────────
     await arcgisManagementPage.searchIntegration(integrationConfig.name);
@@ -54,9 +54,6 @@ test.describe('ArcGIS Integration View Data Verification', () => {
     // Basic Details tab and h1 heading visible
     await expect(arcgisViewPage.basicDetailsTab).toBeVisible({ timeout: 10000 });
     await expect(arcgisViewPage.pageTitle.filter({ hasText: integrationConfig.name })).toBeVisible({ timeout: 10000 });
-
-    // Wait for full page load
-    await page.waitForLoadState('domcontentloaded');
 
     // ── STEP 4: Verify Basic Details tab ─────────────────────────────────────
     await arcgisViewPage.clickBasicDetailsTab();

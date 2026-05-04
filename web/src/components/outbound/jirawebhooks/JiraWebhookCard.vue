@@ -55,11 +55,10 @@
               </span>
               <span class="list-spacer"></span>
               <span class="created-text"
-                ><span class="label">Created:</span>
-                {{ formatMetadataDate(webhook.createdDate) }}</span
+                ><span class="label">C:</span> {{ formatMetadataDate(webhook.createdDate) }}</span
               >
               <span class="created-text"
-                ><span class="label">Updated:</span>
+                ><span class="label">U:</span>
                 {{ formatMetadataDate(webhook.lastModifiedDate) }}</span
               >
             </div>
@@ -68,10 +67,10 @@
             <div class="title-text">{{ webhook.name }}</div>
             <div class="created-updated-row">
               <div class="created-text">
-                <span class="label">Created:</span> {{ formatMetadataDate(webhook.createdDate) }}
+                <span class="label">C:</span> {{ formatMetadataDate(webhook.createdDate) }}
               </div>
               <div class="created-text">
-                <span class="label">Updated:</span>
+                <span class="label">U:</span>
                 {{ formatMetadataDate(webhook.lastModifiedDate) }}
               </div>
             </div>

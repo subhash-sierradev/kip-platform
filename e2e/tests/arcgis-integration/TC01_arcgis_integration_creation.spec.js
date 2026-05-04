@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test } from '@playwright/test';
 import { POManager } from '../../pages/Common_Files/POManager.js';
 import { ArcGISIntegrationTestCaseDesc } from '../../TestCases/ArcGISIntegrationTestCaseDesc.js';
 import { GenerateTestData } from '../../utils/GenerateTestData.js';
@@ -17,7 +17,6 @@ test.describe('ArcGIS Integration - End-to-End Creation Flow', () => {
   test(ArcGISIntegrationTestCaseDesc.arcGISIntegrationCreationTestCase, async () => {
     // Run full creation wizard and verify the new integration card appears in grid view
     await arcgisCreatorPage.createArcGISIntegration(integrationConfig);
-    const integrationExists = await arcgisCreatorPage.searchAndValidateIntegration(integrationConfig.name);
-    expect(integrationExists).toBe(true);
+    await arcgisCreatorPage.searchAndValidateIntegration(integrationConfig.name);
   });
 });

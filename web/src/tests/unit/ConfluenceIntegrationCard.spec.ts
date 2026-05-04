@@ -280,6 +280,6 @@ describe('ConfluenceIntegrationCard', () => {
     const wrapper = mount(ConfluenceIntegrationCard, {
       props: { integration: makeIntegration(), menuItems: [] },
     });
-    expect(wrapper.text()).toContain('Updated:');
+    expect(wrapper.text()).toContain('U:');
   });
 });

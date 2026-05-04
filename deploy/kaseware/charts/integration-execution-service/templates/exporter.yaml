@@ -1,0 +1,30 @@
+{{- if .Values.core.metricsEnabled }}
+{{- if eq .Values.exporter.metricsMode "prometheus" }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Release.Name }}-exporter
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  podMetricsEndpoints:
+{{- if .Values.exporter-}}
+    - interval: 30s
+      portNumber: {{ .Values.exporter.mainEndpoint.port | default 20000 }}
+      path: {{ .Values.exporter.mainEndpoint.path}}
+
+{{- if .Values.exporter.jmxEnabled }}
+    - interval: 30s
+      portNumber: {{ .Values.jmxprometheus.port | default 7000 }}
+      path: /metrics
+{{- end }}
+
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+{{- end }}
+{{- end }}
