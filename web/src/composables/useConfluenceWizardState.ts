@@ -50,7 +50,9 @@ export function useConfluenceWizardState() {
 
   const pageConfigData = computed<ConfluencePageConfigData>(() => ({
     confluenceSpaceKey: formData.confluenceSpaceKey,
+    confluenceSpaceLabel: formData.confluenceSpaceLabel,
     confluenceSpaceKeyFolderKey: formData.confluenceSpaceKeyFolderKey,
+    confluenceSpaceFolderLabel: formData.confluenceSpaceFolderLabel,
     languageCodes: formData.languageCodes,
     reportNameTemplate: formData.reportNameTemplate,
     includeTableOfContents: formData.includeTableOfContents,

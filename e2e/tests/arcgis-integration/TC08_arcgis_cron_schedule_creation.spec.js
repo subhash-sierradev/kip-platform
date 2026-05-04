@@ -22,7 +22,7 @@ test.describe('ArcGIS Integration - CRON Schedule Creation Flow', () => {
     await arcgisCreatorPage.createArcGISIntegration(integrationConfig);
 
     // STEP 2: Search and confirm card is visible in the grid
-    if (await poManager.basePage.ui.buttons.gridView.isVisible()) await poManager.basePage.ui.buttons.gridView.click();
+    if (await poManager.ui.buttons.gridView.isVisible()) await poManager.ui.buttons.gridView.click();
     await arcgisManagementPage.searchIntegration(integrationConfig.name);
     const integrationCard = arcgisManagementPage.getIntegrationCard(integrationConfig.name);
     await expect(integrationCard).toBeVisible({ timeout: 10000 });

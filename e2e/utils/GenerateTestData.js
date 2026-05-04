@@ -93,7 +93,8 @@ getArcGISIntegrationConfig()
     schedule: {
       startDate: tomorrowDate,
       executionTime: '09:00',
-      days: faker.helpers.arrayElements(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], { min: 2, max: 3 })
+      days: faker.helpers.arrayElements(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], { min: 2, max: 3 }),
+      dataWindow: 'Rolling Window'
     },
     connection: {
       useExisting: true,

@@ -56,7 +56,7 @@ public class IntegrationConnectionService {
                 .build();
 
         if (!testResult.success()) {
-            return ResponseEntity.ok(response);
+            return ResponseEntity.status(testResult.statusCode()).body(response);
         }
 
         vaultService.saveSecret(secretName, request.integrationSecret());

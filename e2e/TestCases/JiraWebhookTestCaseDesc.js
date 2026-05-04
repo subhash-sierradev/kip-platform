@@ -13,5 +13,6 @@ export const JiraWebhookTestCaseDesc = {
     cloneWebhookFromDashboardTestCase: "Clone JIRA Webhook from Dashboard @regression @JiraWebhook",
     disableWebhookFromDashboardTestCase: "Disable JIRA Webhook from Dashboard @regression @JiraWebhook",
     webhookHistoryTestCase: "Webhook History - Test Connection Functionality @regression @JiraWebhook",
+    testDisabledWebhookTestCase: "Test Webhook Button Disabled State Verification @regression @JiraWebhook",
     
 }
