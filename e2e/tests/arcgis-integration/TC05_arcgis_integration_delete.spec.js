@@ -6,12 +6,10 @@ import { GenerateTestData } from '../../utils/GenerateTestData.js';
 test.describe('ArcGIS Integration - Delete from Grid View (Kebab Menu)', () => {
 
   let integrationConfig;
-  let createdIntegrationName;
   let poManager;
 
   test.beforeEach(async ({ page }) => {
     integrationConfig = new GenerateTestData().getArcGISIntegrationConfig();
-    createdIntegrationName = integrationConfig.name;
 
     poManager = new POManager(page);
 
@@ -20,7 +18,7 @@ test.describe('ArcGIS Integration - Delete from Grid View (Kebab Menu)', () => {
     await poManager.loginPage.loginAsync();
 
     // Wait for home page to be fully loaded
-    await expect(poManager.basePage.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
+    await expect(poManager.ui.userProfile.welcomeText).toBeVisible({ timeout: 15000 });
   });
 
   // ============================================================
@@ -32,14 +30,14 @@ test.describe('ArcGIS Integration - Delete from Grid View (Kebab Menu)', () => {
     await poManager.arcgisIntegrationCreatorPage.createArcGISIntegration(integrationConfig);
 
     // Verify Grid View is active after creation
-    await expect(poManager.basePage.ui.buttons.gridView).toBeVisible();
+    await expect(poManager.ui.buttons.gridView).toBeVisible();
 
     // Search for the created integration and verify it appears in the grid ──
-    await poManager.arcgisIntegrationManagementPage.searchIntegration(createdIntegrationName);
-    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(createdIntegrationName)).toBeVisible();
+    await poManager.arcgisIntegrationManagementPage.searchIntegration(integrationConfig.name);
+    await expect(poManager.arcgisIntegrationManagementPage.getIntegrationText(integrationConfig.name)).toBeVisible();
 
     // Open the 'Integration options' kebab menu and click Delete
-    await poManager.arcgisIntegrationManagementPage.deleteIntegration(createdIntegrationName);
+    await poManager.arcgisIntegrationManagementPage.deleteIntegration(integrationConfig.name);
 
     // Verify the confirmation dialog — title, warning message, Cancel & Delete buttons
     await poManager.arcgisIntegrationManagementPage.verifyDeleteConfirmationDialog();
@@ -51,6 +49,6 @@ test.describe('ArcGIS Integration - Delete from Grid View (Kebab Menu)', () => {
     await poManager.arcgisIntegrationManagementPage.verifyDeleteSuccessNotification();
 
     // Search for the deleted integration and verify it does not appear in search results
-    await poManager.arcgisIntegrationManagementPage.verifyIntegrationAbsentFromSearch(createdIntegrationName);
+    await poManager.arcgisIntegrationManagementPage.verifyIntegrationAbsentFromSearch(integrationConfig.name);
   });
 });

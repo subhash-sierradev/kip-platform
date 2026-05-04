@@ -102,7 +102,9 @@ describe('useConfluenceWizardState', () => {
   it('updates page config and reflects computed data', () => {
     state.updatePageConfigData({
       confluenceSpaceKey: 'SPACE',
+      confluenceSpaceLabel: 'My Space (SPACE)',
       confluenceSpaceKeyFolderKey: 'SPACE/FOLDER',
+      confluenceSpaceFolderLabel: 'Parent > Folder',
       languageCodes: ['en', 'fr'],
       reportNameTemplate: 'Daily {date}',
       includeTableOfContents: false,
@@ -110,7 +112,9 @@ describe('useConfluenceWizardState', () => {
 
     expect(state.pageConfigData.value).toEqual({
       confluenceSpaceKey: 'SPACE',
+      confluenceSpaceLabel: 'My Space (SPACE)',
       confluenceSpaceKeyFolderKey: 'SPACE/FOLDER',
+      confluenceSpaceFolderLabel: 'Parent > Folder',
       languageCodes: ['en', 'fr'],
       reportNameTemplate: 'Daily {date}',
       includeTableOfContents: false,

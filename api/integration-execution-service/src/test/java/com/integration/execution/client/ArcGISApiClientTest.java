@@ -142,7 +142,7 @@ class ArcGISApiClientTest {
 
         assertThatThrownBy(() -> client.queryFeatures("secret"))
                 .isInstanceOf(IntegrationApiException.class)
-            .hasMessageContaining("ArcGIS query failed");
+                .hasMessageContaining("invalid token");
     }
 
     @Test
@@ -203,11 +203,6 @@ class ArcGISApiClientTest {
 
         assertThatThrownBy(() -> client.getAccessToken("secret", secret))
                 .isInstanceOf(IntegrationApiException.class)
-                .hasMessageContaining("Token generation failed")
-                .cause()
-                .isInstanceOf(RuntimeException.class)
-                .hasCauseInstanceOf(IntegrationApiException.class)
-                .rootCause()
                 .hasMessageContaining("Token missing in response");
     }
 
@@ -281,7 +276,7 @@ class ArcGISApiClientTest {
 
         assertThatThrownBy(() -> client.queryFeaturesWithWhere("secret", "invalid ="))
                 .isInstanceOf(IntegrationApiException.class)
-                .hasMessageContaining("ArcGIS query failed");
+                .hasMessageContaining("invalid where clause");
     }
 
     @Test
@@ -322,7 +317,7 @@ class ArcGISApiClientTest {
 
         assertThatThrownBy(() -> client.getAccessToken("secret", secret))
                 .isInstanceOf(IntegrationApiException.class)
-                .hasMessageContaining("Token generation failed");
+                .hasMessageContaining("Token missing in response");
     }
 
     @Test

@@ -8,10 +8,10 @@
         <div class="title-text">{{ integration.name || 'Unnamed Integration' }}</div>
         <div class="created-updated-row">
           <div class="created-text">
-            <span class="label">Created:</span> {{ formatMetadataDate(integration.createdDate) }}
+            <span class="label">C:</span> {{ formatMetadataDate(integration.createdDate) }}
           </div>
           <div class="created-text">
-            <span class="label">Updated:</span>
+            <span class="label">U:</span>
             {{ formatMetadataDate(integration.lastModifiedDate) }}
           </div>
         </div>

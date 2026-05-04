@@ -1,0 +1,232 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+{{- with .Values.deployment.annotations }}
+  annotations:
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.core.replicas }}
+  selector:
+    matchLabels:
+      app: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Release.Name }}
+      annotations:
+{{- with .Values.podAnnotations }}
+{{ toYaml . | indent 8 }}
+{{- end }}
+{{- if .Values.vault.enabled }}
+        vault.security.banzaicloud.io/vault-addr: {{ .Values.vault.vaultAddress | quote }}
+        vault.security.banzaicloud.io/vault-role: {{ .Values.vault.vaultRole | quote }}
+        vault.security.banzaicloud.io/vault-skip-verify: {{ .Values.vault.vaultSkipVerify | quote }}
+        vault.security.banzaicloud.io/vault-tls-secret: {{ .Values.vault.vaultTlsSecret | quote }}
+        vault.security.banzaicloud.io/vault-agent: {{ .Values.vault.vaultAgent | quote }}
+        vault.security.banzaicloud.io/vault-path: {{ .Values.vault.vaultPath | quote }}
+{{- end }}
+    spec:
+{{- if eq $.Values.core.deployMode "production"}}
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - {{ .Release.Name }}
+            topologyKey: kubernetes.io/hostname
+{{- end }}
+      securityContext:
+        fsGroup: {{ .Values.core.fsGroupId }}
+        runAsUser: {{ .Values.core.runAsUserId }}
+{{- if or (and (.Values.exporter.jmxEnabled) (eq .Values.exporter.metricsMode "prometheus")) (.Values.core.certLoaderEnabled) (.Values.certLoader.enabled) }}
+      initContainers:
+{{- if and (.Values.exporter.jmxEnabled) (eq .Values.exporter.metricsMode "prometheus") }}
+        - name: copyjmxexporter
+          image: {{ .Values.core.dockerRegistry }}/jmx-exporter:{{ .Values.core.jmxExporterTag }}
+          command: [ 'sh', '-c', "cp /home/jmx-exporter/* /data/binaries/" ]
+          volumeMounts:
+            - name: ephemeral
+              mountPath: "/data/binaries"
+{{- end }}
+{{- if or (.Values.core.certLoaderEnabled) (.Values.certLoader.enabled) }}
+        - name: certloader-fromsecret
+          image: {{ .Values.core.dockerRegistry }}/{{ .Chart.Name }}{{ ternary "-fips" "" .Values.core.fips }}:{{ .Values.core.dockerTag }}
+          imagePullPolicy: {{ .Values.core.imagePullPolicy }}
+          env:
+          - name: CERTLOADER_ENABLED
+            value: {{ or (.Values.core.certLoaderEnabled) (.Values.certLoader.enabled) | quote }}
+          - name: CERTLOADER_PEM
+            value: {{ toYaml .Values.core.certLoaderPem | indent 16 }}
+{{- range $certEnvName, $certSecretKeyRef  := .Values.certLoader.certsToLoad }}
+          - name: {{ $certEnvName }}
+            valueFrom:
+              secretKeyRef:
+                name: {{ $certSecretKeyRef.name }}
+                key: {{ $certSecretKeyRef.key }}
+{{- end }}
+          command: ["bash", "-c"]
+          args:
+            - |
+              trap 'echo "Error executing command, line: $LINENO - $BASH_COMMAND"; echo "loading certs: $CERTLOADER_PEM."; exit 0' ERR
+              if [ "$CERTLOADER_ENABLED" = "true" ]; then
+                CACERTS_PATH="${JAVA_HOME}/lib/security/cacerts"
+                STOREPASS="{{ .Values.certLoader.storePass | default "truststore-password" }}"
+                STORETYPE=$(keytool -list -v -keystore "$CACERTS_PATH" -storepass "$STOREPASS" | sed -n 's/^Keystore type: //p')
+                if [[ "$STORETYPE" != "JKS" && "$STORETYPE" != "BCFKS" ]]; then
+                  echo "WARNING: unable to determine keystore type for $CACERTS_PATH"
+                  STORETYPE="{{ ternary "BCFKS" "JKS" .Values.core.fips }}"
+                fi
+                echo "storetype: $STORETYPE"
+                cp -f ${CACERTS_PATH} /secrets/certloader/cacerts
+                chmod u+w /secrets/certloader/cacerts
+
+                if [ -n "$CERTLOADER_PEM" ]; then
+                  vars_index=0
+                  echo -n "${CERTLOADER_PEM}" | sed -e 's/\(-----END CERTIFICATE-----\)/\1\n#/g' | while read -rd '#' CERT; do
+                    if [ -n "$CERT" ]; then
+                      echo "adding kaseware_cert_${vars_index} to ${JAVA_HOME}/lib/security/cacerts"
+                      echo -n "${CERT}" | keytool -import -noprompt -alias kaseware_cert_${vars_index} -storetype "${STORETYPE}" -storepass "${STOREPASS}" -keystore /secrets/certloader/cacerts
+                      vars_index=$((vars_index + 1))
+                    fi
+                  done
+                fi
+{{- $i := 0 }}
+{{- range $certEnvName, $certSecretKeyRef  := .Values.certLoader.certsToLoad }}
+                CERTLOADER_ENV="{{ $certEnvName }}"
+                if [[ ! "$CERTLOADER_ENV" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+                  echo "Error: Invalid environment variable: '$CERTLOADER_ENV'"
+                fi
+                CERTLOADER_FROMSECRET_PEM="${!CERTLOADER_ENV}"
+                if [ -n "${CERTLOADER_FROMSECRET_PEM}" ]; then
+                  index=0
+                  echo -n "${CERTLOADER_FROMSECRET_PEM}" | sed -e 's/\(-----END CERTIFICATE-----\)/\1\n#/g' | while read -rd '#' CERT; do
+                    if [ -n "$CERT" ]; then
+                      echo "adding kaseware_cert_secret_{{ $i }}_${index} to ${JAVA_HOME}/lib/security/cacerts"
+                      echo -n "${CERT}" | keytool -import -noprompt -alias kaseware_cert_secret_{{ $i }}_${index} -storetype "${STORETYPE}" -storepass "${STOREPASS}" -keystore /secrets/certloader/cacerts
+                      index=$((index + 1))
+                    fi
+                  done
+                fi
+{{- $i = add $i 1 }}
+{{- end }}
+
+                echo "finished loading certs from parameters"
+              fi
+{{- if or (.Values.certLoader.eguardian) (.Values.core.certLoaderEguardian) }}
+              echo "Adding eguardian cert"
+              while [ ${ATTEMPT:-1} -lt 5 ]; do
+                curl -s -k https://services.cjis.gov -w "%{certs}" -o /dev/null | sed -n '/-BEGIN CERTIFICATE-/,/-END CERTIFICATE-/p' | \
+                  keytool -import -noprompt -alias cjis_gov -storetype "${STORETYPE}" -storepass "${STOREPASS}" -keystore /secrets/certloader/cacerts && break
+                sleep 3
+                ATTEMPT=$((ATTEMPT + 1))
+              done
+{{- end }}
+              exit 0
+          volumeMounts:
+            - name: certloader
+              mountPath: "/secrets/certloader"
+{{- end }}
+{{- end }}
+      containers:
+      - name: {{ .Release.Name }}
+        image: {{ .Values.core.dockerRegistry }}/{{ .Chart.Name }}{{ ternary "-fips" "" .Values.core.fips }}:{{ .Values.core.dockerTag }}
+        livenessProbe:
+          exec:
+            command: ["bash","/healthcheck.sh"]
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          failureThreshold: 3
+          periodSeconds: 60
+        ports:
+          - containerPort: {{ .Values.service.port }}
+{{- if .Values.core.metricsEnabled }}
+          - containerPort: {{ .Values.exporter.mainEndpoint.port }}
+{{- end }}
+{{- if and (.Values.exporter.jmxEnabled) (eq .Values.exporter.metricsMode "prometheus") }}
+          - containerPort: {{ .Values.jmxprometheus.port }}
+{{- end }}
+{{- if .Values.diagnostics.enabled }}
+          - containerPort: {{ .Values.diagnostics.port }}
+{{- end }}
+{{- if .Values.resources.enabled }}
+        resources:
+          requests:
+            memory: {{ .Values.resources.memoryRequest | quote }}
+            cpu: {{ .Values.resources.cpuRequest | quote }}
+          limits:
+            memory: {{ .Values.resources.memoryLimit | quote }}
+            cpu: {{ .Values.resources.cpuLimit | quote }}
+{{- end }}
+        imagePullPolicy: {{ .Values.core.imagePullPolicy }}
+        env:
+{{- if .Values.exporter.jmxEnabled }}
+          - name: METRICS_ENABLED
+            value: {{ .Values.exporter.jmxEnabled | quote}}
+{{- end }}
+{{- if .Values.jmxprometheus.port }}
+          - name: JMXPROMETHEUS_PORT
+            value: {{ .Values.jmxprometheus.port | quote}}
+{{- end }}
+{{- if .Values.core.jemallocEnabled }}
+          - name: JEMALLOC_ENABLED
+            value: {{ .Values.core.jemallocEnabled | quote}}
+{{- end }}
+{{- range $paramKey, $paramValue := .Values.env.params }}
+          - name: {{ $paramKey }}
+            value: {{ $paramValue | quote }}
+{{- end }}
+        envFrom:
+          - configMapRef:
+              name: {{ .Release.Name }}-javaopts-cm
+{{- range $secretName, $enabled := .Values.env.secretRefs }}
+  {{- if $enabled }}
+          - secretRef:
+              name: {{ $secretName }}
+  {{- end }}
+{{- end }}
+        volumeMounts:
+          - name: java-logging
+            mountPath: /home/logback.xml
+            subPath: logback.xml
+{{- if .Values.core.heapdumps }}
+          - name: heapdumps
+            mountPath: /data/heapdumps
+{{- end }}
+{{- if or (.Values.core.certLoaderEnabled) (.Values.certLoader.enabled) }}
+          - name: certloader
+            mountPath: /usr/lib/jvm/java-17-amazon-corretto/lib/security/cacerts
+            subPath: cacerts
+            readOnly: true
+{{- end }}
+      volumes:
+        - name: ephemeral
+          emptyDir:
+            sizeLimit: 50Mi
+        - name: java-logging
+          configMap:
+            name: {{ .Release.Name }}-javalogging-cm
+{{- range $key, $value := $.Values.volumes }}
+        - name: {{ $value.name }}
+          persistentVolumeClaim:
+            claimName: {{ $value.name }}
+{{- end }}
+{{- if .Values.core.heapdumps }}
+        - name: heapdumps
+          persistentVolumeClaim:
+            claimName: heapdumps
+{{- end }}
+{{- if or (.Values.core.certLoaderEnabled) (.Values.certLoader.enabled) }}
+        - name: certloader
+          emptyDir:
+            sizeLimit: 50Mi
+{{- end }}
+      imagePullSecrets:
+      - name: {{ .Values.core.dockerPullSecret }}

@@ -5,25 +5,23 @@ import { GenerateTestData } from '../../utils/GenerateTestData.js';
 
 test.describe('ArcGIS Integration - Job History', () => {
   let poManager;
-  let testDataGenerator;
   let integrationConfig;
 
   test.beforeEach(async ({ page }) => {
-    testDataGenerator = new GenerateTestData();
-    integrationConfig = testDataGenerator.getArcGISIntegrationConfig();
+    integrationConfig = new GenerateTestData().getArcGISIntegrationConfig();
 
     poManager = new POManager(page);
 
     await poManager.loginPage.pageUrlAsync();
     await poManager.loginPage.loginAsync();
-    await expect(poManager.basePage.ui.userProfile.welcomeText).toBeVisible();
+    await expect(poManager.ui.userProfile.welcomeText).toBeVisible();
 
     // Create a fresh ArcGIS integration to use for job history testing
     await poManager.arcgisIntegrationCreatorPage.createArcGISIntegration(integrationConfig);
-    await expect(poManager.basePage.ui.buttons.gridView).toBeVisible();
+    await expect(poManager.ui.buttons.gridView).toBeVisible();
   });
 
-  test(ArcGISIntegrationTestCaseDesc.arcGISJobHistoryTestCase, async ({ page }) => {
+  test(ArcGISIntegrationTestCaseDesc.arcGISJobHistoryTestCase, async () => {
     const managementPage = poManager.arcgisIntegrationManagementPage;
     const viewPage = poManager.arcgisIntegrationViewPage;
 

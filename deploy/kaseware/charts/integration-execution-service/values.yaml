@@ -1,0 +1,54 @@
+certLoader:
+  enabled: false
+
+core:
+  replicas: 1
+  dockerRegistry: kaseware.azurecr.io
+  dockerTag: stub
+  imagePullPolicy: Always
+  deployMode: production # Can be production or development (enable/disable affinity)
+  fips: false
+  fsGroupId: 2016
+  runAsUserId: 2016
+  metricsEnabled: false
+  jmxExporterTag: stable
+  enableAzureIdentity: false
+
+deployment:
+  annotations: {}
+
+diagnostics:
+  enabled: false
+
+env:
+  params:
+  secretRefs:
+
+keyVault:
+  enableAzureIdentity: true
+  azureClientId:
+  azureTenantId:
+
+exporter:
+  jmxEnabled: false
+  metricsMode: prometheus
+  mainEndpoint: {}
+
+jmxprometheus:
+  port: 9404
+
+vault:
+  enabled: false
+
+resources:
+  enabled: true
+  memoryRequest: 2Gi
+  cpuRequest: 100m
+  memoryLimit: 4Gi
+  cpuLimit: 1000m
+
+service:
+  type: ClusterIP
+  port: 8080
+
+additionalJavaOptions:

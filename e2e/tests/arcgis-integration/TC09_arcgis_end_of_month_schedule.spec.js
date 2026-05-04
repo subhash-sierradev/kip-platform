@@ -46,7 +46,7 @@ test.describe('ArcGIS Integration - Schedule End of Month Configuration', () => 
     // Integration card is visible — End of Month toggle accepted
     await poManager.ui.buttons.gridView.click();
     await poManager.arcgisIntegrationEditorPage.searchIntegration(integrationConfig.name);
-    expect(await poManager.arcgisIntegrationEditorPage.verifyIntegrationVisible(integrationConfig.name)).toBe(true);
+    await poManager.arcgisIntegrationEditorPage.verifyIntegrationVisible(integrationConfig.name);
 
     // Next Run Date reflects the last day of the first applicable selected month
     const nextRunDateText = await poManager.arcgisIntegrationEditorPage.getNextRunDate(integrationConfig.name);

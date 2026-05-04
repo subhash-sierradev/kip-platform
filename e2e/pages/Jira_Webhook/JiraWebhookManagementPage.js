@@ -25,9 +25,9 @@ export class JiraWebhookManagementPage extends BasePage {
     // Dialog elements
     this.deleteDialog = page.getByRole('dialog').filter({ hasText: /delete|remove/i });
     this.deleteWarningMessage = page.getByText(/This action cannot be undone|permanently delete/i);
-    this.disableDialog = page.getByRole('dialog').filter({ hasText: /disable/i });
+    this.disableDialog = page.getByRole('dialog').getByRole('button', { name: 'Disable' });
     this.disableWarningMessage = page.locator('dialog, [role="dialog"]').getByText(/disable|deactivate|webhooks will not|stop processing/i).first();
-    this.enableDialog = page.getByRole('dialog').filter({ hasText: /enable|activate/i });
+    this.enableDialog = page.getByRole('dialog').getByRole('button', { name: 'Enable' });
     this.enableWarningMessage = page.locator('dialog, [role="dialog"]').getByText(/enable|activate|webhooks will|start processing/i).first();
     
     // Notification elements - more specific selectors
@@ -146,7 +146,7 @@ export class JiraWebhookManagementPage extends BasePage {
 
   //Confirm disable action in the disable confirmation dialog
   async confirmDisable() {
-    await this.uiCommon.getButtonByText('Disable').click();
+    await this.disableDialog.click();
   }
 
   //Open options menu for a webhook and click Enable
@@ -157,7 +157,7 @@ export class JiraWebhookManagementPage extends BasePage {
 
   //Confirm enable action in the enable confirmation dialog
   async confirmEnable() {
-    await this.uiCommon.getButtonByText('Enable').click();
+    await this.enableDialog.click();
   }
 
   //Returns the status badge locator (Enabled/Disabled) for a specific webhook card
