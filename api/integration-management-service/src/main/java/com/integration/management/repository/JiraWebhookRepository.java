@@ -21,6 +21,10 @@ public interface JiraWebhookRepository extends JpaRepository<JiraWebhook, String
             + "AND w.tenantId = :tenantId AND w.isDeleted = false")
     Optional<JiraWebhook> findByIdAndTenantIdAndIsDeletedFalse(String id, String tenantId);
 
+    @Query("SELECT w FROM JiraWebhook w LEFT JOIN FETCH w.jiraFieldMappings WHERE w.id = :id "
+            + "AND w.isDeleted = false")
+    Optional<JiraWebhook> findByIdAndIsDeletedFalse(@Param("id") String id);
+
     @Query("SELECT w.name FROM JiraWebhook w WHERE w.id = :id")
     String findJiraWebhookNameById(@Param("id") String id);
 

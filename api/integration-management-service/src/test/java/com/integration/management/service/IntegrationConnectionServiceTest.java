@@ -205,13 +205,13 @@ class IntegrationConnectionServiceTest {
         }
 
         @Test
-        @DisplayName("should return null on invalid UUID")
+        @DisplayName("should return null on invalid UUID (exception is swallowed)")
         void invalidUuid_returnsNull() {
             assertThat(service.getIntegrationConnectionNameById("not-a-uuid", "t")).isNull();
         }
 
         @Test
-        @DisplayName("should return null when repository throws")
+        @DisplayName("should return null when repository throws (exception is swallowed)")
         void repositoryThrows_returnsNull() {
             UUID id = UUID.randomUUID();
             when(connectionRepository.findSecretNameByIdAndTenantId(id, "t"))
@@ -567,10 +567,9 @@ class IntegrationConnectionServiceTest {
     }
 
     @Test
-    @DisplayName("getIntegrationConnectionNameById returns null for invalid UUID")
-    void getIntegrationConnectionNameById_invalidUuid_returnsNull() {
-        String result = service.getIntegrationConnectionNameById("not-a-uuid", "t1");
-        assertThat(result).isNull();
+    @DisplayName("getIntegrationConnectionNameById returns null for invalid UUID (exception swallowed)")
+    void getIntegrationConnectionNameById_invalidUuid_throwsIllegalArgumentException() {
+        assertThat(service.getIntegrationConnectionNameById("not-a-uuid", "t1")).isNull();
     }
 
     @Test

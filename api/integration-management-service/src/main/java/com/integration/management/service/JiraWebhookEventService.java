@@ -50,7 +50,7 @@ public class JiraWebhookEventService {
         log.info("Retrying webhook trigger: {} for tenant: {} by user: {}", id, tenantId, userId);
 
         JiraWebhookEvent lastEvent = findByOriginalEventIdOrderByRetryAttempt(id);
-        JiraWebhook webhook = findWebhook(lastEvent.getWebhookId(), tenantId);
+        JiraWebhook webhook = findWebhook(lastEvent.getWebhookId());
 
         String originalEventId = StringUtils.hasText(lastEvent.getOriginalEventId())
                 ? lastEvent.getOriginalEventId() : id;
@@ -81,12 +81,13 @@ public class JiraWebhookEventService {
         log.info("Executing webhook: {} with payload length: {} for tenant: {} by user: {}",
                 id, jiraWebhookPayload != null ? jiraWebhookPayload.length() : 0, tenantId, userId);
 
-        JiraWebhook webhook = findWebhook(id, tenantId);
+        JiraWebhook webhook = findWebhook(id);
+        String effectiveTenantId = webhook.getTenantId();
         JiraWebhookEvent event = recordJiraWebhookEvent(
-                id, tenantId, userId, jiraWebhookPayload, null, 0);
+                id, effectiveTenantId, userId, jiraWebhookPayload, null, 0);
 
         JiraWebhookExecutionCommand command = buildCommand(
-                webhook, event, jiraWebhookPayload, tenantId, userId);
+                webhook, event, jiraWebhookPayload, effectiveTenantId, userId);
 
         messagePublisher.publish(
                 QueueNames.JIRA_WEBHOOK_EXCHANGE,
@@ -97,10 +98,10 @@ public class JiraWebhookEventService {
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(mapper.toResponse(event));
     }
 
-    private JiraWebhook findWebhook(final String webhookId, final String tenantId) {
-        return jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(webhookId, tenantId)
+    private JiraWebhook findWebhook(final String webhookId) {
+        return jiraWebhookRepository.findByIdAndIsDeletedFalse(webhookId)
                 .orElseThrow(() -> new IntegrationNotFoundException(
-                        "Jira webhook not found with ID: " + webhookId + " for tenant: " + tenantId));
+                        "Jira webhook not found with ID: " + webhookId));
     }
 
     private JiraWebhookExecutionCommand buildCommand(
@@ -216,7 +217,14 @@ public class JiraWebhookEventService {
     }
 
     public List<JiraWebhookEventResponse> getWebhookEventsByWebhookId(final String webhookId, final String tenantId) {
-        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhook(webhookId, tenantId)
+        // Assert tenant ownership before returning events — prevents tenant A from reading
+        // events that belong to tenant B's webhooks.
+        jiraWebhookRepository.findByIdAndTenantIdAndIsDeletedFalse(webhookId, tenantId)
+                .orElseThrow(() -> new IntegrationNotFoundException(
+                        "Jira webhook not found with ID: " + webhookId + " for tenant: " + tenantId));
+        // Use owner-tenant scoped query so that system-triggered events (stored with
+        // tenantId='GLOBAL') are visible to the owning organisation.
+        return triggerHistoryRepository.findLatestEventsPerOriginalTriggerByWebhookOwnerTenant(webhookId, tenantId)
                 .stream().map(mapper::toResponse).toList();
     }
 

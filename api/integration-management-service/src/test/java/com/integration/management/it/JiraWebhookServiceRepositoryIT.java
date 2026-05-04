@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Verifies webhook creation, lookup, trigger event persistence, and retry lineage tracking
  * against a real PostgreSQL Testcontainer with all schema migrations applied via Flyway.
  */
-@DisplayName("Jira Webhook Service Repository — integration tests")
+@DisplayName("Jira Webhook Service Repository â€” integration tests")
 class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
 
     private static final String TENANT = "GLOBAL";
@@ -198,32 +198,6 @@ class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
         assertThat(found.get().getWebhookId()).isEqualTo(webhook.getId());
     }
 
-    @Test
-    @DisplayName("findLatestEventsPerOriginalTriggerByWebhook returns most recent events for webhook")
-    void findLatestEvents_returnsMostRecentPerWebhook() {
-        JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Latest Events IT"));
-        String originalEventId = UUID.randomUUID().toString();
-
-        // Two events for same original, different retry attempts
-        JiraWebhookEvent firstEvent = jiraWebhookEventRepository.save(
-                buildEvent(webhook.getId(), TriggerStatus.FAILED,
-                        originalEventId, 0, Instant.now().minusSeconds(60)));
-        createdEventIds.add(firstEvent.getId());
-
-        JiraWebhookEvent retryEvent = jiraWebhookEventRepository.save(
-                buildEvent(webhook.getId(), TriggerStatus.SUCCESS,
-                        originalEventId, 1, Instant.now()));
-        createdEventIds.add(retryEvent.getId());
-
-        List<JiraWebhookEvent> latest =
-                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhook(
-                        webhook.getId(), TENANT);
-
-        // Only the latest event for that original event should be returned
-        List<UUID> latestIds = latest.stream().map(JiraWebhookEvent::getId).toList();
-        assertThat(latestIds).contains(retryEvent.getId());
-        assertThat(latestIds).doesNotContain(firstEvent.getId());
-    }
 
     @Test
     @DisplayName("findTopByOriginalEventIdOrderByRetryAttemptDesc returns last retry for original event")
@@ -277,5 +251,87 @@ class JiraWebhookServiceRepositoryIT extends AbstractImsIT {
         assertThat(resultIds).contains(newEventA.getId(), eventB.getId());
         assertThat(resultIds).doesNotContain(oldEventA.getId());
     }
-}
 
+    // ------------------------------------------------------------------ OWNER-TENANT SCOPED EVENTS
+
+    @Test
+    @DisplayName("findLatestEventsPerOriginalTriggerByWebhookOwnerTenant returns system events stored with GLOBAL tenantId when queried by webhook owner tenant")
+    void findLatestEventsPerOriginalTriggerByWebhookOwnerTenant_systemEventsWithGlobalTenant_returnedForOwnerTenant() {
+        // Scenario: webhook belongs to "org-tenant", but events are recorded by the system
+        // with tenantId = "GLOBAL".  The new query must still return those events when the
+        // owning organisation queries for them.
+        String orgTenant = "org-tenant-" + UUID.randomUUID().toString().substring(0, 8);
+
+        String webhookId = UUID.randomUUID().toString().replace("-", "").substring(0, 11);
+        JiraWebhook webhook = JiraWebhook.builder()
+                .id(webhookId)
+                .name("Owner Tenant Webhook IT")
+                .normalizedName("owner-tenant-webhook-it-" + webhookId)
+                .webhookUrl("https://test.example.com/webhook/" + webhookId)
+                .connectionId(savedConnection.getId())
+                .samplePayload("{\"key\":\"TEST-ORG\"}")
+                .isEnabled(true)
+                .tenantId(orgTenant)            // webhook owned by real org
+                .createdBy("org-admin")
+                .lastModifiedBy("org-admin")
+                .build();
+        jiraWebhookRepository.save(webhook);
+        createdWebhookIds.add(webhookId);
+
+        String originalEventId = UUID.randomUUID().toString();
+
+        // First attempt â€” stored with GLOBAL tenantId (system-triggered)
+        JiraWebhookEvent attempt0 = jiraWebhookEventRepository.save(
+                JiraWebhookEvent.builder()
+                        .webhookId(webhookId)
+                        .tenantId("GLOBAL")           // system identity, NOT the org tenant
+                        .triggeredBy("system")
+                        .triggeredAt(Instant.now().minusSeconds(60))
+                        .incomingPayload("{\"k\":\"v\"}")
+                        .status(TriggerStatus.FAILED)
+                        .originalEventId(originalEventId)
+                        .retryAttempt(0)
+                        .build());
+        createdEventIds.add(attempt0.getId());
+
+        // Retry â€” also stored with GLOBAL tenantId
+        JiraWebhookEvent attempt1 = jiraWebhookEventRepository.save(
+                JiraWebhookEvent.builder()
+                        .webhookId(webhookId)
+                        .tenantId("GLOBAL")
+                        .triggeredBy("system")
+                        .triggeredAt(Instant.now())
+                        .incomingPayload("{\"k\":\"v\"}")
+                        .status(TriggerStatus.SUCCESS)
+                        .originalEventId(originalEventId)
+                        .retryAttempt(1)
+                        .build());
+        createdEventIds.add(attempt1.getId());
+
+        // Query as the owning organisation (not GLOBAL)
+        List<JiraWebhookEvent> latest =
+                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhookOwnerTenant(
+                        webhookId, orgTenant);
+
+        // Only the latest attempt for that original event should be returned
+        List<UUID> latestIds = latest.stream().map(JiraWebhookEvent::getId).toList();
+        assertThat(latestIds).contains(attempt1.getId());
+        assertThat(latestIds).doesNotContain(attempt0.getId());
+    }
+
+    @Test
+    @DisplayName("findLatestEventsPerOriginalTriggerByWebhookOwnerTenant returns empty list when tenant does not own the webhook")
+    void findLatestEventsPerOriginalTriggerByWebhookOwnerTenant_wrongOwnerTenant_returnsEmptyList() {
+        JiraWebhook webhook = jiraWebhookRepository.save(buildWebhook("Wrong Tenant Events IT"));
+        JiraWebhookEvent event = jiraWebhookEventRepository.save(
+                buildEvent(webhook.getId(), TriggerStatus.SUCCESS,
+                        UUID.randomUUID().toString(), 0, Instant.now()));
+        createdEventIds.add(event.getId());
+
+        List<JiraWebhookEvent> latest =
+                jiraWebhookEventRepository.findLatestEventsPerOriginalTriggerByWebhookOwnerTenant(
+                        webhook.getId(), "completely-different-tenant");
+
+        assertThat(latest).isEmpty();
+    }
+}

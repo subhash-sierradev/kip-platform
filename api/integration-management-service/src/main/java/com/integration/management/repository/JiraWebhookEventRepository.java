@@ -16,21 +16,35 @@ import java.util.UUID;
 @Repository
 public interface JiraWebhookEventRepository extends JpaRepository<JiraWebhookEvent, UUID> {
 
-    // Find latest events per original trigger, filtered by tenantId on the event
-    // itself
+
+    /**
+     * Returns the latest event per original trigger for the given webhook, scoped by the
+     * <em>webhook owner's</em> tenantId (via join on {@code jira_webhooks}) rather than the
+     * event's own {@code tenantId}.
+     *
+     * <p>This is necessary because system-triggered events are stored with
+     * {@code tenantId = 'GLOBAL'} while the owning webhook belongs to a real organisation
+     * tenant.  Filtering by the webhook's tenantId allows the owning tenant to retrieve those
+     * events without ever seeing events from another tenant's webhooks.
+     */
     @Query("SELECT jwe FROM JiraWebhookEvent jwe "
             + "WHERE jwe.webhookId = :webhookId "
-            + "AND jwe.tenantId = :tenantId "
+            + "AND EXISTS ("
+            + "    SELECT 1 FROM JiraWebhook jw "
+            + "    WHERE jw.id = jwe.webhookId "
+            + "    AND jw.tenantId = :tenantId "
+            + "    AND jw.isDeleted = false"
+            + ") "
             + "AND NOT EXISTS ("
             + "    SELECT 1 FROM JiraWebhookEvent newer "
-            + "    WHERE newer.webhookId = :webhookId "
-            + "    AND newer.tenantId = :tenantId "
+            + "    WHERE newer.webhookId = jwe.webhookId "
             + "    AND newer.originalEventId = jwe.originalEventId "
             + "    AND (newer.triggeredAt > jwe.triggeredAt "
             + "         OR (newer.triggeredAt = jwe.triggeredAt AND newer.id > jwe.id))"
             + ") ORDER BY jwe.triggeredAt DESC")
-    List<JiraWebhookEvent> findLatestEventsPerOriginalTriggerByWebhook(@Param("webhookId") String webhookId,
-                                                                       @Param("tenantId") String tenantId);
+    List<JiraWebhookEvent> findLatestEventsPerOriginalTriggerByWebhookOwnerTenant(
+            @Param("webhookId") String webhookId,
+            @Param("tenantId") String tenantId);
 
     Optional<JiraWebhookEvent> findTopByOriginalEventIdOrderByRetryAttemptDesc(String originalEventId);
 
